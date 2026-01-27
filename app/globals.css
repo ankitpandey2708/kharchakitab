@@ -1,0 +1,814 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   KharchaKitab Design System: "Ink & Ember" Edition
+   A fusion of Indian ledger book nostalgia with contemporary warmth
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Core Palette */
+  --kk-void: #0a0a0a;
+  --kk-ink: #1a1a1a;
+  --kk-paper: #faf8f5;
+  --kk-cream: #f5f2ed;
+
+  /* Ember Spectrum */
+  --kk-ember: #ff6b35;
+  --kk-ember-glow: #ff8c5a;
+  --kk-saffron: #f7c948;
+  --kk-ember-deep: #e04a16;
+
+  /* Supporting Tones */
+  --kk-ash: #6b6b6b;
+  --kk-smoke: rgba(15, 15, 15, 0.06);
+  --kk-smoke-heavy: rgba(15, 15, 15, 0.12);
+  --kk-mist: rgba(255, 255, 255, 0.7);
+  --kk-danger: #e5484d;
+  --kk-danger-bg: rgba(229, 72, 77, 0.08);
+  --kk-danger-ink: #b02a30;
+
+  /* Radius scale */
+  --kk-radius-sm: 12px;
+  --kk-radius-md: 16px;
+  --kk-radius-lg: 20px;
+  --kk-radius-xl: 24px;
+
+  /* Type scale */
+  --kk-text-label: 0.6875rem;
+  --kk-text-chip: 0.75rem;
+  --kk-text-button: 0.6875rem;
+  --kk-tracking-label: 0.16em;
+  --kk-tracking-chip: 0.16em;
+  --kk-tracking-button: 0.18em;
+
+  /* Semantic */
+  --background: var(--kk-paper);
+  --foreground: var(--kk-ink);
+
+  /* Shadows */
+  --kk-shadow-sm: 0 2px 8px rgba(10, 10, 10, 0.04);
+  --kk-shadow-md: 0 8px 24px rgba(10, 10, 10, 0.08);
+  --kk-shadow-lg: 0 16px 48px rgba(10, 10, 10, 0.12);
+  --kk-shadow-ember: 0 8px 32px rgba(255, 107, 53, 0.25);
+  --kk-shadow-ember-intense: 0 12px 40px rgba(255, 107, 53, 0.4);
+
+  /* Transitions */
+  --kk-ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --kk-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --kk-duration-fast: 150ms;
+  --kk-duration-normal: 250ms;
+  --kk-duration-slow: 400ms;
+}
+
+@theme inline {
+  --color-background: var(--kk-paper);
+  --color-foreground: var(--kk-ink);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Base Styles
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--kk-paper);
+  color: var(--kk-ink);
+  font-family: var(--font-body), system-ui, sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Subtle paper texture */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  z-index: 9999;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Utility Classes
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.user-select-none {
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+/* Card Component */
+.kk-card {
+  background: var(--kk-mist);
+  border: 1px solid var(--kk-smoke);
+  border-radius: var(--kk-radius-lg);
+  box-shadow: var(--kk-shadow-sm);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: box-shadow var(--kk-duration-normal) var(--kk-ease-out),
+    transform var(--kk-duration-normal) var(--kk-ease-out);
+}
+
+.kk-card:hover {
+  box-shadow: var(--kk-shadow-md);
+}
+
+/* Surface - solid background variant */
+.kk-surface {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--kk-smoke);
+  border-radius: var(--kk-radius-md);
+  box-shadow: var(--kk-shadow-sm);
+}
+
+/* Chip/Tag Component */
+.kk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border: 1px solid var(--kk-smoke-heavy);
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  font-size: var(--kk-text-chip);
+  font-weight: 600;
+  letter-spacing: var(--kk-tracking-chip);
+  transition: all var(--kk-duration-fast) var(--kk-ease-out);
+}
+
+.kk-chip:hover {
+  border-color: var(--kk-ember);
+  background: rgba(255, 107, 53, 0.06);
+  color: var(--kk-ink);
+}
+
+.kk-chip-active {
+  background: var(--kk-ember);
+  border-color: var(--kk-ember);
+  color: white;
+}
+
+.kk-chip-muted {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: var(--kk-smoke);
+  color: var(--kk-ink);
+}
+
+.kk-chip-filter {
+  text-transform: uppercase;
+  font-size: var(--kk-text-label);
+  letter-spacing: var(--kk-tracking-chip);
+}
+
+/* Ink line accent - adds character to cards */
+.kk-ink-line {
+  position: relative;
+}
+
+.kk-ink-line::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  background: linear-gradient(180deg, var(--kk-ember), var(--kk-saffron));
+  border-radius: 0 2px 2px 0;
+}
+
+/* Amount styling with rupee symbol */
+.kk-amount {
+  font-family: var(--font-mono), monospace;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.kk-rupee {
+  color: var(--kk-ember);
+  font-weight: 500;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Animations & Keyframes
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Fade up entry animation */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up var(--kk-duration-slow) var(--kk-ease-out) forwards;
+  opacity: 0;
+}
+
+/* Staggered delays for lists */
+.animate-stagger-1 {
+  animation-delay: 0ms;
+}
+
+.animate-stagger-2 {
+  animation-delay: 50ms;
+}
+
+.animate-stagger-3 {
+  animation-delay: 100ms;
+}
+
+.animate-stagger-4 {
+  animation-delay: 150ms;
+}
+
+.animate-stagger-5 {
+  animation-delay: 200ms;
+}
+
+/* Ink drop expansion */
+@keyframes ink-drop {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-ink-drop {
+  animation: ink-drop 0.4s var(--kk-ease-spring) forwards;
+}
+
+/* Ember pulse - for recording state */
+@keyframes ember-pulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 107, 53, 0.4),
+      0 8px 32px rgba(255, 107, 53, 0.3);
+  }
+
+  50% {
+    box-shadow: 0 0 0 20px rgba(255, 107, 53, 0),
+      0 12px 40px rgba(255, 107, 53, 0.4);
+  }
+}
+
+.animate-ember-pulse {
+  animation: ember-pulse 1.5s ease-in-out infinite;
+}
+
+/* Ring expansion for mic button */
+@keyframes ring-expand {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+@keyframes ring-expand-delayed {
+  0% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+/* Spark rise animation */
+@keyframes spark-rise {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(-40px) scale(0);
+    opacity: 0;
+  }
+}
+
+/* Subtle float */
+@keyframes subtle-float {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.animate-subtle-float {
+  animation: subtle-float 4s ease-in-out infinite;
+}
+
+/* Skeleton loading */
+@keyframes ink-wash {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.kk-skeleton {
+  background: linear-gradient(90deg,
+      var(--kk-smoke) 0%,
+      var(--kk-smoke-heavy) 50%,
+      var(--kk-smoke) 100%);
+  background-size: 200% 100%;
+  animation: ink-wash 1.5s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+/* Toast progress bar */
+@keyframes toast-progress {
+  from {
+    width: 0%;
+  }
+
+  to {
+    width: 100%;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Gradient Orbs (Background Decoration)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.kk-gradient-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.kk-gradient-orb-ember {
+  background: radial-gradient(circle, var(--kk-ember-glow) 0%, transparent 70%);
+}
+
+.kk-gradient-orb-saffron {
+  background: radial-gradient(circle, var(--kk-saffron) 0%, transparent 70%);
+}
+
+.kk-gradient-orb-ink {
+  background: radial-gradient(circle, var(--kk-ink) 0%, transparent 70%);
+  opacity: 0.08;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  body::before {
+    opacity: 0;
+  }
+
+  .kk-card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .kk-gradient-orb {
+    filter: blur(24px);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Custom Scrollbar
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--kk-smoke-heavy);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--kk-ash);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Form Elements
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.kk-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: white;
+  border: 1px solid var(--kk-smoke-heavy);
+  border-radius: var(--kk-radius-sm);
+  font-size: 1rem;
+  transition: border-color var(--kk-duration-fast) var(--kk-ease-out),
+    box-shadow var(--kk-duration-fast) var(--kk-ease-out);
+}
+
+.kk-input:focus {
+  outline: none;
+  border-color: var(--kk-ember);
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.12);
+}
+
+.kk-input::placeholder {
+  color: var(--kk-ash);
+}
+
+.kk-date-input::-webkit-inner-spin-button {
+  display: none;
+}
+
+.kk-date-input::-webkit-calendar-picker-indicator {
+  opacity: 0;
+  display: none;
+}
+
+.kk-date-input {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.kk-input-compact {
+  padding: 0.45rem 0.9rem;
+  font-size: 0.75rem;
+  letter-spacing: var(--kk-tracking-button);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.kk-select {
+  background-color: white;
+  text-align: center;
+  text-align-last: center;
+}
+
+.kk-select option {
+  text-align: center;
+}
+
+.kk-shadow-sm {
+  box-shadow: var(--kk-shadow-sm);
+}
+
+.kk-shadow-md {
+  box-shadow: var(--kk-shadow-md);
+}
+
+.kk-shadow-lg {
+  box-shadow: var(--kk-shadow-lg);
+}
+
+.kk-radius-sm {
+  border-radius: var(--kk-radius-sm);
+}
+
+.kk-radius-md {
+  border-radius: var(--kk-radius-md);
+}
+
+.kk-radius-lg {
+  border-radius: var(--kk-radius-lg);
+}
+
+.kk-radius-xl {
+  border-radius: var(--kk-radius-xl);
+}
+
+.kk-radius-top-xl {
+  border-top-left-radius: var(--kk-radius-xl);
+  border-top-right-radius: var(--kk-radius-xl);
+}
+
+.kk-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--kk-smoke);
+  background: var(--kk-cream);
+  color: var(--kk-ink);
+  border-radius: 999px;
+  padding: 0.2rem 0.7rem;
+  font-size: var(--kk-text-button);
+  font-weight: 600;
+  letter-spacing: var(--kk-tracking-label);
+}
+
+.kk-pill-muted {
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--kk-ash);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Buttons
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.kk-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.875rem 1.5rem;
+  background: linear-gradient(135deg, var(--kk-ember) 0%, var(--kk-ember-deep) 100%);
+  color: white;
+  font-weight: 600;
+  border-radius: var(--kk-radius-md);
+  border: none;
+  cursor: pointer;
+  box-shadow: var(--kk-shadow-ember);
+  transition: all var(--kk-duration-fast) var(--kk-ease-out);
+}
+
+.kk-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--kk-shadow-ember-intense);
+}
+
+.kk-btn-primary:active {
+  transform: translateY(0);
+}
+
+.kk-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.kk-btn-primary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.3);
+}
+
+.kk-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.625rem 1rem;
+  background: white;
+  color: var(--kk-ink);
+  font-weight: 600;
+  font-size: 0.875rem;
+  border-radius: 999px;
+  border: 1px solid var(--kk-smoke-heavy);
+  cursor: pointer;
+  transition: all var(--kk-duration-fast) var(--kk-ease-out);
+}
+
+.kk-btn-secondary:hover {
+  border-color: var(--kk-ink);
+  background: var(--kk-cream);
+}
+
+.kk-btn-secondary:focus-visible {
+  outline: none;
+  border-color: var(--kk-ember);
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.18);
+}
+
+.kk-btn-secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.kk-btn-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  background: white;
+  color: var(--kk-ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 107, 53, 0.35);
+  box-shadow: var(--kk-shadow-sm);
+  transition: all var(--kk-duration-fast) var(--kk-ease-out);
+}
+
+.kk-btn-outline:hover {
+  border-color: var(--kk-ember);
+  background: var(--kk-cream);
+  color: var(--kk-ember);
+}
+
+.kk-btn-outline:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.kk-btn-outline:focus-visible {
+  outline: none;
+  border-color: var(--kk-ember);
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.18);
+}
+
+/* Ghost button: minimal chrome with consistent focus affordance */
+.kk-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.75rem;
+  background: transparent;
+  color: var(--kk-ash);
+  font-weight: 600;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--kk-duration-fast) var(--kk-ease-out);
+}
+
+.kk-btn-ghost:hover {
+  background: var(--kk-cream);
+  color: var(--kk-ink);
+}
+
+.kk-btn-ghost:focus-visible {
+  outline: none;
+  border-color: var(--kk-ember);
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.18);
+}
+
+/* Compact size token: consistent small action buttons */
+.kk-btn-compact {
+  gap: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.75rem;
+  letter-spacing: var(--kk-tracking-button);
+  text-transform: uppercase;
+}
+
+.kk-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  color: var(--kk-ash);
+  background: var(--kk-cream);
+  transition: all var(--kk-duration-fast) var(--kk-ease-out);
+}
+
+.kk-icon-btn:hover {
+  background: var(--kk-smoke-heavy);
+  color: var(--kk-ink);
+}
+
+.kk-icon-btn-ghost {
+  width: 2.75rem;
+  height: 2.75rem;
+  background: transparent;
+}
+
+.kk-icon-btn-lg {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+.kk-icon-btn-sm {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+.kk-icon-btn-ghost:hover {
+  background: var(--kk-cream);
+  color: var(--kk-ember);
+}
+
+.kk-icon-btn-danger:hover {
+  background: var(--kk-danger-bg);
+  color: var(--kk-danger-ink);
+}
+
+.kk-icon-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.18);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Category Icons with Ember Glow
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.kk-category-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  background: linear-gradient(135deg, var(--kk-ember) 0%, var(--kk-ember-deep) 100%);
+  color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.2);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Label/Header Typography
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.kk-label {
+  font-size: var(--kk-text-label);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--kk-tracking-label);
+  color: var(--kk-ash);
+}
+
+.kk-heading {
+  font-family: var(--font-display), serif;
+  font-weight: 600;
+  color: var(--kk-ink);
+}
+
+.kk-micro {
+  font-size: var(--kk-text-label);
+  letter-spacing: 0.02em;
+}
+
+.kk-meta {
+  font-size: var(--kk-text-chip);
+  color: var(--kk-ash);
+}
+
+/* Progress bars */
+.kk-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--kk-ash);
+}
+
+.kk-progress-rail {
+  height: 0.5rem;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--kk-smoke);
+}
+
+.kk-progress-rail-over {
+  box-shadow: 0 0 0 1px rgba(255, 107, 53, 0.35),
+    0 0 14px rgba(255, 107, 53, 0.35);
+}
+
+.kk-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--kk-ember) 0%, var(--kk-saffron) 100%);
+  transition: width var(--kk-duration-normal) var(--kk-ease-out),
+    background-color var(--kk-duration-normal) var(--kk-ease-out);
+}
+
+@layer utilities {
+  .p-5 {
+    padding: calc(var(--spacing) * 2);
+  }
+}
