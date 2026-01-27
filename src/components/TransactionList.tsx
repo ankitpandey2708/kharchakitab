@@ -99,6 +99,9 @@ export const TransactionList = ({
   const [mobileSheetTxId, setMobileSheetTxId] = useState<string | null>(null);
   const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(false);
   const [mobileConfirmDelete, setMobileConfirmDelete] = useState(false);
+  const transactionsRef = React.useRef<Transaction[]>([]);
+  const todayTransactionsRef = React.useRef<Transaction[]>([]);
+  const periodTransactionsRef = React.useRef<Transaction[]>([]);
   const hasEdit = Boolean(onEdit);
   const currentMonthKey = (() => {
     const now = new Date();
@@ -320,11 +323,23 @@ export const TransactionList = ({
   }, [deletedTx, summaryView, isInCurrentMonth]);
 
   useEffect(() => {
+    transactionsRef.current = transactions;
+  }, [transactions]);
+
+  useEffect(() => {
+    todayTransactionsRef.current = todayTransactions;
+  }, [todayTransactions]);
+
+  useEffect(() => {
+    periodTransactionsRef.current = periodTransactions;
+  }, [periodTransactions]);
+
+  useEffect(() => {
     if (!editedTx) return;
     const previous =
-      transactions.find((tx) => tx.id === editedTx.id) ??
-      todayTransactions.find((tx) => tx.id === editedTx.id) ??
-      periodTransactions.find((tx) => tx.id === editedTx.id) ??
+      transactionsRef.current.find((tx) => tx.id === editedTx.id) ??
+      todayTransactionsRef.current.find((tx) => tx.id === editedTx.id) ??
+      periodTransactionsRef.current.find((tx) => tx.id === editedTx.id) ??
       null;
     setTransactions((prev) =>
       sortTransactions(prev.map((tx) => (tx.id === editedTx.id ? editedTx : tx)))
@@ -376,11 +391,11 @@ export const TransactionList = ({
       } else if (nowInMonth) {
         delta = editedTx.amount;
       }
-      if (delta !== 0) {
-        setMonthTotal((prev) => (prev === null ? prev : prev + delta));
-      }
+    if (delta !== 0) {
+      setMonthTotal((prev) => (prev === null ? prev : prev + delta));
     }
-  }, [editedTx, summaryView, isInCurrentMonth, periodTransactions, todayTransactions, transactions]);
+  }
+  }, [editedTx, summaryView, isInCurrentMonth]);
 
   useEffect(() => {
     if (!addedTx) return;
