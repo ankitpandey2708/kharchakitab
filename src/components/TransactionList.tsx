@@ -425,15 +425,17 @@ export const TransactionList = ({
   const monthToDateTotal = summaryView === "month" ? viewTotal : monthTotal;
   const activeBudget = budgets.monthly;
   const hasBudget = typeof activeBudget === "number" && activeBudget > 0;
-  const { remaining, overspend, budgetPercent } = useMemo(() => {
+  const { remaining, overspend, budgetPercent, rawRemaining } = useMemo(() => {
     if (!hasBudget) {
-      return { remaining: null, overspend: false, budgetPercent: 0 };
+      return { remaining: null, overspend: false, budgetPercent: 0, rawRemaining: null };
     }
     const total = monthToDateTotal ?? viewTotal;
+    const raw = activeBudget - total;
     return {
-      remaining: Math.max(activeBudget - total, 0),
-      overspend: total > activeBudget,
+      remaining: Math.max(raw, 0),
+      overspend: raw < 0,
       budgetPercent: Math.min(total / activeBudget, 1),
+      rawRemaining: raw,
     };
   }, [activeBudget, hasBudget, monthToDateTotal, viewTotal]);
 
@@ -495,14 +497,25 @@ export const TransactionList = ({
     const MS_DAY = 24 * 60 * 60 * 1000;
     return Math.floor((monthEnd.getTime() - today.getTime()) / MS_DAY) + 1;
   })();
-  const dailyCap =
-    hasBudget && remaining !== null && daysLeftInMonth > 0
-      ? remaining / daysLeftInMonth
-      : 0;
-  const pacingCap = summaryView === "today" ? dailyCap : 0;
   const pacingSpent = viewTotal;
-  const pacingRemaining = Math.max(pacingCap - pacingSpent, 0);
-  const pacingOverspend = hasBudget && isPacingView && pacingSpent > pacingCap;
+  const pacingTarget =
+    hasBudget &&
+    isPacingView &&
+    rawRemaining !== null &&
+    daysLeftInMonth > 0
+      ? (() => {
+          // Solve (B - (M + x)) / D = T + x for x.
+          // B = activeBudget, M = monthToDateTotal (includes today), T = pacingSpent, D = daysLeftInMonth.
+          return (activeBudget - (monthToDateTotal ?? viewTotal) - daysLeftInMonth * pacingSpent) /
+            (daysLeftInMonth + 1);
+        })()
+      : 0;
+  const pacingCap =
+    summaryView === "today" ? pacingSpent + Math.max(pacingTarget, 0) : 0;
+  const pacingRemaining = Math.max(pacingTarget, 0);
+  const pacingOverspend =
+    hasBudget && isPacingView && pacingTarget < 0;
+  const pacingOverspendAmount = Math.max(-pacingTarget, 0);
   const pacingPercent =
     hasBudget && isPacingView && pacingCap > 0
       ? Math.min(pacingSpent / pacingCap, 1)
@@ -510,8 +523,9 @@ export const TransactionList = ({
   const pacingTooltip = `Spent ₹${formatCurrency(pacingSpent)} / Cap ₹${formatCurrency(
     pacingCap
   )} • ${pacingOverspend
-    ? `Remaining -₹${formatCurrency(pacingSpent - pacingCap)}`
+    ? `Over by ₹${formatCurrency(pacingOverspendAmount)}`
     : `Remaining ₹${formatCurrency(pacingRemaining)}`}`;
+
 
   const compactBudgetRow = ({
     title,
@@ -696,32 +710,34 @@ export const TransactionList = ({
     !hasBudget || !isPacingView ? null : (
       <div className="mt-4 rounded-[var(--kk-radius-md)] border border-[var(--kk-smoke)] bg-white/70 p-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex w-full items-center justify-between gap-2">
-            <div className="kk-label">Daily Allowance</div>
-            <button
-              type="button"
-              onClick={openBudgetEditorFromPacing}
-              className="text-xs font-medium text-[var(--kk-ember)] transition hover:text-[var(--kk-ember-ink)]"
-              aria-label="Edit monthly budget"
-            >
-              Edit
-            </button>
-          </div>
+        <div className="flex w-full items-center justify-between gap-2">
+          <div className="kk-label">Safe to spend today</div>
+          <button
+            type="button"
+            onClick={openBudgetEditorFromPacing}
+            className="text-xs font-medium text-[var(--kk-ember)] transition hover:text-[var(--kk-ember-ink)]"
+            aria-label="Edit monthly budget"
+          >
+            Edit
+          </button>
+        </div>
         </div>
         <div className="mt-3 flex items-center justify-start gap-4">
-          <div>
-            <div className="kk-meta">Remaining</div>
-            <div
-              className={`text-base font-semibold ${pacingOverspend
-                ? "text-[var(--kk-danger-ink)]"
-                : "text-[var(--kk-ink)]"
-                }`}
-            >
-              {pacingOverspend
-                ? `-₹${formatCurrency(pacingSpent - pacingCap)}`
-                : `₹${formatCurrency(pacingRemaining)}`}
+          {pacingOverspend ? (
+            <div>
+              <div className="kk-meta">Over by</div>
+              <div className="text-base font-semibold text-[var(--kk-danger-ink)]">
+                ₹{formatCurrency(pacingOverspendAmount)}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div>
+              <div className="kk-meta">Remaining</div>
+              <div className="text-base font-semibold text-[var(--kk-ink)]">
+                ₹{formatCurrency(pacingRemaining)}
+              </div>
+            </div>
+          )}
         </div>
         <button
           type="button"
