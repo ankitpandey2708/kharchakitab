@@ -1,10 +1,9 @@
 # Features
 P0
-- Vercel Analytics/Posthog
+- Add/Manage(cancel, renew etc) recurring expense
 
 P1
 - Manage subscriptions
-- Add/Manage(cancel, renew etc) recurring expense
 - Competitor analysis (Play store reviews)
 - Family mode
 
