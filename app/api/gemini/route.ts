@@ -45,14 +45,16 @@ export async function POST(request: NextRequest) {
   // Track successful expense parsing server-side
   const distinctId = request.headers.get("x-posthog-distinct-id") || "anonymous";
   const posthog = getPostHogClient();
-  posthog.capture({
-    distinctId,
-    event: "expense_parsed",
-    properties: {
-      input_length: text.length,
-      output_length: rawText.length,
-    },
-  });
+  if (posthog) {
+    posthog.capture({
+      distinctId,
+      event: "expense_parsed",
+      properties: {
+        input_length: text.length,
+        output_length: rawText.length,
+      },
+    });
+  }
 
   return NextResponse.json({ text: rawText });
 }

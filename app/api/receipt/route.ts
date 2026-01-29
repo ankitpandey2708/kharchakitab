@@ -63,15 +63,17 @@ export async function POST(request: NextRequest) {
   // Track successful receipt parsing server-side
   const distinctId = request.headers.get("x-posthog-distinct-id") || "anonymous";
   const posthog = getPostHogClient();
-  posthog.capture({
-    distinctId,
-    event: "receipt_parsed",
-    properties: {
-      image_size_bytes: buffer.byteLength,
-      image_mime_type: mimeType,
-      output_length: rawText.length,
-    },
-  });
+  if (posthog) {
+    posthog.capture({
+      distinctId,
+      event: "receipt_parsed",
+      properties: {
+        image_size_bytes: buffer.byteLength,
+        image_mime_type: mimeType,
+        output_length: rawText.length,
+      },
+    });
+  }
 
   return NextResponse.json({ text: rawText });
 }

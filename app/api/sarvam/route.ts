@@ -70,14 +70,16 @@ export async function POST(request: NextRequest) {
   // Track successful transcription server-side
   const distinctId = request.headers.get("x-posthog-distinct-id") || "anonymous";
   const posthog = getPostHogClient();
-  posthog.capture({
-    distinctId,
-    event: "transcription_completed",
-    properties: {
-      transcript_length: transcriptText.length,
-      audio_file_size: buffer.byteLength,
-    },
-  });
+  if (posthog) {
+    posthog.capture({
+      distinctId,
+      event: "transcription_completed",
+      properties: {
+        transcript_length: transcriptText.length,
+        audio_file_size: buffer.byteLength,
+      },
+    });
+  }
 
   return NextResponse.json({ text: transcriptText });
 }
