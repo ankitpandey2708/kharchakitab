@@ -1,10 +1,14 @@
 import posthog from "posthog-js";
 
-const isProduction = process.env.NODE_ENV === "production";
+const enabledFlag = process.env.NEXT_PUBLIC_POSTHOG_ENABLED;
+const isEnabled =
+  enabledFlag === undefined
+    ? process.env.NODE_ENV === "production"
+    : enabledFlag === "true";
 const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY;
 const posthogHost = process.env.NEXT_PUBLIC_POSTHOG_HOST;
 
-if (isProduction && posthogKey) {
+if (isEnabled && posthogKey) {
   posthog.init(posthogKey, {
     api_host: posthogHost,
     defaults: "2025-11-30",
