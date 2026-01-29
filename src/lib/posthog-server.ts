@@ -12,7 +12,7 @@ export function getPostHogClient() {
   if (!process.env.NEXT_PUBLIC_POSTHOG_KEY) return null;
   if (!posthogClient) {
     posthogClient = new PostHog(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
-      host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+      host: "https://us.i.posthog.com",
       flushAt: 1,
       flushInterval: 0,
     });

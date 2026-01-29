@@ -6,7 +6,7 @@ const isEnabled =
     ? process.env.NODE_ENV === "production"
     : enabledFlag === "true";
 const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY;
-const posthogHost = process.env.NEXT_PUBLIC_POSTHOG_HOST;
+const posthogHost = "/_h";
 
 if (isEnabled && posthogKey) {
   posthog.init(posthogKey, {
