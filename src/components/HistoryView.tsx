@@ -22,6 +22,8 @@ import { TransactionActionSheet } from "@/src/components/TransactionActionSheet"
 import { formatCurrency as formatCurrencyUtil } from "@/src/utils/money";
 import { useMobileSheet } from "@/src/hooks/useMobileSheet";
 import { useSummaryViewSync } from "@/src/hooks/useSummaryViewSync";
+import posthog from "posthog-js";
+
 const HISTORY_PAGE_SIZE = 30;
 
 type SummaryView = "today" | "week" | "month";
@@ -938,6 +940,11 @@ export const HistoryView = ({
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
+      posthog.capture("expenses_exported", {
+        transaction_count: transactions.length,
+        filter_type: filter,
+        date_range_label: getExportLabel(),
+      });
     } finally {
       setIsExporting(false);
     }

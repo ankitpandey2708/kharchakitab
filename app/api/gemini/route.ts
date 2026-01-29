@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getPostHogClient } from "@/src/lib/posthog-server";
 
 const GEMINI_MODEL = "models/gemini-3-flash-preview";
 
@@ -40,5 +41,18 @@ export async function POST(request: NextRequest) {
     }>;
   };
   const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+
+  // Track successful expense parsing server-side
+  const distinctId = request.headers.get("x-posthog-distinct-id") || "anonymous";
+  const posthog = getPostHogClient();
+  posthog.capture({
+    distinctId,
+    event: "expense_parsed",
+    properties: {
+      input_length: text.length,
+      output_length: rawText.length,
+    },
+  });
+
   return NextResponse.json({ text: rawText });
 }

@@ -23,6 +23,7 @@ import {
   MIN_AUDIO_SIZE_BYTES,
 } from "@/src/config/mic";
 import { ERROR_MESSAGES, toUserMessage } from "@/src/utils/error";
+import posthog from "posthog-js";
 
 type TransactionInput = Omit<Transaction, "id">;
 
@@ -231,6 +232,7 @@ const AppShell = () => {
 
   const handleStartRecording = useCallback(async () => {
     setLastError(null); // Clear any previous errors
+    posthog.capture("recording_started");
     await audioRecorder.startRecording();
   }, [audioRecorder]);
 
@@ -283,9 +285,19 @@ const AppShell = () => {
       });
       setEditedTx(updatedTx);
       refreshTransactions();
+      posthog.capture("transaction_added", {
+        amount: expense.amount,
+        category: expense.category,
+        payment_method: expense.paymentMethod ?? "cash",
+        source: "voice",
+      });
     } catch (error) {
       await removePendingTransaction(tempId);
       setLastError(toUserMessage(error, "unableToTranscribeAudio"));
+      posthog.capture("error_occurred", {
+        error_type: "transcription_failed",
+        error_message: toUserMessage(error, "unableToTranscribeAudio"),
+      });
     } finally {
       stopProcessing();
     }
@@ -329,9 +341,24 @@ const AppShell = () => {
       });
       setEditedTx(updatedTx);
       refreshTransactions();
+      posthog.capture("receipt_processed", {
+        amount: expense.amount,
+        category: expense.category,
+        payment_method: expense.paymentMethod ?? "cash",
+      });
+      posthog.capture("transaction_added", {
+        amount: expense.amount,
+        category: expense.category,
+        payment_method: expense.paymentMethod ?? "cash",
+        source: "receipt",
+      });
     } catch (error) {
       await removePendingTransaction(tempId);
       setLastError(toUserMessage(error, "unableToProcessReceipt"));
+      posthog.capture("error_occurred", {
+        error_type: "receipt_processing_failed",
+        error_message: toUserMessage(error, "unableToProcessReceipt"),
+      });
     } finally {
       stopReceiptProcessing();
     }
@@ -342,6 +369,10 @@ const AppShell = () => {
   ) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    posthog.capture("receipt_upload_started", {
+      file_type: file.type,
+      file_size_bytes: file.size,
+    });
     try {
       const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -357,18 +388,34 @@ const AppShell = () => {
       await processReceiptDataUrl(dataUrl);
     } catch (error) {
       setLastError(toUserMessage(error, "unableToReadReceiptImage"));
+      posthog.capture("error_occurred", {
+        error_type: "receipt_read_failed",
+        error_message: toUserMessage(error, "unableToReadReceiptImage"),
+      });
     }
   };
 
   const handleStopRecording = useCallback(async () => {
     const { audioBlob, duration } = await audioRecorder.stopRecording();
+    posthog.capture("recording_stopped", {
+      duration_ms: duration,
+      blob_size_bytes: audioBlob?.size ?? 0,
+    });
     const validationError = getAudioValidationError(audioBlob, duration);
     if (validationError) {
       setLastError(validationError);
+      posthog.capture("error_occurred", {
+        error_type: "recording_validation",
+        error_message: validationError,
+      });
       return;
     }
     if (!audioBlob) {
       setLastError(ERROR_MESSAGES.noAudioCaptured);
+      posthog.capture("error_occurred", {
+        error_type: "no_audio_captured",
+        error_message: ERROR_MESSAGES.noAudioCaptured,
+      });
       return;
     }
     processedBlobRef.current = audioBlob;
@@ -397,12 +444,18 @@ const AppShell = () => {
 
   const handleOpenHistory = useCallback(() => {
     setIsHistoryOpen(true);
+    posthog.capture("history_viewed");
   }, []);
 
   const handleTransactionDeleted = useCallback(
     (tx: Transaction) => {
       setDeletedTx(tx);
       refreshTransactions();
+      posthog.capture("transaction_deleted", {
+        amount: tx.amount,
+        category: tx.category,
+        payment_method: tx.paymentMethod,
+      });
     },
     [refreshTransactions]
   );
@@ -428,10 +481,21 @@ const AppShell = () => {
         const updated = buildTransaction(data, editState.id);
         await updateTransaction(editState.id, updated);
         setEditedTx(updated);
+        posthog.capture("transaction_edited", {
+          amount: data.amount,
+          category: data.category,
+          payment_method: data.paymentMethod,
+        });
       } else {
         const transaction = buildTransaction(data);
         const id = await addTransaction(transaction);
         setAddedTx({ ...transaction, id });
+        posthog.capture("transaction_added", {
+          amount: data.amount,
+          category: data.category,
+          payment_method: data.paymentMethod,
+          source: "manual",
+        });
       }
       setRefreshKey((prev) => prev + 1);
       setIsEditing(false);
@@ -531,6 +595,7 @@ const AppShell = () => {
                 onClick={() => {
                   setIsAboutVisible(false);
                   window.localStorage.setItem("kk_about_visible", "false");
+                  posthog.capture("about_dismissed");
                 }}
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--kk-cream)] text-[var(--kk-ash)] transition hover:bg-[var(--kk-smoke-heavy)] hover:text-[var(--kk-ink)]"
                 aria-label="Dismiss about card"
@@ -592,6 +657,7 @@ const AppShell = () => {
                           category: "Food",
                         });
                         setIsEditing(true);
+                        posthog.capture("manual_entry_opened");
                       }}
                       className="kk-btn-secondary kk-btn-compact"
                     >
