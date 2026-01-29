@@ -11,6 +11,7 @@ const posthogHost = "/_h";
 if (isEnabled && posthogKey) {
   posthog.init(posthogKey, {
     api_host: posthogHost,
+    ui_host: "https://us.posthog.com",
     defaults: "2025-11-30",
     capture_exceptions: true,
   });
