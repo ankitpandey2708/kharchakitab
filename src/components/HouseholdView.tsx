@@ -164,7 +164,9 @@ export const HouseholdView = () => {
   }, []);
 
   const refreshSyncState = useCallback(async () => {
-    if (!identity) return;
+    const currentIdentity = identity ?? await getDeviceIdentity();
+    if (!currentIdentity) return;
+
     const pairingsList = await getPairings();
     setPairings(pairingsList);
     if (pairingsList.length === 0) {
@@ -443,36 +445,24 @@ export const HouseholdView = () => {
       setIdentity(device);
       setDisplayNameDraft(device.display_name);
 
-      // Load pairings first to know our state - avoid stale state issue
-      console.log('[HouseholdView] Loading pairings from DB...');
-      const pairingsList = await getPairings();
-      console.log('[HouseholdView] Loaded pairings from DB:', pairingsList.length, 'records');
-      pairingsList.forEach((p, i) => {
-        console.log(`[HouseholdView] Pairing[${i}]: device_id=${p.partner_device_id}, name=${p.partner_display_name}, created=${new Date(p.created_at).toISOString()}`);
-      });
-      setPairings(pairingsList);
-
+      // Initial data load
       await refreshSyncState();
       await fetchHouseholdTransactions();
+      await refreshNearby();
 
-      // Auto-trigger device discovery on first load
-      console.log('[HouseholdView] Device identity:', device.display_name, device.device_id);
-      console.log('[HouseholdView] Current pairings state count:', pairings.length);
-
-      // Check if we have any pairings - use the loaded list directly (not stale state)
-      if (pairingsList.length === 0) {
-        console.log('[HouseholdView] No paired devices found, triggering auto-discovery...');
-        await refreshNearby();
-      } else {
-        console.log('[HouseholdView] Already paired with:', pairingsList.map(p => p.partner_display_name).join(', '));
-        // Refresh nearby to show paired devices (even if offline)
-        console.log('[HouseholdView] Refreshing nearby devices to show paired devices...');
-        await refreshNearby();
-      }
-
-      console.log('[HouseholdView] Initialization complete. visibleDevices will update...');
+      console.log('[HouseholdView] Initialization complete.');
     })();
-  }, []);
+  }, [fetchHouseholdTransactions, refreshNearby, refreshSyncState]);
+
+  // Periodic discovery refresh
+  useEffect(() => {
+    if (!identity) return;
+    const interval = setInterval(() => {
+      refreshSyncState();
+      refreshNearby();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [identity, refreshNearby, refreshSyncState]);
 
   useEffect(() => {
     if (refreshTrigger > 0) {
@@ -945,13 +935,13 @@ export const HouseholdView = () => {
                             {device.display_name}
                           </div>
                           <div className="text-[10px] uppercase tracking-wider text-[var(--kk-ash)]">
-                            {isPaired ? 'Paired' : isOnline ? 'Tap to Pair' : 'Offline'}
+                            {isPaired ? (isOnline ? 'Paired' : 'Offline') : isOnline ? 'Tap to Pair' : 'Offline'}
                           </div>
                         </div>
                         {isPaired && (
                           <button
                             onClick={(e) => { e.stopPropagation(); handleForgetPartner(device.device_id); }}
-                            className="opacity-0 group-hover:opacity-100 p-1 text-[var(--kk-ash)] hover:text-[var(--kk-danger)] transition-all"
+                            className="opacity-40 transition-all hover:opacity-100 md:opacity-0 md:group-hover:opacity-100 p-1 text-[var(--kk-ash)] hover:text-[var(--kk-danger)]"
                           >
                             <XCircle className="h-4 w-4" />
                           </button>
