@@ -42,7 +42,3 @@ We've built some insights and a dashboard for you to keep an eye on user behavio
 - [Voice Recording Funnel](https://us.posthog.com/project/301391/insights/5hdMRpis) - Conversion funnel from recording to transaction
 - [Errors by Type](https://us.posthog.com/project/301391/insights/0dtIJru3) - Application errors breakdown for debugging
 - [User Engagement Actions](https://us.posthog.com/project/301391/insights/syD7gsu5) - Key engagement events tracking
-
-### Agent skill
-
-We've left an agent skill folder in your project at `.claude/skills/nextjs-app-router/`. You can use this context for further agent development when using Claude Code. This will help ensure the model provides the most up-to-date approaches for integrating PostHog.

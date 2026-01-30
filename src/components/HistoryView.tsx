@@ -12,6 +12,8 @@ import {
 import {
   deleteTransaction,
   getTransactionsInRange,
+  updateTransaction,
+  isTransactionShared,
 } from "@/src/db/db";
 import type { Transaction } from "@/src/types";
 import { useEscapeKey } from "@/src/hooks/useEscapeKey";
@@ -335,9 +337,17 @@ export const HistoryView = ({
     activeId: mobileSheetTxId,
     confirmDelete: mobileConfirmDelete,
     setConfirmDelete: setMobileConfirmDelete,
-    openSheet: openMobileSheet,
+    openSheet: baseOpenMobileSheet,
     closeSheet: closeMobileSheet,
   } = useMobileSheet();
+  const [isMobileSheetShared, setIsMobileSheetShared] = useState(false);
+
+  const openMobileSheet = useCallback(async (id: string) => {
+    const shared = await isTransactionShared(id);
+    setIsMobileSheetShared(shared);
+    baseOpenMobileSheet(id);
+  }, [baseOpenMobileSheet]);
+
   const hasEdit = Boolean(onEdit);
   const metricsCacheRef = useRef(
     new Map<
@@ -1118,6 +1128,18 @@ export const HistoryView = ({
     [findTxById, onEdit]
   );
 
+  const handleTogglePrivate = useCallback(
+    async (id: string, nextPrivate: boolean) => {
+      const shared = await isTransactionShared(id);
+      if (shared && nextPrivate) return; // Prevent marking shared as private
+      const tx = findTxById(id);
+      if (!tx) return;
+      await updateTransaction(id, { is_private: nextPrivate });
+      void loadFirstPage();
+    },
+    [findTxById, loadFirstPage]
+  );
+
   const mobileSheetTx = mobileSheetTxId ? findTxById(mobileSheetTxId) : null;
 
   const donutSegments = useMemo(() => {
@@ -1590,6 +1612,8 @@ export const HistoryView = ({
             onClose={closeMobileSheet}
             onEdit={hasEdit ? handleEdit : undefined}
             onDelete={handleDelete}
+            onTogglePrivate={handleTogglePrivate}
+            isShared={isMobileSheetShared}
             formatCurrency={formatCurrency}
           />
         </motion.div>

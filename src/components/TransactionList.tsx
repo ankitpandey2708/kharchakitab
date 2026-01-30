@@ -7,6 +7,8 @@ import {
   deleteTransaction,
   getRecentTransactions,
   getTransactionsInRange,
+  updateTransaction,
+  isTransactionShared,
 } from "@/src/db/db";
 import type { Transaction } from "@/src/types";
 import { getRangeForFilter, isToday } from "@/src/utils/dates";
@@ -75,9 +77,16 @@ export const TransactionList = ({
     activeId: mobileSheetTxId,
     confirmDelete: mobileConfirmDelete,
     setConfirmDelete: setMobileConfirmDelete,
-    openSheet: openMobileSheet,
+    openSheet: baseOpenMobileSheet,
     closeSheet: closeMobileSheet,
   } = useMobileSheet({ onOpenChange: onMobileSheetChange });
+  const [isMobileSheetShared, setIsMobileSheetShared] = useState(false);
+
+  const openMobileSheet = useCallback(async (id: string) => {
+    const shared = await isTransactionShared(id);
+    setIsMobileSheetShared(shared);
+    baseOpenMobileSheet(id);
+  }, [baseOpenMobileSheet]);
   const transactionsRef = React.useRef<Transaction[]>([]);
   const todayTransactionsRef = React.useRef<Transaction[]>([]);
   const periodTransactionsRef = React.useRef<Transaction[]>([]);
@@ -123,22 +132,22 @@ export const TransactionList = ({
     const range = getRangeForFilter(summaryView === "today" ? "today" : "month");
     const rangePromise = range
       ? getTransactionsInRange(range.start, range.end)
-      .then((items) => {
-        if (!shouldUpdate()) return;
-        const sorted = sortTransactions(items);
-        setPeriodTransactions(sorted);
-        if (summaryView === "today") {
-          setTodayTransactions(sorted);
-        } else {
-          setTodayTransactions(sorted.filter((tx) => isToday(tx.timestamp)));
-        }
-      })
-      .catch(() => {
-        if (shouldUpdate()) {
-          setPeriodTransactions([]);
-          setTodayTransactions([]);
-        }
-      })
+        .then((items) => {
+          if (!shouldUpdate()) return;
+          const sorted = sortTransactions(items);
+          setPeriodTransactions(sorted);
+          if (summaryView === "today") {
+            setTodayTransactions(sorted);
+          } else {
+            setTodayTransactions(sorted.filter((tx) => isToday(tx.timestamp)));
+          }
+        })
+        .catch(() => {
+          if (shouldUpdate()) {
+            setPeriodTransactions([]);
+            setTodayTransactions([]);
+          }
+        })
       : Promise.resolve();
 
     const monthPromise =
@@ -280,10 +289,10 @@ export const TransactionList = ({
       } else if (nowInMonth) {
         delta = editedTx.amount;
       }
-    if (delta !== 0) {
-      setMonthTotal((prev) => (prev === null ? prev : prev + delta));
+      if (delta !== 0) {
+        setMonthTotal((prev) => (prev === null ? prev : prev + delta));
+      }
     }
-  }
   }, [editedTx, summaryView, isInCurrentMonth]);
 
   useEffect(() => {
@@ -389,15 +398,15 @@ export const TransactionList = ({
   const pacingSpent = viewTotal;
   const pacingTarget =
     hasBudget &&
-    isPacingView &&
-    rawRemaining !== null &&
-    daysLeftInMonth > 0
+      isPacingView &&
+      rawRemaining !== null &&
+      daysLeftInMonth > 0
       ? (() => {
-          // Solve (B - (M + x)) / D = T + x for x.
-          // B = activeBudget, M = monthToDateTotal (includes today), T = pacingSpent, D = daysLeftInMonth.
-          return (activeBudget - (monthToDateTotal ?? viewTotal) - daysLeftInMonth * pacingSpent) /
-            (daysLeftInMonth + 1);
-        })()
+        // Solve (B - (M + x)) / D = T + x for x.
+        // B = activeBudget, M = monthToDateTotal (includes today), T = pacingSpent, D = daysLeftInMonth.
+        return (activeBudget - (monthToDateTotal ?? viewTotal) - daysLeftInMonth * pacingSpent) /
+          (daysLeftInMonth + 1);
+      })()
       : 0;
   const pacingCap =
     summaryView === "today" ? pacingSpent + Math.max(pacingTarget, 0) : 0;
@@ -599,17 +608,17 @@ export const TransactionList = ({
     !hasBudget || !isPacingView ? null : (
       <div className="mt-4 rounded-[var(--kk-radius-md)] border border-[var(--kk-smoke)] bg-white/70 p-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex w-full items-center justify-between gap-2">
-          <div className="kk-label">Safe to spend today</div>
-          <button
-            type="button"
-            onClick={openBudgetEditorFromPacing}
-            className="text-xs font-medium text-[var(--kk-ember)] transition hover:text-[var(--kk-ember-ink)]"
-            aria-label="Edit monthly budget"
-          >
-            Edit
-          </button>
-        </div>
+          <div className="flex w-full items-center justify-between gap-2">
+            <div className="kk-label">Safe to spend today</div>
+            <button
+              type="button"
+              onClick={openBudgetEditorFromPacing}
+              className="text-xs font-medium text-[var(--kk-ember)] transition hover:text-[var(--kk-ember-ink)]"
+              aria-label="Edit monthly budget"
+            >
+              Edit
+            </button>
+          </div>
         </div>
         <div className="mt-3 flex items-center justify-start gap-4">
           {pacingOverspend ? (
@@ -677,6 +686,18 @@ export const TransactionList = ({
       if (tx) onEdit(tx);
     },
     [findTxById, onEdit]
+  );
+
+  const handleTogglePrivate = useCallback(
+    async (id: string, nextPrivate: boolean) => {
+      const shared = await isTransactionShared(id);
+      if (shared && nextPrivate) return; // Prevent marking shared as private
+      const tx = findTxById(id);
+      if (!tx) return;
+      await updateTransaction(id, { is_private: nextPrivate });
+      reloadTransactions();
+    },
+    [findTxById, reloadTransactions]
   );
 
   const mobileSheetTx = mobileSheetTxId ? findTxById(mobileSheetTxId) : null;
@@ -814,6 +835,8 @@ export const TransactionList = ({
         onClose={closeMobileSheet}
         onEdit={hasEdit ? handleEdit : undefined}
         onDelete={handleDelete}
+        onTogglePrivate={handleTogglePrivate}
+        isShared={isMobileSheetShared}
         formatCurrency={formatCurrency}
       />
     </div>

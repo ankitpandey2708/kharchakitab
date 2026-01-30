@@ -27,6 +27,17 @@
   --kk-danger-bg: rgba(229, 72, 77, 0.08);
   --kk-danger-ink: #b02a30;
 
+  /* Forest & Sage Spectrum (Success/Positive) */
+  --kk-sage: #2d8d60;
+  --kk-sage-bg: rgba(45, 141, 96, 0.08);
+  --kk-sage-ink: #1e5e40;
+  --kk-forest: #1b4d3e;
+
+  /* Sky & Ocean (Info) */
+  --kk-ocean: #3e63dd;
+  --kk-ocean-bg: rgba(62, 99, 221, 0.08);
+  --kk-ocean-ink: #2a4099;
+
   /* Radius scale */
   --kk-radius-sm: 12px;
   --kk-radius-md: 16px;
@@ -738,7 +749,8 @@ body::before {
   display: none;
 }
 
-@media (pointer: coarse), (max-width: 639px) {
+@media (pointer: coarse),
+(max-width: 639px) {
   .kk-mobile-only {
     display: inline-flex;
   }
@@ -822,4 +834,374 @@ body::before {
   .p-5 {
     padding: calc(var(--spacing) * 2);
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Household Sync & Device Management
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Icon Wrappers */
+.kk-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 12px;
+  background: var(--kk-smoke);
+  color: var(--kk-ash);
+  transition: all var(--kk-duration-fast) var(--kk-ease-out);
+}
+
+.kk-icon-success {
+  background: var(--kk-sage-bg);
+  color: var(--kk-sage);
+}
+
+.kk-icon-warning {
+  background: rgba(247, 201, 72, 0.12);
+  /* Saffron bg */
+  color: var(--kk-saffron);
+}
+
+.kk-icon-muted {
+  background: var(--kk-smoke);
+  color: var(--kk-ash);
+}
+
+/* Status Indicators */
+.kk-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.kk-status-dot-small {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.kk-status-online {
+  background-color: var(--kk-sage);
+}
+
+.kk-status-connecting {
+  background-color: var(--kk-saffron);
+  animation: pulse 1.5s infinite;
+}
+
+.kk-status-offline {
+  background-color: var(--kk-ash);
+}
+
+.kk-status-paired {
+  background-color: var(--kk-ocean);
+}
+
+.kk-status-text {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--kk-text-chip);
+  font-weight: 600;
+  letter-spacing: var(--kk-tracking-chip);
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Device Cards */
+.kk-device-card {
+  position: relative;
+  background: white;
+  border: 1px solid var(--kk-smoke-heavy);
+  border-radius: var(--kk-radius-md);
+  transition: all var(--kk-duration-fast) var(--kk-ease-out);
+}
+
+.kk-device-card:hover {
+  border-color: var(--kk-ember);
+  box-shadow: var(--kk-shadow-sm);
+}
+
+.kk-device-offline {
+  opacity: 0.7;
+  filter: grayscale(0.5);
+}
+
+.kk-device-connected {
+  border-color: var(--kk-sage);
+  background: var(--kk-sage-bg);
+}
+
+.kk-device-button {
+  width: 100%;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  text-align: left;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+}
+
+.kk-device-avatar {
+  position: relative;
+  width: 2.5rem;
+  height: 2.5rem;
+  background: var(--kk-cream);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.kk-device-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.kk-device-name {
+  font-weight: 600;
+  color: var(--kk-ink);
+  display: flex;
+  align-items: center;
+}
+
+.kk-device-status {
+  flex-shrink: 0;
+}
+
+.kk-device-action {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  padding: 0.25rem;
+  color: var(--kk-ash);
+  opacity: 0;
+  transition: opacity var(--kk-duration-fast);
+}
+
+.kk-device-card:hover .kk-device-action {
+  opacity: 1;
+}
+
+/* Avatar States */
+.kk-avatar-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid white;
+}
+
+.kk-avatar-online {
+  background-color: var(--kk-sage);
+}
+
+.kk-avatar-connecting {
+  background-color: var(--kk-saffron);
+}
+
+.kk-avatar-offline {
+  background-color: var(--kk-ash);
+}
+
+/* Empty States */
+.kk-empty-state {
+  padding: 3rem 1.5rem;
+  text-align: center;
+  background: var(--kk-smoke);
+  border-radius: var(--kk-radius-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.kk-empty-icon {
+  color: var(--kk-ash);
+  opacity: 0.4;
+}
+
+.kk-empty-title {
+  font-weight: 600;
+  color: var(--kk-ink);
+  font-size: 1rem;
+}
+
+.kk-empty-description {
+  font-size: 0.875rem;
+  color: var(--kk-ash);
+  max-width: 280px;
+}
+
+/* Badges */
+.kk-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.625rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.kk-badge-info {
+  background: var(--kk-ocean-bg);
+  color: var(--kk-ocean-ink);
+}
+
+.kk-badge-error {
+  background: var(--kk-danger-bg);
+  color: var(--kk-danger-ink);
+}
+
+.kk-badge-warning {
+  background: rgba(247, 201, 72, 0.12);
+  color: #856404;
+}
+
+.kk-badge-muted {
+  background: var(--kk-smoke-heavy);
+  color: var(--kk-ash);
+}
+
+/* Progress */
+.kk-progress-container {
+  width: 100%;
+}
+
+.kk-progress-bar {
+  height: 8px;
+  background: var(--kk-smoke-heavy);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+/* Chips */
+.kk-chip-group {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+/* Specialized Cards */
+.kk-card-emphasis {
+  background: linear-gradient(to bottom right, white, var(--kk-cream));
+  border: 2px solid var(--kk-ember);
+}
+
+.kk-card-warning {
+  border: 1px solid var(--kk-saffron);
+  background: rgba(247, 201, 72, 0.04);
+}
+
+/* Pairing Codes */
+.kk-pairing-code {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.kk-code-digit {
+  width: 3.5rem;
+  height: 4.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border: 1px solid var(--kk-smoke-heavy);
+  border-radius: var(--kk-radius-md);
+  font-size: 2rem;
+  font-weight: 700;
+  font-family: var(--font-display);
+  color: var(--kk-ember);
+  box-shadow: var(--kk-shadow-sm);
+}
+
+.kk-code-input-wrapper {
+  max-width: 120px;
+}
+
+.kk-code-input {
+  letter-spacing: 0.5em;
+  font-weight: 700;
+  font-size: 1.25rem;
+}
+
+/* Conflict Resolution */
+.kk-conflict-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  background: white;
+  border: 1px solid var(--kk-smoke-heavy);
+  border-radius: var(--kk-radius-md);
+  cursor: pointer;
+  transition: all var(--kk-duration-fast);
+}
+
+.kk-conflict-item:hover {
+  border-color: var(--kk-saffron);
+  background: rgba(247, 201, 72, 0.04);
+}
+
+.kk-conflict-id {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.kk-conflict-card {
+  padding: 1.25rem;
+  background: white;
+  border: 1px solid var(--kk-smoke-heavy);
+  border-radius: var(--kk-radius-lg);
+}
+
+.kk-conflict-header {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1rem;
+  gap: 0.25rem;
+}
+
+.kk-conflict-editor {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--kk-ash);
+}
+
+.kk-conflict-item-name {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--kk-ink);
+}
+
+.kk-conflict-amount {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--kk-ember);
+  margin-top: 0.25rem;
 }

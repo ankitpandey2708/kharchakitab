@@ -14,6 +14,8 @@ interface TransactionActionSheetProps {
   onClose: () => void;
   onEdit?: (id: string) => void;
   onDelete: (id: string) => void;
+  onTogglePrivate?: (id: string, nextPrivate: boolean) => void;
+  isShared?: boolean;
   formatCurrency: (
     value: number,
     options?: Intl.NumberFormatOptions
@@ -38,21 +40,22 @@ export const TransactionActionSheet = ({
   onClose,
   onEdit,
   onDelete,
+  onTogglePrivate,
+  isShared = false,
   formatCurrency,
 }: TransactionActionSheetProps) => {
   if (!isOpen || !tx) return null;
 
   return (
     <AnimatePresence>
-      <motion.button
+      <motion.div
         key="transaction-action-sheet-overlay"
-        type="button"
         aria-label="Close transaction actions"
-        className="fixed inset-0 z-40 bg-black/30 sm:hidden"
+        className="fixed inset-0 z-40 bg-[var(--kk-void)]/40 backdrop-blur-sm sm:hidden"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.18 }}
+        transition={{ duration: 0.2 }}
         onClick={onClose}
       />
       <motion.div
@@ -61,7 +64,7 @@ export const TransactionActionSheet = ({
         initial={{ y: "100%", opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: "100%", opacity: 0 }}
-        transition={{ duration: 0.24, ease: "easeOut" }}
+        transition={{ duration: 0.2, ease: "easeOut" }}
         role="dialog"
         aria-modal="true"
         aria-label={`Actions for ${tx.item}`}
@@ -87,9 +90,8 @@ export const TransactionActionSheet = ({
             </div>
 
             <div
-              className={`mt-4 grid gap-2 ${
-                hasEdit ? "grid-cols-2" : "grid-cols-1"
-              }`}
+              className={`mt-4 grid gap-2 ${hasEdit ? "grid-cols-2" : "grid-cols-1"
+                }`}
             >
               {hasEdit && onEdit && (
                 <button
@@ -106,11 +108,10 @@ export const TransactionActionSheet = ({
               )}
               <button
                 type="button"
-                className={`kk-btn-secondary flex items-center justify-center gap-2 ${
-                  confirmDelete
-                    ? "border-[var(--kk-ember)] text-[var(--kk-ember)]"
-                    : ""
-                }`}
+                className={`kk-btn-secondary flex items-center justify-center gap-2 ${confirmDelete
+                  ? "border-[var(--kk-ember)] text-[var(--kk-ember)]"
+                  : ""
+                  }`}
                 onClick={() => {
                   if (!confirmDelete) {
                     setConfirmDelete(true);
@@ -130,6 +131,23 @@ export const TransactionActionSheet = ({
                 )}
               </button>
             </div>
+            {onTogglePrivate && !isShared && (
+              <button
+                type="button"
+                className="kk-btn-secondary mt-3 flex items-center justify-center gap-2"
+                onClick={() => {
+                  onTogglePrivate(tx.id, !tx.is_private);
+                  onClose();
+                }}
+              >
+                {tx.is_private ? "Make shared" : "Make private"}
+              </button>
+            )}
+            {isShared && (
+              <div className="mt-3 bg-[var(--kk-smoke)] p-2 rounded-lg text-center text-[10px] text-[var(--kk-ash)] uppercase tracking-wider font-bold">
+                Already shared with partner
+              </div>
+            )}
           </div>
         </div>
       </motion.div>

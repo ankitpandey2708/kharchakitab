@@ -1,27 +1,134 @@
 import { openDB, type DBSchema, type IDBPIndex } from "idb";
-import type { Transaction } from "@/src/types";
+import type {
+  DeviceIdentity,
+  PairingRecord,
+  SyncState,
+  Transaction,
+  TransactionVersion,
+} from "@/src/types";
 import { normalizeAmount } from "@/src/utils/money";
+import { getFingerprintData, parseDeviceName } from "@/src/utils/deviceIdentity";
 
-interface QuickLogDB extends DBSchema {
+interface QuickLogDB {
   transactions: {
     key: string;
     value: Transaction;
     indexes: {
       "by-date": number;
+      "by-updated": number;
+      "by-owner": string;
+      "by-private": boolean;
+      "by-deleted": number;
+    };
+  };
+  transaction_versions: {
+    key: string;
+    value: TransactionVersion;
+    indexes: {
+      "by-transaction": string;
+      "by-updated": number;
+    };
+  };
+  device_identity: {
+    key: string;
+    value: DeviceIdentity;
+    indexes: {
+      "by-name": string;
+    };
+  };
+  pairings: {
+    key: string;
+    value: PairingRecord;
+    indexes: {
+      "by-created": number;
+    };
+  };
+  sync_state: {
+    key: string;
+    value: SyncState;
+    indexes: {
+      "by-last-sync": number;
     };
   };
 }
 
 const DB_NAME = "QuickLogDB";
-const DB_VERSION = 1;
+const DB_VERSION = 3;
 const queryCache = new Map<string, Transaction[]>();
 
 const getDb = () =>
   openDB<QuickLogDB>(DB_NAME, DB_VERSION, {
-    upgrade(db) {
+    upgrade: async (db, oldVersion, _newVersion, transaction) => {
+      let store: any;
       if (!db.objectStoreNames.contains("transactions")) {
-        const store = db.createObjectStore("transactions", { keyPath: "id" });
+        store = db.createObjectStore("transactions", { keyPath: "id" });
         store.createIndex("by-date", "timestamp");
+      } else {
+        store = transaction.objectStore("transactions");
+      }
+
+      if (!store.indexNames.contains("by-updated")) {
+        store.createIndex("by-updated", "updated_at");
+      }
+      if (!store.indexNames.contains("by-owner")) {
+        store.createIndex("by-owner", "owner_device_id");
+      }
+      if (!store.indexNames.contains("by-private")) {
+        store.createIndex("by-private", "is_private");
+      }
+      if (!store.indexNames.contains("by-deleted")) {
+        store.createIndex("by-deleted", "deleted_at");
+      }
+
+      if (!db.objectStoreNames.contains("transaction_versions")) {
+        const versions = db.createObjectStore("transaction_versions", {
+          keyPath: "version_id",
+        });
+        versions.createIndex("by-transaction", "transaction_id");
+        versions.createIndex("by-updated", "updated_at");
+      }
+
+      if (!db.objectStoreNames.contains("device_identity")) {
+        const identity = db.createObjectStore("device_identity", {
+          keyPath: "device_id",
+        });
+        identity.createIndex("by-name", "display_name");
+      }
+
+      if (!db.objectStoreNames.contains("pairings")) {
+        const pairings = db.createObjectStore("pairings", {
+          keyPath: "partner_device_id",
+        });
+        pairings.createIndex("by-created", "created_at");
+      }
+
+      if (!db.objectStoreNames.contains("sync_state")) {
+        const syncState = db.createObjectStore("sync_state", {
+          keyPath: "partner_device_id",
+        });
+        syncState.createIndex("by-last-sync", "last_sync_at");
+      }
+
+      if (oldVersion < 2) {
+        let cursor = await store.openCursor();
+        while (cursor) {
+          const value = cursor.value as Transaction;
+          const timestamp = value.timestamp ?? Date.now();
+          const next: Transaction = {
+            ...value,
+            owner_device_id: value.owner_device_id ?? "legacy",
+            created_at: value.created_at ?? timestamp,
+            updated_at: value.updated_at ?? timestamp,
+            is_private: value.is_private ?? false,
+            source: value.source ?? "unknown",
+            version: value.version ?? 1,
+            version_group_id: value.version_group_id ?? value.id,
+            deleted_at: value.deleted_at ?? null,
+            conflict: value.conflict ?? false,
+          };
+          await cursor.update(next);
+          cursor = await cursor.continue();
+        }
       }
     },
   });
@@ -33,8 +140,12 @@ const generateId = () => {
   return `tx_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 };
 
-const collectTransactions = async (
-  index: IDBPIndex<QuickLogDB, ["transactions"], "transactions", "by-date">,
+const generateVersionId = () => `ver_${generateId()}`;
+
+const collectTransactions = async <
+  IndexName extends keyof QuickLogDB["transactions"]["indexes"]
+>(
+  index: IDBPIndex<QuickLogDB, ["transactions"], "transactions", IndexName>,
   range: IDBKeyRange | null | undefined,
   limit?: number
 ): Promise<Transaction[]> => {
@@ -48,7 +159,7 @@ const collectTransactions = async (
   return results;
 };
 
-const cacheKeyFor = (parts: Array<string | number | undefined | null>) =>
+const cacheKeyFor = (parts: Array<string | number | boolean | undefined | null>) =>
   parts.map((part) => String(part ?? "")).join("|");
 
 const getCached = (key: string) => queryCache.get(key);
@@ -61,14 +172,186 @@ const clearCache = () => {
   queryCache.clear();
 };
 
+const isDeleted = (tx: Transaction) => Boolean(tx.deleted_at);
+
+const ensureDefaults = (
+  tx: Transaction,
+  overrides?: Partial<Transaction>
+): Transaction => {
+  const now = Date.now();
+  return {
+    ...tx,
+    amount: normalizeAmount(tx.amount),
+    created_at: tx.created_at ?? now,
+    updated_at: tx.updated_at ?? now,
+    is_private: tx.is_private ?? false,
+    source: tx.source ?? "unknown",
+    version: tx.version ?? 1,
+    version_group_id: tx.version_group_id ?? tx.id,
+    deleted_at: tx.deleted_at ?? null,
+    conflict: tx.conflict ?? false,
+    ...overrides,
+  };
+};
+
+const backfillOwnerDeviceId = async (deviceId: string) => {
+  const db = await getDb();
+  const tx = db.transaction("transactions", "readwrite");
+  const store = tx.store;
+  let cursor = await store.openCursor();
+  while (cursor) {
+    const value = cursor.value as Transaction;
+    if (!value.owner_device_id || value.owner_device_id === "legacy") {
+      await cursor.update({
+        ...value,
+        owner_device_id: deviceId,
+        updated_at: Date.now(),
+        version: value.version ?? 1,
+      });
+    }
+    cursor = await cursor.continue();
+  }
+  await tx.done;
+};
+
+const getSmartDeviceName = () => {
+  if (typeof navigator === "undefined") return "My Phone";
+  const ua = navigator.userAgent;
+  let device = "Device";
+  if (/Windows/.test(ua)) device = "Windows PC";
+  else if (/Macintosh/.test(ua)) device = "Mac";
+  else if (/iPhone/.test(ua)) device = "iPhone";
+  else if (/iPad/.test(ua)) device = "iPad";
+  else if (/Android/.test(ua)) device = "Android";
+  else if (/Linux/.test(ua)) device = "Linux PC";
+
+  let browser = "";
+  if (/Edg/.test(ua)) browser = "Edge";
+  else if (/Chrome/.test(ua) && !/Edg/.test(ua)) browser = "Chrome";
+  else if (/Firefox/.test(ua)) browser = "Firefox";
+  else if (/Safari/.test(ua) && !/Chrome/.test(ua)) browser = "Safari";
+
+  return browser ? `${device} (${browser})` : device;
+};
+
+export const getDeviceIdentity = async (): Promise<DeviceIdentity> => {
+  // Fetch fingerprint data first to avoid IDB transaction auto-commit issues
+  let visitorId: string | undefined;
+  let smartName: string | undefined;
+
+  try {
+    const fpData = await getFingerprintData();
+    if (fpData) {
+      visitorId = fpData.visitorId;
+      smartName = parseDeviceName(fpData.components);
+    }
+  } catch (e) {
+    console.warn("FingerprintJS failed", e);
+  }
+
+  const db = await getDb();
+  const tx = db.transaction("device_identity", "readwrite");
+  const store = tx.store;
+  const all = await store.getAll();
+  const now = Date.now();
+
+  // Fallback name
+  if (!smartName) smartName = getSmartDeviceName();
+
+  if (all.length > 0) {
+    const identity = { ...all[0], last_active_at: now };
+    if (visitorId && !identity.visitor_id) {
+      identity.visitor_id = visitorId;
+    }
+    if (identity.display_name === "My Phone" || identity.display_name === "Device") {
+      identity.display_name = smartName;
+    }
+    await store.put(identity);
+    await tx.done;
+    return identity;
+  }
+  const device_id = generateId();
+  const identity: DeviceIdentity = {
+    device_id,
+    visitor_id: visitorId,
+    display_name: smartName,
+    created_at: now,
+    last_active_at: now,
+  };
+  await store.put(identity);
+  await tx.done;
+  await backfillOwnerDeviceId(device_id);
+  return identity;
+};
+
+export const setDeviceDisplayName = async (displayName: string) => {
+  const identity = await getDeviceIdentity();
+  const db = await getDb();
+  await db.put("device_identity", {
+    ...identity,
+    display_name: displayName.trim() || identity.display_name,
+    last_active_at: Date.now(),
+  });
+};
+
+export const recordTransactionVersion = async (
+  transaction: Transaction,
+  editorDeviceId: string
+) => {
+  const db = await getDb();
+  const version: TransactionVersion = {
+    version_id: generateVersionId(),
+    transaction_id: transaction.id,
+    version_index: transaction.version ?? 1,
+    updated_at: transaction.updated_at ?? Date.now(),
+    editor_device_id: editorDeviceId,
+    payload_snapshot: transaction,
+  };
+  await db.put("transaction_versions", version);
+};
+
+export const upsertTransactionVersion = async (
+  transaction: Transaction,
+  editorDeviceId: string,
+  options?: { versionId?: string }
+): Promise<void> => {
+  const db = await getDb();
+  const versionIndex = transaction.version ?? 1;
+  const updatedAt = transaction.updated_at ?? Date.now();
+  const index = db
+    .transaction("transaction_versions")
+    .store.index("by-transaction");
+  for await (const cursor of index.iterate(transaction.id)) {
+    const value = cursor.value as TransactionVersion;
+    if (
+      value.version_index === versionIndex &&
+      value.editor_device_id === editorDeviceId &&
+      value.updated_at === updatedAt
+    ) {
+      return;
+    }
+  }
+  const version: TransactionVersion = {
+    version_id: options?.versionId ?? generateVersionId(),
+    transaction_id: transaction.id,
+    version_index: versionIndex,
+    updated_at: updatedAt,
+    editor_device_id: editorDeviceId,
+    payload_snapshot: transaction,
+  };
+  await db.put("transaction_versions", version);
+};
+
 export const addTransaction = async (tx: Transaction): Promise<string> => {
   const db = await getDb();
-  const transaction = {
+  const identity = await getDeviceIdentity();
+  const transaction = ensureDefaults({
     ...tx,
     id: tx.id || generateId(),
-    amount: normalizeAmount(tx.amount),
-  };
+    owner_device_id: tx.owner_device_id ?? identity.device_id,
+  });
   await db.put("transactions", transaction);
+  await recordTransactionVersion(transaction, identity.device_id);
   clearCache();
   return transaction.id;
 };
@@ -82,7 +365,8 @@ export const getRecentTransactions = async (
   const db = await getDb();
   const index = db.transaction("transactions").store.index("by-date");
   const results = await collectTransactions(index, null, limit);
-  return setCached(cacheKey, results);
+  const filtered = results.filter((tx) => !isDeleted(tx));
+  return setCached(cacheKey, filtered);
 };
 
 export const getTransactionsInRange = async (
@@ -101,26 +385,295 @@ export const getTransactionsInRange = async (
   if (upperBound < start) return [];
   const range = IDBKeyRange.bound(start, upperBound);
   const results = await collectTransactions(index, range, limit);
-  return setCached(cacheKey, results);
+  const filtered = results.filter((tx) => !isDeleted(tx));
+  return setCached(cacheKey, filtered);
+};
+
+export const getTransactionsUpdatedSince = async (
+  since: number,
+  limit?: number
+): Promise<Transaction[]> => {
+  const db = await getDb();
+  const index = db.transaction("transactions").store.index("by-updated");
+  const range = IDBKeyRange.lowerBound(since, true);
+  const results = await collectTransactions(index, range, limit);
+  return results;
+};
+
+export const getTransactionsByOwner = async (
+  ownerDeviceId: string,
+  options?: {
+    limit?: number;
+    includeDeleted?: boolean;
+    includePrivate?: boolean;
+  }
+): Promise<Transaction[]> => {
+  const cacheKey = cacheKeyFor([
+    "owner",
+    ownerDeviceId,
+    options?.limit,
+    options?.includeDeleted,
+    options?.includePrivate,
+  ]);
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+  const db = await getDb();
+  const index = db.transaction("transactions").store.index("by-owner");
+  const range = IDBKeyRange.only(ownerDeviceId);
+  const results = await collectTransactions(index, range, options?.limit);
+  const filtered = results.filter((tx) => {
+    if (!options?.includeDeleted && isDeleted(tx)) return false;
+    if (!options?.includePrivate && tx.is_private) return false;
+    return true;
+  });
+  return setCached(cacheKey, filtered);
+};
+
+export const getTransactionById = async (
+  id: string
+): Promise<Transaction | undefined> => {
+  const db = await getDb();
+  return db.get("transactions", id);
 };
 
 export const updateTransaction = async (
   id: string,
-  updates: Partial<Transaction>
+  updates: Partial<Transaction>,
+  options?: {
+    skipVersion?: boolean;
+    source?: Transaction["source"];
+    updatedAt?: number;
+    editorDeviceId?: string;
+    overrideVersion?: number;
+  }
 ): Promise<void> => {
   const db = await getDb();
   const existing = await db.get("transactions", id);
   if (!existing) return;
-  const next =
-    typeof updates.amount === "number"
-      ? { ...existing, ...updates, amount: normalizeAmount(updates.amount) }
-      : { ...existing, ...updates };
+  const now = options?.updatedAt ?? Date.now();
+  const nextVersion =
+    options?.overrideVersion ??
+    (options?.skipVersion
+      ? existing.version ?? 1
+      : (existing.version ?? 1) + 1);
+  const next = ensureDefaults({
+    ...existing,
+    ...updates,
+    amount:
+      typeof updates.amount === "number"
+        ? normalizeAmount(updates.amount)
+        : existing.amount,
+    updated_at: now,
+    source: options?.source ?? existing.source,
+    version: nextVersion,
+  });
+  await db.put("transactions", next);
+  if (!options?.skipVersion) {
+    const editorDeviceId =
+      options?.editorDeviceId ??
+      existing.owner_device_id ??
+      (await getDeviceIdentity()).device_id;
+    await recordTransactionVersion(next, editorDeviceId);
+  }
+  clearCache();
+};
+
+export const upsertTransactionRaw = async (tx: Transaction): Promise<void> => {
+  const db = await getDb();
+  const existing = await db.get("transactions", tx.id);
+  const next = ensureDefaults({ ...(existing ?? {}), ...tx });
   await db.put("transactions", next);
   clearCache();
 };
 
+const clearTransactionHistory = async (db: any, id: string) => {
+  const tx = db.transaction("transaction_versions", "readwrite");
+  const versions = tx.store;
+  const index = versions.index("by-transaction");
+  let cursor = await index.openKeyCursor(id);
+  while (cursor) {
+    await versions.delete(cursor.primaryKey);
+    cursor = await cursor.continue();
+  }
+  await tx.done;
+};
+
 export const deleteTransaction = async (id: string): Promise<void> => {
   const db = await getDb();
+  const existing = await db.get("transactions", id);
+  if (!existing) return;
+
+  const pairings = await getPairings();
+  const txTime = existing.created_at ?? existing.timestamp;
+
+  // A transaction is safe to hard delete if it's private or if it hasn't been synced to any partner.
+  const wasNeverSynced =
+    existing.is_private ||
+    pairings.length === 0 ||
+    pairings.every((p) => !p.last_sync_at || p.last_sync_at < txTime);
+
+  if (wasNeverSynced) {
+    // Full Hard Delete
+    await db.delete("transactions", id);
+    await clearTransactionHistory(db, id);
+  } else {
+    // Soft Delete (Keep tombstone for sync)
+    await updateTransaction(
+      id,
+      {
+        deleted_at: Date.now(),
+      },
+      { skipVersion: false }
+    );
+    // Wipe history anyway to save space
+    await clearTransactionHistory(db, id);
+  }
+  clearCache();
+};
+
+export const hardDeleteTransaction = async (id: string): Promise<void> => {
+  const db = await getDb();
   await db.delete("transactions", id);
+  clearCache();
+};
+
+export const getPairings = async (): Promise<PairingRecord[]> => {
+  const db = await getDb();
+  return db.getAll("pairings");
+};
+
+export const savePairing = async (record: PairingRecord): Promise<void> => {
+  const db = await getDb();
+  await db.put("pairings", record);
+};
+
+export const removePairing = async (partnerDeviceId: string): Promise<void> => {
+  const db = await getDb();
+  await db.delete("pairings", partnerDeviceId);
+  await db.delete("sync_state", partnerDeviceId);
+};
+
+export const getSyncState = async (
+  partnerDeviceId: string
+): Promise<SyncState | undefined> => {
+  const db = await getDb();
+  return db.get("sync_state", partnerDeviceId);
+};
+
+export const setSyncState = async (state: SyncState): Promise<void> => {
+  const db = await getDb();
+  await db.put("sync_state", state);
+};
+
+export const getTransactionVersions = async (
+  transactionId: string
+): Promise<TransactionVersion[]> => {
+  const db = await getDb();
+  const index = db
+    .transaction("transaction_versions")
+    .store.index("by-transaction");
+  const results: TransactionVersion[] = [];
+  for await (const cursor of index.iterate(transactionId)) {
+    results.push(cursor.value);
+  }
+  return results.sort((a, b) => b.updated_at - a.updated_at);
+};
+
+export const getConflicts = async (
+  partnerDeviceId?: string
+): Promise<string[]> => {
+  const db = await getDb();
+  if (partnerDeviceId) {
+    const state = await db.get("sync_state", partnerDeviceId);
+    return state?.conflicts ?? [];
+  }
+  const states = await db.getAll("sync_state");
+  const conflicts = new Set<string>();
+  states.forEach((state) => {
+    state.conflicts?.forEach((id: string) => conflicts.add(id));
+  });
+  return Array.from(conflicts);
+};
+
+export const addConflict = async (
+  partnerDeviceId: string,
+  transactionId: string
+) => {
+  const state = (await getSyncState(partnerDeviceId)) ?? {
+    partner_device_id: partnerDeviceId,
+    last_sync_at: null,
+    last_sync_cursor: null,
+    conflicts: [],
+  };
+  const conflicts = new Set(state.conflicts ?? []);
+  conflicts.add(transactionId);
+  await setSyncState({ ...state, conflicts: Array.from(conflicts) });
+};
+
+export const clearConflict = async (
+  partnerDeviceId: string,
+  transactionId: string
+) => {
+  const state = await getSyncState(partnerDeviceId);
+  if (!state?.conflicts) return;
+  const conflicts = state.conflicts.filter((id) => id !== transactionId);
+  await setSyncState({ ...state, conflicts });
+};
+
+export const applyRemoteTransaction = async (
+  partnerDeviceId: string,
+  remote: Transaction,
+  lastSyncAt: number | null
+): Promise<{ received: boolean; conflict: boolean; applied: boolean }> => {
+  if (!remote || remote.is_private) {
+    return { received: false, conflict: false, applied: false };
+  }
+  const localRecord = await getTransactionById(remote.id);
+  if (!localRecord) {
+    await upsertTransactionRaw({ ...remote, conflict: false });
+    await upsertTransactionVersion(remote, remote.owner_device_id || "remote");
+    return { received: true, conflict: false, applied: true };
+  }
+
+  const localUpdated = localRecord.updated_at ?? localRecord.timestamp;
+  const remoteUpdated = remote.updated_at ?? remote.timestamp;
+  const hasConflict =
+    Boolean(lastSyncAt) &&
+    localUpdated > (lastSyncAt ?? 0) &&
+    remoteUpdated > (lastSyncAt ?? 0) &&
+    localUpdated !== remoteUpdated;
+
+  if (hasConflict) {
+    await addConflict(partnerDeviceId, remote.id);
+    const newer = remoteUpdated >= localUpdated ? remote : localRecord;
+    await upsertTransactionRaw({ ...newer, conflict: true });
+    await upsertTransactionVersion(remote, remote.owner_device_id || "remote");
+    return { received: false, conflict: true, applied: true };
+  }
+
+  if (remoteUpdated > localUpdated) {
+    await upsertTransactionRaw({ ...remote, conflict: false });
+    await upsertTransactionVersion(remote, remote.owner_device_id || "remote");
+    return { received: true, conflict: false, applied: true };
+  }
+
+  return { received: false, conflict: false, applied: false };
+};
+
+export const isTransactionShared = async (id: string): Promise<boolean> => {
+  const db = await getDb();
+  const existing = await db.get("transactions", id);
+  if (!existing || existing.is_private) return false;
+
+  const pairings = await getPairings();
+  const txTime = existing.created_at ?? existing.timestamp;
+
+  return (
+    pairings.length > 0 &&
+    pairings.some((p) => p.last_sync_at && p.last_sync_at >= txTime)
+  );
+};
+
+export const clearCacheForSync = () => {
   clearCache();
 };

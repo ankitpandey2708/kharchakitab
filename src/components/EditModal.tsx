@@ -17,6 +17,8 @@ interface EditModalProps {
   category: string;
   paymentMethod?: "cash" | "upi" | "card" | "unknown";
   timestamp?: number;
+  isPrivate?: boolean;
+  isShared?: boolean;
   onClose: () => void;
   onSave: (data: {
     amount: number;
@@ -24,6 +26,7 @@ interface EditModalProps {
     category: string;
     paymentMethod: "cash" | "upi" | "card" | "unknown";
     timestamp: number;
+    isPrivate?: boolean;
   }) => void;
 }
 
@@ -58,6 +61,8 @@ export const EditModal = ({
   category,
   paymentMethod = "cash",
   timestamp = Date.now(),
+  isPrivate = false,
+  isShared = false,
   onClose,
   onSave,
 }: EditModalProps) => {
@@ -68,6 +73,7 @@ export const EditModal = ({
     PaymentKey
   >(paymentMethod);
   const [dateValue, setDateValue] = useState(toDateInputValue(timestamp));
+  const [isPrivateValue, setIsPrivateValue] = useState(isPrivate);
 
   useEffect(() => {
     if (isOpen) {
@@ -76,8 +82,9 @@ export const EditModal = ({
       setCategoryValue(category);
       setPaymentValue(paymentMethod);
       setDateValue(toDateInputValue(timestamp));
+      setIsPrivateValue(isPrivate);
     }
-  }, [isOpen, amount, item, category, paymentMethod, timestamp]);
+  }, [isOpen, amount, item, category, paymentMethod, timestamp, isPrivate]);
 
   useEscapeKey(isOpen, onClose);
 
@@ -218,6 +225,33 @@ export const EditModal = ({
                 </div>
               </div>
 
+              <div className={`mt-4 flex items-center justify-between gap-3 kk-radius-md border border-[var(--kk-smoke)] px-4 py-3 ${isShared ? 'bg-[var(--kk-smoke)] opacity-70' : 'bg-[var(--kk-cream)]'}`}>
+                <div>
+                  <div className="text-sm font-medium text-[var(--kk-ink)]">
+                    Private transaction
+                  </div>
+                  <div className="kk-meta">
+                    {isShared ? "This transaction has already been shared." : "Excluded from household sync"}
+                  </div>
+                </div>
+                {!isShared && (
+                  <button
+                    type="button"
+                    onClick={() => setIsPrivateValue((prev) => !prev)}
+                    aria-pressed={isPrivateValue}
+                    className={`relative inline-flex h-6 w-11 items-center kk-radius-full transition ${isPrivateValue
+                      ? "bg-[var(--kk-ember)]"
+                      : "bg-[var(--kk-smoke-heavy)]"
+                      }`}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 transform kk-radius-full bg-white transition ${isPrivateValue ? "translate-x-5" : "translate-x-1"
+                        }`}
+                    />
+                  </button>
+                )}
+              </div>
+
               {/* Save Button */}
               <button
                 type="button"
@@ -230,6 +264,7 @@ export const EditModal = ({
                     timestamp: dateValue
                       ? mergeDateWithTime(dateValue, timestamp)
                       : timestamp,
+                    isPrivate: isPrivateValue,
                   })
                 }
                 disabled={Number(amountValue || 0) <= 0}

@@ -8,11 +8,18 @@ import { EditModal } from "@/src/components/EditModal";
 import { TransactionList } from "@/src/components/TransactionList";
 import { HistoryView } from "@/src/components/HistoryView";
 import { RecordingStatus } from "@/src/components/RecordingStatus";
+import { HouseholdView } from "@/src/components/HouseholdView";
 import { useAudioRecorder } from "@/src/hooks/useAudioRecorder";
 import { parseWithGeminiFlash } from "@/src/services/gemini";
 import { parseReceiptWithGemini } from "@/src/services/receipt";
 import { transcribeAudio } from "@/src/services/sarvam";
-import { addTransaction, deleteTransaction, updateTransaction } from "@/src/db/db";
+import {
+  addTransaction,
+  deleteTransaction,
+  getDeviceIdentity,
+  updateTransaction,
+  isTransactionShared,
+} from "@/src/db/db";
 import type { Expense } from "@/src/utils/schemas";
 import type { Transaction } from "@/src/types";
 import { AlertCircle, PenLine, ImageUp } from "lucide-react";
@@ -37,6 +44,8 @@ const buildTransaction = (
   category: data.category,
   paymentMethod: data.paymentMethod,
   timestamp: data.timestamp,
+  source: data.source ?? "unknown",
+  is_private: data.is_private ?? false,
 });
 
 const formatDateYMD = (value: Date) => {
@@ -92,6 +101,8 @@ const AppShell = () => {
     category: string;
     paymentMethod?: "cash" | "upi" | "card" | "unknown";
     timestamp?: number;
+    isPrivate?: boolean;
+    isShared?: boolean;
   } | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -100,6 +111,9 @@ const AppShell = () => {
   const [isTxnSheetOpen, setIsTxnSheetOpen] = useState(false);
   const [isAboutVisible, setIsAboutVisible] = useState(false);
   const [isReceiptProcessing, setIsReceiptProcessing] = useState(false);
+  const [activeTab, setActiveTab] = useState<"personal" | "household">(
+    "personal"
+  );
   const processedBlobRef = useRef<Blob | null>(null);
   const processingRef = useRef(false);
   const receiptProcessingRef = useRef(false);
@@ -109,6 +123,9 @@ const AppShell = () => {
   useEffect(() => {
     const stored = window.localStorage.getItem("kk_about_visible");
     setIsAboutVisible(stored !== "false");
+  }, []);
+  useEffect(() => {
+    void getDeviceIdentity();
   }, []);
   useEffect(() => {
     setIsRecording(audioRecorder.isRecording);
@@ -202,6 +219,7 @@ const AppShell = () => {
       category: "Other",
       paymentMethod: "unknown",
       timestamp: Date.now(),
+      source: "unknown",
     });
     refreshTransactions();
     return tempId;
@@ -276,13 +294,18 @@ const AppShell = () => {
         paymentMethod: expense.paymentMethod ?? "cash",
         timestamp: toTimestamp(expense.date, now),
       };
-      await updateTransaction(tempId, {
-        amount: expense.amount,
-        item: expense.item,
-        category: expense.category,
-        paymentMethod: expense.paymentMethod ?? "cash",
-        timestamp: toTimestamp(expense.date, now),
-      });
+      await updateTransaction(
+        tempId,
+        {
+          amount: expense.amount,
+          item: expense.item,
+          category: expense.category,
+          paymentMethod: expense.paymentMethod ?? "cash",
+          timestamp: toTimestamp(expense.date, now),
+          source: "voice",
+        },
+        { source: "voice" }
+      );
       setEditedTx(updatedTx);
       refreshTransactions();
       posthog.capture("transaction_added", {
@@ -332,13 +355,18 @@ const AppShell = () => {
         paymentMethod: expense.paymentMethod ?? "cash",
         timestamp: toTimestamp(expense.date, now),
       };
-      await updateTransaction(tempId, {
-        amount: expense.amount,
-        item: expense.item,
-        category: expense.category,
-        paymentMethod: expense.paymentMethod ?? "cash",
-        timestamp: toTimestamp(expense.date, now),
-      });
+      await updateTransaction(
+        tempId,
+        {
+          amount: expense.amount,
+          item: expense.item,
+          category: expense.category,
+          paymentMethod: expense.paymentMethod ?? "cash",
+          timestamp: toTimestamp(expense.date, now),
+          source: "receipt",
+        },
+        { source: "receipt" }
+      );
       setEditedTx(updatedTx);
       refreshTransactions();
       posthog.capture("receipt_processed", {
@@ -429,7 +457,8 @@ const AppShell = () => {
     month: "short",
   });
 
-  const openEdit = useCallback((tx: Transaction) => {
+  const openEdit = useCallback(async (tx: Transaction) => {
+    const isShared = await isTransactionShared(tx.id);
     setEditState({
       mode: "edit",
       id: tx.id,
@@ -438,6 +467,8 @@ const AppShell = () => {
       category: tx.category,
       paymentMethod: tx.paymentMethod,
       timestamp: tx.timestamp,
+      isPrivate: tx.is_private ?? false,
+      isShared,
     });
     setIsEditing(true);
   }, []);
@@ -472,14 +503,22 @@ const AppShell = () => {
       category: string;
       paymentMethod: "cash" | "upi" | "card" | "unknown";
       timestamp: number;
+      isPrivate?: boolean;
     }) => {
       if (data.amount <= 0) {
         setLastError(ERROR_MESSAGES.amountGreaterThanZero);
         return;
       }
       if (editState?.mode === "edit" && editState.id) {
-        const updated = buildTransaction(data, editState.id);
-        await updateTransaction(editState.id, updated);
+        const updated = buildTransaction(
+          {
+            ...data,
+            source: "manual",
+            is_private: data.isPrivate ?? false,
+          },
+          editState.id
+        );
+        await updateTransaction(editState.id, updated, { source: "manual" });
         setEditedTx(updated);
         posthog.capture("transaction_edited", {
           amount: data.amount,
@@ -487,7 +526,11 @@ const AppShell = () => {
           payment_method: data.paymentMethod,
         });
       } else {
-        const transaction = buildTransaction(data);
+        const transaction = buildTransaction({
+          ...data,
+          source: "manual",
+          is_private: data.isPrivate ?? false,
+        });
         const id = await addTransaction(transaction);
         setAddedTx({ ...transaction, id });
         posthog.capture("transaction_added", {
@@ -581,7 +624,25 @@ const AppShell = () => {
 
       {/* Main Content */}
       <main className="relative z-10 mx-auto max-w-4xl px-4 pb-24 pt-6 sm:px-6">
-        {isAboutVisible && (
+        <div className="mb-6 flex items-center justify-center">
+          <div className="flex rounded-full border border-[var(--kk-smoke)] bg-white/70 p-1 shadow-[var(--kk-shadow-sm)]">
+            {(["personal", "household"] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${activeTab === tab
+                  ? "bg-[var(--kk-ember)] text-white"
+                  : "text-[var(--kk-ink)] hover:bg-[var(--kk-cream)]"
+                  }`}
+              >
+                {tab === "personal" ? "Personal" : "Household"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {activeTab === "personal" && isAboutVisible && (
           <section className="mb-6 kk-card px-5 py-4">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
@@ -627,74 +688,80 @@ const AppShell = () => {
             </div>
           </section>
         )}
-        {/* Error Banner */}
-        <AnimatePresence>
-          {lastError && (
-            <motion.div
-              initial={{ opacity: 0, y: -12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.24 }}
-              className="mb-5 overflow-hidden rounded-[var(--kk-radius-lg)] border border-[rgba(229,72,77,0.24)] bg-[rgba(229,72,77,0.06)] px-4 py-3 shadow-[var(--kk-shadow-sm)]"
-            >
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-[rgba(229,72,77,0.25)] bg-white text-[var(--kk-danger-ink)]">
-                  <AlertCircle className="h-4 w-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start gap-2">
-                    <div className="flex-1 min-w-0 text-sm font-semibold text-[var(--kk-danger-ink)]">
-                      {lastError}
+        {activeTab === "personal" ? (
+          <>
+            {/* Error Banner */}
+            <AnimatePresence>
+              {lastError && (
+                <motion.div
+                  initial={{ opacity: 0, y: -12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -12 }}
+                  transition={{ duration: 0.24 }}
+                  className="mb-5 overflow-hidden rounded-[var(--kk-radius-lg)] border border-[rgba(229,72,77,0.24)] bg-[rgba(229,72,77,0.06)] px-4 py-3 shadow-[var(--kk-shadow-sm)]"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-[rgba(229,72,77,0.25)] bg-white text-[var(--kk-danger-ink)]">
+                      <AlertCircle className="h-4 w-4" />
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLastError(null);
-                        setEditState({
-                          mode: "new",
-                          amount: 0,
-                          item: "",
-                          category: "Food",
-                        });
-                        setIsEditing(true);
-                        posthog.capture("manual_entry_opened");
-                      }}
-                      className="kk-btn-secondary kk-btn-compact"
-                    >
-                      <PenLine className="h-3 w-3" />
-                      Enter manually
-                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start gap-2">
+                        <div className="flex-1 min-w-0 text-sm font-semibold text-[var(--kk-danger-ink)]">
+                          {lastError}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLastError(null);
+                            setEditState({
+                              mode: "new",
+                              amount: 0,
+                              item: "",
+                              category: "Food",
+                            });
+                            setIsEditing(true);
+                            posthog.capture("manual_entry_opened");
+                          }}
+                          className="kk-btn-secondary kk-btn-compact"
+                        >
+                          <PenLine className="h-3 w-3" />
+                          Enter manually
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-        {/* Recording/Processing Status */}
-        <RecordingStatus
-          isRecording={isRecording}
-          isProcessing={isProcessing}
-          isReceiptProcessing={isReceiptProcessing}
-        />
+            {/* Recording/Processing Status */}
+            <RecordingStatus
+              isRecording={isRecording}
+              isProcessing={isProcessing}
+              isReceiptProcessing={isReceiptProcessing}
+            />
 
-        {/* Transaction List */}
-        <section>
-          <TransactionList
-            refreshKey={refreshKey}
-            addedTx={addedTx}
-            deletedTx={deletedTx}
-            editedTx={editedTx}
-            onViewAll={handleOpenHistory}
-            onEdit={openEdit}
-            onMobileSheetChange={setIsTxnSheetOpen}
-            onDeleted={handleTransactionDeleted}
-          />
-        </section>
+            {/* Transaction List */}
+            <section>
+              <TransactionList
+                refreshKey={refreshKey}
+                addedTx={addedTx}
+                deletedTx={deletedTx}
+                editedTx={editedTx}
+                onViewAll={handleOpenHistory}
+                onEdit={openEdit}
+                onMobileSheetChange={setIsTxnSheetOpen}
+                onDeleted={handleTransactionDeleted}
+              />
+            </section>
+          </>
+        ) : (
+          <HouseholdView />
+        )}
       </main>
 
       {/* Mic Button */}
-      {!isTxnSheetOpen && (
+      {!isTxnSheetOpen && activeTab === "personal" && (
         <MicButton
           isRecording={isRecording}
           startRecording={handleStartRecording}
@@ -718,6 +785,8 @@ const AppShell = () => {
         category={editState?.category ?? "Food"}
         paymentMethod={editState?.paymentMethod ?? "cash"}
         timestamp={editState?.timestamp ?? Date.now()}
+        isPrivate={editState?.isPrivate ?? false}
+        isShared={editState?.isShared ?? false}
         onClose={handleCloseEdit}
         onSave={handleSaveEdit}
       />

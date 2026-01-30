@@ -2,13 +2,7 @@
 
 ## Goals
 - Enable two users to maintain personal ledgers on their own devices and merge into a unified household view without storing transaction data in the cloud.
-- Keep UX voice-first and privacy-first: transactions stay local; voice and images are processed in-memory and cleared immediately after use.
 - Provide a reliable manual "Sync Now" flow with secure pairing and conflict handling.
-
-## Non-Goals
-- No cloud storage of transactions, voice, images, or derived transcripts.
-- No always-on/background sync (web-only limitations).
-- No native app dependencies.
 
 ## Decisions Locked
 - Platform: web URL only (PWA install optional but not required).
