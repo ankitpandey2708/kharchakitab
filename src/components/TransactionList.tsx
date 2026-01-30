@@ -712,7 +712,16 @@ export const TransactionList = ({
 
   const mobileSheetTx = mobileSheetTxId ? findTxById(mobileSheetTxId) : null;
 
-  if (!isLoading && transactions.length === 0) {
+  if (isLoading) {
+    return (
+      <div className="space-y-5">
+        <div className="kk-card h-36 animate-pulse bg-[var(--kk-mist)]/50 sm:h-44" />
+        <div className="kk-card h-64 animate-pulse bg-[var(--kk-mist)]/50" />
+      </div>
+    );
+  }
+
+  if (transactions.length === 0) {
     return (
       <motion.div
         initial={{ opacity: 0, y: 16 }}
