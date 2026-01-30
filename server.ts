@@ -5,7 +5,11 @@ const PORT = process.env.PORT || 7071;
 const PRESENCE_TTL_MS = 60 * 1000; // 60 seconds for presence
 const PAIRING_TTL_MS = 5 * 60 * 1000; // S6.T6: 5 minutes for pairing sessions
 
-const server = createServer();
+const server = createServer((req, res) => {
+  // Handle basic health checks for Render/Uptime services
+  res.writeHead(200);
+  res.end("OK");
+});
 const wss = new WebSocketServer({ server });
 
 interface Client {
