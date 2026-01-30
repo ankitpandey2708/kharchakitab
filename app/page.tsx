@@ -117,12 +117,6 @@ const AppShell = () => {
   // Show by default on localhost, or if PostHog is not enabled
   const [showHousehold, setShowHousehold] = useState(false);
 
-  useEffect(() => {
-    // Only show by default on localhost for development
-    // On production, it should be disabled until feature flags are loaded
-    setShowHousehold(window.location.hostname === "localhost");
-  }, []);
-
   const { client } = useSignaling();
   const identityRef = useRef<any>(null);
 
@@ -179,18 +173,21 @@ const AppShell = () => {
   }, [client, setActiveTab, setIncomingPair, showHousehold]);
 
   useEffect(() => {
-    // Only check feature flags if PostHog is enabled for prod
-    if (process.env.NEXT_PUBLIC_POSTHOG_ENABLED === "true") {
-      posthog.onFeatureFlags(() => {
-        const isEnabled = posthog.isFeatureEnabled("household-view");
-        console.log(`[AppShell] PostHog feature flags loaded. household-view enabled: ${isEnabled}`);
+    const isLocal = window.location.hostname === "localhost";
 
-        if (isEnabled) {
-          setShowHousehold(true);
-        } else if (window.location.hostname !== "localhost") {
-          setShowHousehold(false);
-        }
-      });
+    // Always check for feature flags if PostHog initialized
+    posthog.onFeatureFlags(() => {
+      const isEnabled = posthog.isFeatureEnabled("household-view");
+      console.log(`[AppShell] PostHog flags loaded. "household-view": ${isEnabled}`);
+
+      if (typeof isEnabled === "boolean") {
+        setShowHousehold(isEnabled);
+      }
+    });
+
+    // Fallback/Default behavior before flags load or if flag is missing
+    if (isLocal) {
+      setShowHousehold(true);
     }
   }, []);
 
