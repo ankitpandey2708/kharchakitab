@@ -26,7 +26,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
 
   // Wrap setActiveTab with logging
   const setActiveTab = useCallback((tab: "personal" | "household") => {
-    console.log(`[AppContext] ${new Date().toISOString()} SET_ACTIVE_TAB: ${activeTab} -> ${tab}`);
+
     setActiveTabState(tab);
   }, [activeTab]);
 
@@ -42,7 +42,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     [isRecording, activeTab, setActiveTab, incomingPair, setIncomingPair]
   );
 
-  console.log(`[AppContext] ${new Date().toISOString()} CONTEXT_VALUE: activeTab=${activeTab}`);
+
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };
 

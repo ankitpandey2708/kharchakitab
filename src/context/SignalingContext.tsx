@@ -23,10 +23,10 @@ export const SignalingProvider = ({ children }: { children: React.ReactNode }) =
 
     const connect = useCallback(async () => {
         try {
-            console.log('[SignalingProvider] Connecting to signaling server...');
+
             const device = await getDeviceIdentity();
             if (!device) {
-                console.log('[SignalingProvider] No device identity found');
+
                 return;
             }
 
@@ -40,7 +40,7 @@ export const SignalingProvider = ({ children }: { children: React.ReactNode }) =
                 device_id: device.device_id,
                 display_name: device.display_name,
             });
-            console.log('[SignalingProvider] Registered as', device.display_name);
+
 
             // Heartbeat every 20 seconds
             intervalRef.current = window.setInterval(() => {
@@ -52,14 +52,14 @@ export const SignalingProvider = ({ children }: { children: React.ReactNode }) =
             setIsConnected(true);
             setError(null);
         } catch (err) {
-            console.log('[SignalingProvider] Connection failed:', err);
+
             setIsConnected(false);
             setError(err instanceof Error ? err.message : "Failed to connect");
         }
     }, []);
 
     const disconnect = useCallback(() => {
-        console.log('[SignalingProvider] Disconnecting...');
+
         if (intervalRef.current) {
             window.clearInterval(intervalRef.current);
             intervalRef.current = null;

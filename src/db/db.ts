@@ -247,7 +247,7 @@ export const getDeviceIdentity = async (): Promise<DeviceIdentity> => {
       smartName = parseDeviceName(fpData.components);
     }
   } catch (e) {
-    console.warn("FingerprintJS failed", e);
+
   }
 
   const db = await getDb();
@@ -287,7 +287,7 @@ export const getDeviceIdentity = async (): Promise<DeviceIdentity> => {
         recovered = allIdentities.find((id) => id.visitor_id === visitorId);
       }
     } catch (e) {
-      console.warn("Visitor ID lookup failed, falling back to manual filter", e);
+
       const allIdentities = await store.getAll();
       recovered = allIdentities.find((id) => id.visitor_id === visitorId);
     }

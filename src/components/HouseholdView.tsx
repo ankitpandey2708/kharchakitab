@@ -203,21 +203,21 @@ export const HouseholdView = () => {
 
   const refreshNearby = useCallback(async () => {
     if (isSearching) {
-      console.log('[refreshNearby] Already searching, skipping...');
+
       return;
     }
-    console.log('[refreshNearby] Starting device discovery...');
+
     setIsSearching(true);
     setErrorMessage(null);
     try {
       // Fetch identity directly to avoid stale state
       const device = await getDeviceIdentity();
       if (!device) {
-        console.log('[refreshNearby] No identity found, aborting...');
+
         setIsSearching(false);
         return;
       }
-      console.log('[refreshNearby] Using identity:', device.display_name);
+
       const client = await connectSignaling();
       client.send("presence:join", {
         device_id: device.device_id,
@@ -227,14 +227,14 @@ export const HouseholdView = () => {
         Array<{ device_id: string; display_name: string }>
       >("presence:list", { device_id: device.device_id });
       const filtered = list.filter((item) => item.device_id !== device.device_id);
-      console.log('[refreshNearby] Found', filtered.length, 'nearby devices:', filtered.map(d => d.display_name));
+
       setNearbyDevices(filtered);
     } catch (error) {
-      console.log('[refreshNearby] Error:', error);
+
       setErrorMessage("Unable to discover nearby devices");
     } finally {
       setIsSearching(false);
-      console.log('[refreshNearby] Discovery complete, isSearching=false');
+
     }
   }, [connectSignaling, isSearching]);
 
@@ -268,8 +268,8 @@ export const HouseholdView = () => {
   const handleIncomingPairCancel = async () => {
     if (!incomingPair || !identity) return;
     const timestamp = new Date().toISOString();
-    console.log(`[Client-DeviceB] ${timestamp} PAIRING_REJECT_CLICKED: User clicked Cancel Pairing button`);
-    console.log(`[Client-DeviceB] ${timestamp} PAIRING_REJECT_STATE: sessionId=${incomingPair.session_id}, from_device_id=${incomingPair.from_device_id}`);
+
+
 
     const client = await connectSignaling();
     client.send("pairing:reject", {
@@ -280,12 +280,12 @@ export const HouseholdView = () => {
       message: "Pairing request cancelled by receiver",
     });
 
-    console.log(`[Client-DeviceB] ${timestamp} PAIRING_REJECT_SENT: pairing:reject sent to ${incomingPair.from_device_id}`);
+
 
     // Clear local state
     setIncomingPair(null);
     setIncomingCode("");
-    console.log(`[Client-DeviceB] ${timestamp} PAIRING_REJECT_LOCAL_CLEARED: incomingPair and incomingCode cleared`);
+
   };
 
   const handleSyncWith = async (partnerDeviceId: string) => {
@@ -440,7 +440,7 @@ export const HouseholdView = () => {
 
   useEffect(() => {
     void (async () => {
-      console.log('[HouseholdView] Component mounted, initializing...');
+
       const device = await getDeviceIdentity();
       setIdentity(device);
       setDisplayNameDraft(device.display_name);
@@ -450,7 +450,7 @@ export const HouseholdView = () => {
       await fetchHouseholdTransactions();
       await refreshNearby();
 
-      console.log('[HouseholdView] Initialization complete.');
+
     })();
   }, [fetchHouseholdTransactions, refreshNearby, refreshSyncState]);
 
@@ -465,16 +465,16 @@ export const HouseholdView = () => {
 
   useEffect(() => {
     if (!identity) {
-      console.log(`[Client] ${new Date().toISOString()} SIGNALING_SKIP: No identity yet`);
+
       return;
     }
 
     if (!client) {
-      console.log(`[Client] ${new Date().toISOString()} SIGNALING_SKIP: No shared client yet`);
+
       return;
     }
 
-    console.log(`[Client] ${new Date().toISOString()} SIGNALING_INIT: Using shared signaling client for device ${identity.device_id}`);
+
     clientRef.current = client;
 
     // Signaling event handlers
@@ -504,12 +504,12 @@ export const HouseholdView = () => {
 
       // Check if this is for incoming pair (Device B receiving rejection - shouldn't happen but just in case)
       if (payload && incomingPairRef.current && payload.session_id === incomingPairRef.current.session_id) {
-        console.log(`[Client-DeviceB] ${timestamp} PAIRING_REJECT_RECEIVED: Received pairing:reject for incoming pair`);
+
         if (payload.reason === "wrong_code") {
           setErrorMessage(payload.message || "Incorrect code. Please try again.");
           setIncomingCode("");
         } else if (payload.reason === "max_attempts" || payload.reason === "expired" || payload.reason === "cancelled") {
-          console.log(`[Client-DeviceB] ${timestamp} PAIRING_REJECT_RECEIVED_CANCELLED: Pairing was cancelled by other party`);
+
           setErrorMessage(payload.message || "Pairing failed: " + (payload.message || "Session ended."));
           setIncomingPair(null);
           setIncomingCode("");
@@ -519,11 +519,11 @@ export const HouseholdView = () => {
 
       // Check if this is for outgoing pair (Device A receiving rejection from Device B)
       if (payload && pairingKeyRef.current && payload.session_id === pairingKeyRef.current.session_id) {
-        console.log(`[Client-DeviceA] ${timestamp} PAIRING_REJECT_RECEIVED: Received pairing:reject from ${payload.from_device_id}`);
-        console.log(`[Client-DeviceA] ${timestamp} PAIRING_REJECT_REASON: ${payload.reason} - ${payload.message}`);
+
+
 
         if (payload.reason === "cancelled") {
-          console.log(`[Client-DeviceA] ${timestamp} PAIRING_REJECT_CANCELLED_BY_RECEIVER: Device B cancelled the pairing request`);
+
           setErrorMessage("Pairing request was declined by the other device.");
         } else if (payload.reason === "wrong_code") {
           setErrorMessage(payload.message || "Incorrect code. Please try again.");
@@ -534,27 +534,27 @@ export const HouseholdView = () => {
         // Clear outgoing pair state
         pairingKeyRef.current = null;
         setOutgoingPair(null);
-        console.log(`[Client-DeviceA] ${timestamp} PAIRING_REJECT_CLEARED: outgoingPair and pairingKeyRef cleared`);
+
         return;
       }
     });
 
     const offPairCancel = client.on("pairing:cancel", (payload) => {
       const timestamp = new Date().toISOString();
-      console.log(`[Client-DeviceB] ${timestamp} PAIRING_CANCEL_RECEIVED: Received pairing:cancel from server`);
-      console.log(`[Client-DeviceB] ${timestamp} PAIRING_CANCEL_PAYLOAD:`, JSON.stringify(payload, null, 2));
+
+
       if (!payload || !incomingPairRef.current) {
-        console.log(`[Client-DeviceB] ${timestamp} PAIRING_CANCEL_IGNORED: No payload or no incomingPairRef`);
+
         return;
       }
       if (payload.session_id === incomingPairRef.current.session_id) {
-        console.log(`[Client-DeviceB] ${timestamp} PAIRING_CANCEL_MATCH: sessionId matches, clearing incomingPair`);
-        console.log(`[Client-DeviceB] ${timestamp} PAIRING_CANCEL_FROM: from_device_id=${payload.from_device_id}, from_display_name=${payload.from_display_name}`);
+
+
         setIncomingPair(null);
         setIncomingCode("");
-        console.log(`[Client-DeviceB] ${timestamp} PAIRING_CANCEL_HIDDEN: "Pairing Request" section hidden successfully`);
+
       } else {
-        console.log(`[Client-DeviceB] ${timestamp} PAIRING_CANCEL_NO_MATCH: sessionId ${payload.session_id} !== ${incomingPairRef.current.session_id}`);
+
       }
     });
 
@@ -683,11 +683,11 @@ export const HouseholdView = () => {
   const visibleDevices = useMemo(() => {
     const map = new Map<string, { device_id: string; display_name: string; status: 'online' | 'offline' }>();
 
-    console.log('[visibleDevices] Computing. nearbyDevices:', nearbyDevices.length, 'pairings:', pairings.length);
+
 
     // Add online devices from discovery
     nearbyDevices.forEach(d => {
-      console.log('[visibleDevices] Adding online device:', d.device_id, d.display_name);
+
       map.set(d.device_id, { ...d, status: 'online' });
     });
 
@@ -695,17 +695,17 @@ export const HouseholdView = () => {
     pairings.forEach(p => {
       const existing = map.get(p.partner_device_id);
       if (existing) {
-        console.log('[visibleDevices] Paired device is ONLINE:', p.partner_device_id, p.partner_display_name);
+
         // Update status to online if already present
         existing.status = 'online';
       } else {
-        console.log('[visibleDevices] Adding paired device (OFFLINE):', p.partner_device_id, p.partner_display_name);
+
         map.set(p.partner_device_id, { device_id: p.partner_device_id, display_name: p.partner_display_name, status: 'offline' });
       }
     });
 
     const result = Array.from(map.values());
-    console.log('[visibleDevices] Result:', result.length, 'devices:', result.map(d => `${d.display_name}(${d.device_id.slice(-4)}):${d.status}`));
+
     return result;
   }, [nearbyDevices, pairings]);
 
@@ -891,7 +891,7 @@ export const HouseholdView = () => {
                     const isPaired = partnerIds.has(device.device_id);
                     const isOnline = device.status === 'online';
 
-                    console.log('[DeviceList] Rendering device:', device.display_name, 'id:', device.device_id.slice(-4), 'paired:', isPaired, 'online:', isOnline);
+
 
                     return (
                       <div key={device.device_id}
@@ -990,18 +990,18 @@ export const HouseholdView = () => {
               <button
                 onClick={async () => {
                   const timestamp = new Date().toISOString();
-                  console.log(`[Client-DeviceA] ${timestamp} CANCEL_PAIRING_CLICKED: User clicked Cancel Pairing button`);
+
                   const toDeviceId = pairingKeyRef.current?.to_device_id;
                   const sessionId = pairingKeyRef.current?.session_id;
                   const fromDeviceId = identityRef.current?.device_id;
                   const fromDisplayName = identityRef.current?.display_name;
-                  console.log(`[Client-DeviceA] ${timestamp} CANCEL_PAIRING_STATE: sessionId=${sessionId}, toDeviceId=${toDeviceId}, fromDeviceId=${fromDeviceId}`);
+
                   setOutgoingPair(null);
                   pairingKeyRef.current = null;
-                  console.log(`[Client-DeviceA] ${timestamp} CANCEL_PAIRING_LOCAL_CLEARED: outgoingPair and pairingKeyRef cleared`);
+
                   if (toDeviceId && sessionId && identityRef.current) {
                     try {
-                      console.log(`[Client-DeviceA] ${timestamp} PAIRING_CANCEL_SENDING: Sending pairing:cancel to server...`);
+
                       const client = await connectSignaling();
                       client.send("pairing:cancel", {
                         session_id: sessionId,
@@ -1009,12 +1009,12 @@ export const HouseholdView = () => {
                         from_device_id: fromDeviceId,
                         from_display_name: fromDisplayName,
                       });
-                      console.log(`[Client-DeviceA] ${timestamp} PAIRING_CANCEL_SENT: pairing:cancel sent successfully to toDeviceId=${toDeviceId}`);
+
                     } catch (error) {
-                      console.error(`[Client-DeviceA] ${timestamp} PAIRING_CANCEL_ERROR: Failed to send pairing:cancel`, error);
+
                     }
                   } else {
-                    console.log(`[Client-DeviceA] ${timestamp} PAIRING_CANCEL_SKIPPED: Missing required data toDeviceId=${toDeviceId}, sessionId=${sessionId}, identity=${!!identityRef.current}`);
+
                   }
                 }}
                 className="kk-btn-ghost text-xs"

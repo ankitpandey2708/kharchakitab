@@ -131,14 +131,14 @@ const AppShell = () => {
     if (!client) return;
 
     const offReq = client.on("pairing:request", (payload) => {
-      console.log(`[AppShell] ${new Date().toISOString()} PAIRING_REQUEST_GLOBAL: Received pairing:request payload=`, payload);
+
 
       if (!payload || payload.to_device_id !== identityRef.current?.device_id) {
-        console.log(`[AppShell] ${new Date().toISOString()} PAIRING_REQUEST_GLOBAL_IGNORED: Not for this device. Target=${payload?.to_device_id}, Me=${identityRef.current?.device_id}`);
+
         return;
       }
 
-      console.log(`[AppShell] ${new Date().toISOString()} PAIRING_REQUEST_GLOBAL_MATCH: Auto-switching to household and capturing request`);
+
 
       // Capture the request in global state
       setIncomingPair({
@@ -150,16 +150,16 @@ const AppShell = () => {
       // Auto-switch to Household tab ONLY if the feature is enabled
       setTimeout(() => {
         if (showHousehold) {
-          console.log(`[AppShell] ${new Date().toISOString()} AUTO_SWITCH_EXECUTE: Calling setActiveTab("household")`);
+
           setActiveTab("household");
         } else {
-          console.log(`[AppShell] ${new Date().toISOString()} AUTO_SWITCH_SKIPPED: Household view is disabled`);
+
         }
       }, 300);
     });
 
     const offCancel = client.on("pairing:cancel", (payload) => {
-      console.log(`[AppShell] ${new Date().toISOString()} PAIRING_CANCEL_GLOBAL: Received pairing:cancel payload=`, payload);
+
       // We don't have access to current incomingPair here without a ref, 
       // but we can just call a function that checks it or rely on HouseholdView 
       // once it's mounted. For now, let's at least clear it if it exists.
@@ -179,27 +179,15 @@ const AppShell = () => {
     posthog.onFeatureFlags(() => {
       // Use !! to force undefined/null to false
       const isEnabled = !!posthog.isFeatureEnabled("household-view");
-      const allFlags = posthog.getFeatureFlags();
-
-      console.log(`[AppShell] Flag result for "household-view": ${isEnabled}`, {
-        allFlags,
-        distinctId: posthog.get_distinct_id()
-      });
-
       setShowHousehold(isEnabled);
     });
 
-    // We no longer default to true on localhost so that we can 
-    // strictly test the feature flag behavior.
-    if (isLocal) {
-      console.log("[AppShell] Localhost: Waiting for PostHog flag...");
-    }
   }, []);
 
   useEffect(() => {
     // Force back to personal if currently on household and disabled
     if (!showHousehold && activeTab === "household") {
-      console.log(`[AppShell] Household disabled but activeTab is "household". Resetting to "personal".`);
+
       setActiveTab("personal");
     }
   }, [showHousehold, activeTab, setActiveTab]);

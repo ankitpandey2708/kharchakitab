@@ -30,7 +30,7 @@ class SyncEventEmitter {
                 try {
                     listener(data);
                 } catch (error) {
-                    console.error(`Error in sync event listener for ${event}:`, error);
+
                 }
             });
         }

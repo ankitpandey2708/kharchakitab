@@ -6,7 +6,7 @@ export const getFingerprintData = async () => {
     const result = await fp.get();
     return result;
   } catch (error) {
-    console.error("Failed to load FingerprintJS", error);
+
     return null;
   }
 };
@@ -36,32 +36,32 @@ export const parseDeviceName = (components: any): string => {
     else if (/Chrome/.test(ua) && !/Edg/.test(ua)) browser = "Chrome";
     else if (/Firefox/.test(ua)) browser = "Firefox";
     else if (/Safari/.test(ua) && !/Chrome/.test(ua)) browser = "Safari";
-    
+
     if (browser) features.push(browser);
   }
 
   // Screen Resolution
   // value is typically [width, height]
   if (components.screenResolution?.value) {
-      const res = components.screenResolution.value;
-      if (Array.isArray(res) && res.length >= 2) {
-          const [w, h] = res;
-          if (w >= 3800) features.push('4K');
-          else if (w >= 2500) features.push('QHD'); 
-          else if (w >= 1900) features.push('HD');
-      }
+    const res = components.screenResolution.value;
+    if (Array.isArray(res) && res.length >= 2) {
+      const [w, h] = res;
+      if (w >= 3800) features.push('4K');
+      else if (w >= 2500) features.push('QHD');
+      else if (w >= 1900) features.push('HD');
+    }
   }
 
   // Touch Support
   if (components.touchSupport?.value) {
-      const touch = components.touchSupport.value;
-      if (touch.maxTouchPoints > 0) {
-          features.push('Touchscreen');
-      }
+    const touch = components.touchSupport.value;
+    if (touch.maxTouchPoints > 0) {
+      features.push('Touchscreen');
+    }
   }
-  
+
   if (features.length > 0) {
-      return `${deviceName} (${features.join(', ')})`;
+    return `${deviceName} (${features.join(', ')})`;
   }
   return deviceName;
 };
