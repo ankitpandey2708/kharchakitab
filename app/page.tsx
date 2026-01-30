@@ -10,6 +10,7 @@ import { HistoryView } from "@/src/components/HistoryView";
 import { RecordingStatus } from "@/src/components/RecordingStatus";
 import { HouseholdView } from "@/src/components/HouseholdView";
 import { useAudioRecorder } from "@/src/hooks/useAudioRecorder";
+import { usePresence } from "@/src/hooks/usePresence";
 import { parseWithGeminiFlash } from "@/src/services/gemini";
 import { parseReceiptWithGemini } from "@/src/services/receipt";
 import { transcribeAudio } from "@/src/services/sarvam";
@@ -88,6 +89,8 @@ const dataUrlToBlob = (dataUrl: string): Blob => {
 
 const AppShell = () => {
   const { isRecording, setIsRecording } = useAppContext();
+  // Initialize presence at app level for discoverability
+  const { isConnected, error } = usePresence();
   const [refreshKey, setRefreshKey] = useState(0);
   const [deletedTx, setDeletedTx] = useState<Transaction | null>(null);
   const [editedTx, setEditedTx] = useState<Transaction | null>(null);
@@ -115,10 +118,13 @@ const AppShell = () => {
     "personal"
   );
   // Show by default on localhost, or if PostHog is not enabled
-  const [showHousehold, setShowHousehold] = useState(
-    typeof window !== "undefined" && 
-    (window.location.hostname === "localhost" || process.env.NEXT_PUBLIC_POSTHOG_ENABLED !== "true")
-  );
+  const [showHousehold, setShowHousehold] = useState(false);
+
+  useEffect(() => {
+    setShowHousehold(
+      window.location.hostname === "localhost" || process.env.NEXT_PUBLIC_POSTHOG_ENABLED !== "true"
+    );
+  }, []);
 
   useEffect(() => {
     // Only check feature flags if PostHog is enabled for prod
@@ -677,7 +683,9 @@ const AppShell = () => {
                 type="button"
                 onClick={() => {
                   setIsAboutVisible(false);
-                  window.localStorage.setItem("kk_about_visible", "false");
+                  if (typeof window !== "undefined") {
+                    window.localStorage.setItem("kk_about_visible", "false");
+                  }
                   posthog.capture("about_dismissed");
                 }}
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--kk-cream)] text-[var(--kk-ash)] transition hover:bg-[var(--kk-smoke-heavy)] hover:text-[var(--kk-ink)]"

@@ -310,38 +310,6 @@ export const recordTransactionVersion = async (
   await db.put("transaction_versions", version);
 };
 
-export const upsertTransactionVersion = async (
-  transaction: Transaction,
-  editorDeviceId: string,
-  options?: { versionId?: string }
-): Promise<void> => {
-  const db = await getDb();
-  const versionIndex = transaction.version ?? 1;
-  const updatedAt = transaction.updated_at ?? Date.now();
-  const index = db
-    .transaction("transaction_versions")
-    .store.index("by-transaction");
-  for await (const cursor of index.iterate(transaction.id)) {
-    const value = cursor.value as TransactionVersion;
-    if (
-      value.version_index === versionIndex &&
-      value.editor_device_id === editorDeviceId &&
-      value.updated_at === updatedAt
-    ) {
-      return;
-    }
-  }
-  const version: TransactionVersion = {
-    version_id: options?.versionId ?? generateVersionId(),
-    transaction_id: transaction.id,
-    version_index: versionIndex,
-    updated_at: updatedAt,
-    editor_device_id: editorDeviceId,
-    payload_snapshot: transaction,
-  };
-  await db.put("transaction_versions", version);
-};
-
 export const addTransaction = async (tx: Transaction): Promise<string> => {
   const db = await getDb();
   const identity = await getDeviceIdentity();
@@ -398,35 +366,6 @@ export const getTransactionsUpdatedSince = async (
   const range = IDBKeyRange.lowerBound(since, true);
   const results = await collectTransactions(index, range, limit);
   return results;
-};
-
-export const getTransactionsByOwner = async (
-  ownerDeviceId: string,
-  options?: {
-    limit?: number;
-    includeDeleted?: boolean;
-    includePrivate?: boolean;
-  }
-): Promise<Transaction[]> => {
-  const cacheKey = cacheKeyFor([
-    "owner",
-    ownerDeviceId,
-    options?.limit,
-    options?.includeDeleted,
-    options?.includePrivate,
-  ]);
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
-  const db = await getDb();
-  const index = db.transaction("transactions").store.index("by-owner");
-  const range = IDBKeyRange.only(ownerDeviceId);
-  const results = await collectTransactions(index, range, options?.limit);
-  const filtered = results.filter((tx) => {
-    if (!options?.includeDeleted && isDeleted(tx)) return false;
-    if (!options?.includePrivate && tx.is_private) return false;
-    return true;
-  });
-  return setCached(cacheKey, filtered);
 };
 
 export const getTransactionById = async (
@@ -531,12 +470,6 @@ export const deleteTransaction = async (id: string): Promise<void> => {
   clearCache();
 };
 
-export const hardDeleteTransaction = async (id: string): Promise<void> => {
-  const db = await getDb();
-  await db.delete("transactions", id);
-  clearCache();
-};
-
 export const getPairings = async (): Promise<PairingRecord[]> => {
   const db = await getDb();
   return db.getAll("pairings");
@@ -579,22 +512,6 @@ export const getTransactionVersions = async (
   return results.sort((a, b) => b.updated_at - a.updated_at);
 };
 
-export const getConflicts = async (
-  partnerDeviceId?: string
-): Promise<string[]> => {
-  const db = await getDb();
-  if (partnerDeviceId) {
-    const state = await db.get("sync_state", partnerDeviceId);
-    return state?.conflicts ?? [];
-  }
-  const states = await db.getAll("sync_state");
-  const conflicts = new Set<string>();
-  states.forEach((state) => {
-    state.conflicts?.forEach((id: string) => conflicts.add(id));
-  });
-  return Array.from(conflicts);
-};
-
 export const addConflict = async (
   partnerDeviceId: string,
   transactionId: string
@@ -618,46 +535,6 @@ export const clearConflict = async (
   if (!state?.conflicts) return;
   const conflicts = state.conflicts.filter((id) => id !== transactionId);
   await setSyncState({ ...state, conflicts });
-};
-
-export const applyRemoteTransaction = async (
-  partnerDeviceId: string,
-  remote: Transaction,
-  lastSyncAt: number | null
-): Promise<{ received: boolean; conflict: boolean; applied: boolean }> => {
-  if (!remote || remote.is_private) {
-    return { received: false, conflict: false, applied: false };
-  }
-  const localRecord = await getTransactionById(remote.id);
-  if (!localRecord) {
-    await upsertTransactionRaw({ ...remote, conflict: false });
-    await upsertTransactionVersion(remote, remote.owner_device_id || "remote");
-    return { received: true, conflict: false, applied: true };
-  }
-
-  const localUpdated = localRecord.updated_at ?? localRecord.timestamp;
-  const remoteUpdated = remote.updated_at ?? remote.timestamp;
-  const hasConflict =
-    Boolean(lastSyncAt) &&
-    localUpdated > (lastSyncAt ?? 0) &&
-    remoteUpdated > (lastSyncAt ?? 0) &&
-    localUpdated !== remoteUpdated;
-
-  if (hasConflict) {
-    await addConflict(partnerDeviceId, remote.id);
-    const newer = remoteUpdated >= localUpdated ? remote : localRecord;
-    await upsertTransactionRaw({ ...newer, conflict: true });
-    await upsertTransactionVersion(remote, remote.owner_device_id || "remote");
-    return { received: false, conflict: true, applied: true };
-  }
-
-  if (remoteUpdated > localUpdated) {
-    await upsertTransactionRaw({ ...remote, conflict: false });
-    await upsertTransactionVersion(remote, remote.owner_device_id || "remote");
-    return { received: true, conflict: false, applied: true };
-  }
-
-  return { received: false, conflict: false, applied: false };
 };
 
 export const isTransactionShared = async (id: string): Promise<boolean> => {

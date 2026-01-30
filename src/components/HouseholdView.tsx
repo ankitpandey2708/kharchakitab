@@ -174,30 +174,41 @@ export const HouseholdView = () => {
   }, []);
 
   const refreshNearby = useCallback(async () => {
-    if (isSearching) return;
+    if (isSearching) {
+      console.log('[refreshNearby] Already searching, skipping...');
+      return;
+    }
+    console.log('[refreshNearby] Starting device discovery...');
     setIsSearching(true);
     setErrorMessage(null);
     try {
-      const client = await connectSignaling();
-      if (!identity) {
+      // Fetch identity directly to avoid stale state
+      const device = await getDeviceIdentity();
+      if (!device) {
+        console.log('[refreshNearby] No identity found, aborting...');
         setIsSearching(false);
         return;
       }
+      console.log('[refreshNearby] Using identity:', device.display_name);
+      const client = await connectSignaling();
       client.send("presence:join", {
-        device_id: identity.device_id,
-        display_name: identity.display_name,
+        device_id: device.device_id,
+        display_name: device.display_name,
       });
       const list = await client.request<
         Array<{ device_id: string; display_name: string }>
-      >("presence:list", { device_id: identity.device_id });
-      const filtered = list.filter((item) => item.device_id !== identity.device_id);
+      >("presence:list", { device_id: device.device_id });
+      const filtered = list.filter((item) => item.device_id !== device.device_id);
+      console.log('[refreshNearby] Found', filtered.length, 'nearby devices:', filtered.map(d => d.display_name));
       setNearbyDevices(filtered);
     } catch (error) {
+      console.log('[refreshNearby] Error:', error);
       setErrorMessage("Unable to discover nearby devices");
     } finally {
       setIsSearching(false);
+      console.log('[refreshNearby] Discovery complete, isSearching=false');
     }
-  }, [connectSignaling, identity, isSearching]);
+  }, [connectSignaling, isSearching]);
 
   const preparePairing = async (deviceId: string, displayName: string) => {
     if (!identity) return;
@@ -378,11 +389,22 @@ export const HouseholdView = () => {
 
   useEffect(() => {
     void (async () => {
+      console.log('[HouseholdView] Component mounted, initializing...');
       const device = await getDeviceIdentity();
       setIdentity(device);
       setDisplayNameDraft(device.display_name);
       await refreshSyncState();
       await fetchHouseholdTransactions();
+      // Auto-trigger device discovery on first load
+      console.log('[HouseholdView] Pairings count:', pairings.length);
+      console.log('[HouseholdView] Device identity:', device.display_name, device.device_id);
+      if (!pairings[0]) {
+        console.log('[HouseholdView] No paired devices, triggering auto-discovery...');
+        // Call refreshNearby with device directly to avoid race condition
+        await refreshNearby();
+      } else {
+        console.log('[HouseholdView] Already paired with:', pairings[0].partner_display_name);
+      }
     })();
   }, []);
 
@@ -397,12 +419,7 @@ export const HouseholdView = () => {
     if (!identity) return;
     const client = new SignalingClient(SIGNALING_URL);
     clientRef.current = client;
-    client.connect().then(() => {
-      client.send("presence:join", {
-        device_id: identity.device_id,
-        display_name: identity.display_name,
-      });
-    }).catch(() => setErrorMessage("Unable to connect to signaling server"));
+    client.connect().catch(() => setErrorMessage("Unable to connect to signaling server"));
 
     // Signaling event handlers (abbreviated for clarity, same logic as before)
     const offPairRequest = client.on("pairing:request", (payload) => {
@@ -549,12 +566,18 @@ export const HouseholdView = () => {
   }, [identity?.device_id, refreshSyncState, fetchHouseholdTransactions]);
 
   useEffect(() => {
-    if (!identity || !clientRef.current) return;
+    if (!identityRef.current || !clientRef.current) return;
+    console.log('[Heartbeat] Starting presence ping interval');
     const interval = window.setInterval(() => {
-      clientRef.current?.send("presence:ping", { device_id: identity.device_id });
+      if (identityRef.current && clientRef.current?.isConnected()) {
+        clientRef.current.send("presence:ping", { device_id: identityRef.current.device_id });
+      }
     }, 20000);
-    return () => window.clearInterval(interval);
-  }, [identity]);
+    return () => {
+      console.log('[Heartbeat] Clearing presence ping interval');
+      window.clearInterval(interval);
+    };
+  }, [identityRef.current]);
 
   useEffect(() => {
     if (conflictIds.length > 0) setShowConflicts(true);
@@ -691,15 +714,16 @@ export const HouseholdView = () => {
       <div className="grid gap-6 md:grid-cols-12">
 
         {/* LEFT COLUMN: Status & Discovery (4 cols) */}
-        <div className="space-y-6 md:col-span-4 lg:col-span-3">
+        <div className="md:col-span-4 lg:col-span-3">
 
-          {/* Main Status Card */}
-          <div className="kk-card relative overflow-hidden p-5">
+          {/* Combined Sync & Device Card */}
+          <div className="kk-card relative overflow-hidden">
             <div className="absolute top-0 right-0 p-4 opacity-10">
               <Shield className="h-24 w-24 -rotate-12" />
             </div>
 
-            <div className="relative z-10">
+            <div className="relative z-10 p-5">
+              {/* Sync Status Section */}
               <div className="kk-label mb-2">Sync Status</div>
               <div className="flex items-center gap-2">
                 <div className={`h-2.5 w-2.5 rounded-full ${connectionState === 'connected' ? 'bg-[var(--kk-sage)] shadow-[0_0_8px_var(--kk-sage)]' :
@@ -719,7 +743,8 @@ export const HouseholdView = () => {
                 </div>
               )}
 
-              <div className="mt-6">
+              {/* Sync Button */}
+              <div className="mt-4">
                 {isSyncing ? (
                   <button onClick={cancelSync} className="w-full kk-btn-secondary border-[var(--kk-danger-bg)] text-[var(--kk-danger)] hover:bg-[var(--kk-danger-bg)]">
                     Cancel
@@ -740,76 +765,66 @@ export const HouseholdView = () => {
                     disabled={isSearching}
                   >
                     <Users className="mr-2 h-4 w-4" />
-                    Find Devices
+                    Refresh Devices
                   </button>
                 )}
               </div>
             </div>
-          </div>
 
-          {/* Device List */}
-          <div className="kk-surface p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <span className="kk-label">Nearby</span>
-              <button
-                onClick={refreshNearby}
-                disabled={isSearching}
-                className="rounded-full p-1.5 hover:bg-[var(--kk-smoke-heavy)] transition-colors"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 text-[var(--kk-ash)] ${isSearching ? 'animate-spin' : ''}`} />
-              </button>
-            </div>
+            {/* Device List Section */}
+            <div className="p-4">
 
-            <div className="space-y-2">
-              {visibleDevices.length === 0 ? (
-                <div className="py-6 text-center">
-                  <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-[var(--kk-smoke)] text-[var(--kk-ash)]">
-                    <WifiOff className="h-5 w-5" />
-                  </div>
-                  <p className="text-xs text-[var(--kk-ash)]">No devices found nearby</p>
-                </div>
-              ) : (
-                visibleDevices.map(device => {
-                  const isPaired = partnerIds.has(device.device_id);
-                  const isOnline = device.status === 'online';
-
-                  return (
-                    <div key={device.device_id}
-                      onClick={() => {
-                        if (!isOnline && !isPaired) return;
-                        if (isPaired) handleSyncWith(device.device_id);
-                        else preparePairing(device.device_id, device.display_name);
-                      }}
-                      className={`group relative flex cursor-pointer items-center gap-3 rounded-xl border border-transparent p-3 transition-all hover:border-[var(--kk-smoke-heavy)] hover:bg-[var(--kk-paper)] hover:shadow-sm ${activePartnerId === device.device_id ? 'bg-[var(--kk-mist)] border-[var(--kk-ember)]' : ''
-                        }`}
-                    >
-                      <div className="relative">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--kk-cream)] text-[var(--kk-ink)] font-bold text-xs">
-                          {device.display_name.charAt(0)}
-                        </div>
-                        <div className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white ${isOnline ? 'bg-[var(--kk-sage)]' : 'bg-[var(--kk-ash)]'
-                          }`} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-semibold text-[var(--kk-ink)]">
-                          {device.display_name}
-                        </div>
-                        <div className="text-[10px] uppercase tracking-wider text-[var(--kk-ash)]">
-                          {isPaired ? 'Paired' : isOnline ? 'Tap to Pair' : 'Offline'}
-                        </div>
-                      </div>
-                      {isPaired && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleForgetPartner(device.device_id); }}
-                          className="opacity-0 group-hover:opacity-100 p-1.5 text-[var(--kk-ash)] hover:text-[var(--kk-danger)] transition-all"
-                        >
-                          <XCircle className="h-4 w-4" />
-                        </button>
-                      )}
+              <div className="space-y-2">
+                {visibleDevices.length === 0 ? (
+                  <div className="py-4 text-center">
+                    <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-[var(--kk-smoke)] text-[var(--kk-ash)]">
+                      <WifiOff className="h-4 w-4" />
                     </div>
-                  );
-                })
-              )}
+                    <p className="text-xs text-[var(--kk-ash)]">No devices found</p>
+                  </div>
+                ) : (
+                  visibleDevices.map(device => {
+                    const isPaired = partnerIds.has(device.device_id);
+                    const isOnline = device.status === 'online';
+
+                    return (
+                      <div key={device.device_id}
+                        onClick={() => {
+                          if (!isOnline && !isPaired) return;
+                          if (isPaired) handleSyncWith(device.device_id);
+                          else preparePairing(device.device_id, device.display_name);
+                        }}
+                        className={`group relative flex cursor-pointer items-center gap-3 rounded-lg border border-transparent p-2.5 transition-all hover:border-[var(--kk-smoke-heavy)] hover:bg-[var(--kk-paper)] ${activePartnerId === device.device_id ? 'bg-[var(--kk-mist)] border-[var(--kk-ember)]' : ''
+                          }`}
+                      >
+                        <div className="relative">
+                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--kk-cream)] text-[var(--kk-ink)] font-bold text-xs">
+                            {device.display_name.charAt(0)}
+                          </div>
+                          <div className={`absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border-2 border-white ${isOnline ? 'bg-[var(--kk-sage)]' : 'bg-[var(--kk-ash)]'
+                            }`} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-[var(--kk-ink)]">
+                            {device.display_name}
+                          </div>
+                          <div className="text-[10px] uppercase tracking-wider text-[var(--kk-ash)]">
+                            {isPaired ? 'Paired' : isOnline ? 'Tap to Pair' : 'Offline'}
+                          </div>
+                        </div>
+                        {isPaired && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleForgetPartner(device.device_id); }}
+                            className="opacity-0 group-hover:opacity-100 p-1 text-[var(--kk-ash)] hover:text-[var(--kk-danger)] transition-all"
+                          >
+                            <XCircle className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
           </div>
         </div>

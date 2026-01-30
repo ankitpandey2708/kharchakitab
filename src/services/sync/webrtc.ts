@@ -1,13 +1,5 @@
-export type IceCandidatePayload = {
-  candidate: RTCIceCandidateInit;
-};
-
-export type WebRTCConfig = {
-  iceServers: RTCIceServer[];
-};
-
 export const createPeerConnection = (
-  config: WebRTCConfig,
+  config: { iceServers: RTCIceServer[] },
   onIceCandidate: (candidate: RTCIceCandidateInit) => void,
   onDataChannel?: (channel: RTCDataChannel) => void,
   onConnectionStateChange?: (state: RTCPeerConnectionState) => void
@@ -30,25 +22,3 @@ export const createPeerConnection = (
   }
   return pc;
 };
-
-export const waitForDataChannelOpen = (channel: RTCDataChannel) =>
-  new Promise<void>((resolve, reject) => {
-    if (channel.readyState === "open") {
-      resolve();
-      return;
-    }
-    const handleOpen = () => {
-      cleanup();
-      resolve();
-    };
-    const handleError = () => {
-      cleanup();
-      reject(new Error("DataChannel failed to open"));
-    };
-    const cleanup = () => {
-      channel.removeEventListener("open", handleOpen);
-      channel.removeEventListener("error", handleError);
-    };
-    channel.addEventListener("open", handleOpen);
-    channel.addEventListener("error", handleError);
-  });

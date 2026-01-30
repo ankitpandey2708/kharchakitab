@@ -30,12 +30,6 @@ export type SyncPayload = {
   };
 };
 
-export type SyncSummary = {
-  sent: number;
-  received: number;
-  conflicts: number;
-};
-
 const isPendingTransaction = (tx: Transaction) =>
   tx.item === "Processing…" || tx.item.startsWith("Processing ");
 
@@ -115,7 +109,7 @@ export const applySyncPayload = async (
   partnerDeviceId: string,
   payload: SyncPayload,
   progressCallback?: (progress: SyncStatus["progress"]) => void
-): Promise<SyncSummary> => {
+): Promise<{ sent: number; received: number; conflicts: number }> => {
   const identity = await getDeviceIdentity();
   const syncState = await getSyncState(partnerDeviceId);
   const lastSyncAt = syncState?.last_sync_at ?? null;
