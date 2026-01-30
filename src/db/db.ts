@@ -361,19 +361,6 @@ export const addTransaction = async (tx: Transaction): Promise<string> => {
   return transaction.id;
 };
 
-export const getRecentTransactions = async (
-  limit: number
-): Promise<Transaction[]> => {
-  const cacheKey = cacheKeyFor(["recent", limit]);
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
-  const db = await getDb();
-  const index = db.transaction("transactions").store.index("by-date");
-  const results = await collectTransactions(index, null, limit);
-  const filtered = results.filter((tx) => !isDeleted(tx));
-  return setCached(cacheKey, filtered);
-};
-
 export const getPersonalRecentTransactions = async (
   limit: number,
   deviceId?: string

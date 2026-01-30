@@ -118,9 +118,9 @@ const AppShell = () => {
   const [showHousehold, setShowHousehold] = useState(false);
 
   useEffect(() => {
-    setShowHousehold(
-      window.location.hostname === "localhost" || process.env.NEXT_PUBLIC_POSTHOG_ENABLED !== "true"
-    );
+    // Only show by default on localhost for development
+    // On production, it should be disabled until feature flags are loaded
+    setShowHousehold(window.location.hostname === "localhost");
   }, []);
 
   const { client } = useSignaling();
@@ -153,10 +153,14 @@ const AppShell = () => {
         from_display_name: payload.from_display_name,
       });
 
-      // Auto-switch to Household tab after 300ms delay for smoother UX
+      // Auto-switch to Household tab ONLY if the feature is enabled
       setTimeout(() => {
-        console.log(`[AppShell] ${new Date().toISOString()} AUTO_SWITCH_EXECUTE: Calling setActiveTab("household")`);
-        setActiveTab("household");
+        if (showHousehold) {
+          console.log(`[AppShell] ${new Date().toISOString()} AUTO_SWITCH_EXECUTE: Calling setActiveTab("household")`);
+          setActiveTab("household");
+        } else {
+          console.log(`[AppShell] ${new Date().toISOString()} AUTO_SWITCH_SKIPPED: Household view is disabled`);
+        }
       }, 300);
     });
 
@@ -172,14 +176,15 @@ const AppShell = () => {
       offReq();
       offCancel();
     };
-  }, [client, setActiveTab, setIncomingPair]);
+  }, [client, setActiveTab, setIncomingPair, showHousehold]);
 
   useEffect(() => {
     // Only check feature flags if PostHog is enabled for prod
     if (process.env.NEXT_PUBLIC_POSTHOG_ENABLED === "true") {
       posthog.onFeatureFlags(() => {
         const isEnabled = posthog.isFeatureEnabled("household-view");
-        // Only update if it's not already true (to preserve localhost override)
+        console.log(`[AppShell] PostHog feature flags loaded. household-view enabled: ${isEnabled}`);
+
         if (isEnabled) {
           setShowHousehold(true);
         } else if (window.location.hostname !== "localhost") {
@@ -188,6 +193,14 @@ const AppShell = () => {
       });
     }
   }, []);
+
+  useEffect(() => {
+    // Force back to personal if currently on household and disabled
+    if (!showHousehold && activeTab === "household") {
+      console.log(`[AppShell] Household disabled but activeTab is "household". Resetting to "personal".`);
+      setActiveTab("personal");
+    }
+  }, [showHousehold, activeTab, setActiveTab]);
   const processedBlobRef = useRef<Blob | null>(null);
   const processingRef = useRef(false);
   const receiptProcessingRef = useRef(false);
@@ -833,9 +846,9 @@ const AppShell = () => {
               />
             </section>
           </>
-        ) : (
+        ) : showHousehold ? (
           <HouseholdView />
-        )}
+        ) : null}
       </main>
 
       {/* Mic Button */}

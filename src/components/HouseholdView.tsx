@@ -454,15 +454,7 @@ export const HouseholdView = () => {
     })();
   }, [fetchHouseholdTransactions, refreshNearby, refreshSyncState]);
 
-  // Periodic discovery refresh
-  useEffect(() => {
-    if (!identity) return;
-    const interval = setInterval(() => {
-      refreshSyncState();
-      refreshNearby();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [identity, refreshNearby, refreshSyncState]);
+
 
   useEffect(() => {
     if (refreshTrigger > 0) {
@@ -669,19 +661,7 @@ export const HouseholdView = () => {
     };
   }, [identity?.device_id, refreshSyncState, fetchHouseholdTransactions]);
 
-  useEffect(() => {
-    if (!identityRef.current || !clientRef.current) return;
-    console.log('[Heartbeat] Starting presence ping interval');
-    const interval = window.setInterval(() => {
-      if (identityRef.current && clientRef.current?.isConnected()) {
-        clientRef.current.send("presence:ping", { device_id: identityRef.current.device_id });
-      }
-    }, 20000);
-    return () => {
-      console.log('[Heartbeat] Clearing presence ping interval');
-      window.clearInterval(interval);
-    };
-  }, [identityRef.current]);
+
 
   useEffect(() => {
     if (conflictIds.length > 0) setShowConflicts(true);

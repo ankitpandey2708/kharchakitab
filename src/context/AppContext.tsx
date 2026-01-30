@@ -4,7 +4,7 @@ import React, { createContext, useCallback, useContext, useMemo, useState } from
 import type { AppState } from "@/src/types";
 import { ERROR_MESSAGES } from "@/src/utils/error";
 
-export interface IncomingPair {
+interface IncomingPair {
   session_id: string;
   from_device_id: string;
   from_display_name: string;
