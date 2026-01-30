@@ -114,14 +114,25 @@ const AppShell = () => {
   const [activeTab, setActiveTab] = useState<"personal" | "household">(
     "personal"
   );
-  const [showHousehold, setShowHousehold] = useState(false);
+  // Show by default on localhost, or if PostHog is not enabled
+  const [showHousehold, setShowHousehold] = useState(
+    typeof window !== "undefined" && 
+    (window.location.hostname === "localhost" || process.env.NEXT_PUBLIC_POSTHOG_ENABLED !== "true")
+  );
 
   useEffect(() => {
-    // Check feature flag for household view
-    posthog.onFeatureFlags(() => {
-      const isEnabled = posthog.isFeatureEnabled("household-view");
-      setShowHousehold(!!isEnabled);
-    });
+    // Only check feature flags if PostHog is enabled for prod
+    if (process.env.NEXT_PUBLIC_POSTHOG_ENABLED === "true") {
+      posthog.onFeatureFlags(() => {
+        const isEnabled = posthog.isFeatureEnabled("household-view");
+        // Only update if it's not already true (to preserve localhost override)
+        if (isEnabled) {
+          setShowHousehold(true);
+        } else if (window.location.hostname !== "localhost") {
+          setShowHousehold(false);
+        }
+      });
+    }
   }, []);
   const processedBlobRef = useRef<Blob | null>(null);
   const processingRef = useRef(false);
