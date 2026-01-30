@@ -177,17 +177,22 @@ const AppShell = () => {
 
     // Always check for feature flags if PostHog initialized
     posthog.onFeatureFlags(() => {
-      const isEnabled = posthog.isFeatureEnabled("household-view");
-      console.log(`[AppShell] PostHog flags loaded. "household-view": ${isEnabled}`);
+      // Use !! to force undefined/null to false
+      const isEnabled = !!posthog.isFeatureEnabled("household-view");
+      const allFlags = posthog.getFeatureFlags();
 
-      if (typeof isEnabled === "boolean") {
-        setShowHousehold(isEnabled);
-      }
+      console.log(`[AppShell] Flag result for "household-view": ${isEnabled}`, {
+        allFlags,
+        distinctId: posthog.get_distinct_id()
+      });
+
+      setShowHousehold(isEnabled);
     });
 
-    // Fallback/Default behavior before flags load or if flag is missing
+    // We no longer default to true on localhost so that we can 
+    // strictly test the feature flag behavior.
     if (isLocal) {
-      setShowHousehold(true);
+      console.log("[AppShell] Localhost: Waiting for PostHog flag...");
     }
   }, []);
 
