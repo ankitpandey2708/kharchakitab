@@ -133,11 +133,16 @@ wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
 
     // S6.T6: Handle pairing:request - create session with TTL
     if (type === "pairing:request") {
+      const timestamp = new Date().toISOString();
       const sessionId = payload?.session_id;
       const fromDeviceId = payload?.from_device_id;
       const toDeviceId = payload?.to_device_id;
+      const fromDisplayName = payload?.from_display_name;
+
+      console.log(`[Server] ${timestamp} PAIRING_REQUEST_RECEIVED: session=${sessionId} from=${fromDeviceId}(${fromDisplayName}) to=${toDeviceId}`);
 
       if (!sessionId || !fromDeviceId || !toDeviceId) {
+        console.warn(`[Server] ${timestamp} PAIRING_REQUEST_INVALID: Missing required fields`);
         sendMessage(ws, "error", { message: "Invalid pairing request" }, request_id);
         return;
       }
@@ -148,15 +153,17 @@ wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
         from_device_id: fromDeviceId,
         to_device_id: toDeviceId,
       });
-      console.log(`[Pairs] Session created: ${sessionId} (${fromDeviceId} -> ${toDeviceId})`);
+      console.log(`[Server] ${timestamp} PAIRING_SESSION_CREATED: ${sessionId} (TTL: 5 min)`);
 
       // Forward to target device
       const target = clients.get(toDeviceId);
+      console.log(`[Server] ${timestamp} PAIRING_REQUEST_FORWARDING: target=${toDeviceId} connected=${!!target}`);
+
       if (target) {
-        console.log(`[Pairs] Forwarding ${type} to ${toDeviceId}`);
+        console.log(`[Server] ${timestamp} PAIRING_REQUEST_SENT: Sending to ${toDeviceId}`);
         sendMessage(target.ws, type, payload, request_id);
       } else {
-        console.warn(`[Pairs] Forward failed: ${toDeviceId} not connected`);
+        console.warn(`[Server] ${timestamp} PAIRING_REQUEST_FAILED: Target ${toDeviceId} not connected`);
         sendMessage(ws, "error", { message: "Target device not connected" }, request_id);
       }
       return;
@@ -238,6 +245,50 @@ wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
       return;
     }
 
+    // Handle pairing:cancel - cancel an active pairing request
+    if (type === "pairing:cancel") {
+      const sessionId = payload?.session_id;
+      const toDeviceId = payload?.to_device_id;
+      const fromDeviceId = payload?.from_device_id;
+      const fromDisplayName = payload?.from_display_name;
+      const timestamp = new Date().toISOString();
+
+      console.log(`[Server] ${timestamp} PAIRING_CANCEL_RECEIVED: from=${fromDeviceId} (${fromDisplayName}) to=${toDeviceId} session=${sessionId}`);
+
+      if (!sessionId || !toDeviceId) {
+        console.log(`[Server] ${timestamp} PAIRING_CANCEL_INVALID: Missing sessionId or toDeviceId`);
+        sendMessage(ws, "error", { message: "Invalid pairing cancel" }, request_id);
+        return;
+      }
+
+      // Check if session exists
+      const session = pairingSessions.get(sessionId);
+      if (!session) {
+        console.log(`[Server] ${timestamp} PAIRING_CANCEL_SESSION_NOT_FOUND: sessionId=${sessionId} not found or already expired`);
+        // Still try to forward in case client needs to clear state
+      } else {
+        console.log(`[Server] ${timestamp} PAIRING_CANCEL_SESSION_FOUND: session created_at=${new Date(session.created_at).toISOString()}`);
+      }
+
+      // Forward to target device
+      const target = clients.get(toDeviceId);
+      if (target) {
+        console.log(`[Server] ${timestamp} PAIRING_CANCEL_FORWARDING: Forwarding to target device ${toDeviceId}`);
+        sendMessage(target.ws, type, payload, request_id);
+        console.log(`[Server] ${timestamp} PAIRING_CANCEL_FORWARDED: Successfully forwarded pairing:cancel to ${toDeviceId}`);
+      } else {
+        console.warn(`[Server] ${timestamp} PAIRING_CANCEL_TARGET_OFFLINE: Target device ${toDeviceId} not connected`);
+        sendMessage(ws, "error", { message: "Target device not connected" }, request_id);
+      }
+
+      // Clean up the session since it was cancelled
+      if (session) {
+        console.log(`[Server] ${timestamp} PAIRING_CANCEL_CLEANUP: Deleting session ${sessionId}`);
+        pairingSessions.delete(sessionId);
+      }
+      return;
+    }
+
     // Handle pairing:reject - forward failure/retry status
     if (type === "pairing:reject") {
       const sessionId = payload?.session_id;
@@ -264,7 +315,8 @@ wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
       // If the rejection is terminal (e.g. max attempts), we could delete the session here.
       // But we'll rely on the client to stop and the server's TTL to clean up.
       // Or we can check a flag:
-      if (payload?.final) {
+      if (payload?.final || payload?.reason === "cancelled") {
+        console.log(`[Pairs] Pairing rejected with reason=${payload?.reason}, deleting session ${sessionId}`);
         pairingSessions.delete(sessionId);
       }
       return;

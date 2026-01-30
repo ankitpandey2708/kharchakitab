@@ -3,7 +3,7 @@ P0
 - Add/Manage(cancel, renew etc) recurring expense
 
 P1
-- Manage subscriptions
+- Household from couple 2 devices pov
 - Competitor analysis (Play store reviews)
 
 P2

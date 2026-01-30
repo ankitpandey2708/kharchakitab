@@ -93,6 +93,7 @@ const getDb = () =>
           keyPath: "device_id",
         });
         identity.createIndex("by-name", "display_name");
+        identity.createIndex("by-visitor", "visitor_id", { unique: true });
       }
 
       if (!db.objectStoreNames.contains("pairings")) {
@@ -258,6 +259,7 @@ export const getDeviceIdentity = async (): Promise<DeviceIdentity> => {
   // Fallback name
   if (!smartName) smartName = getSmartDeviceName();
 
+  // Case 1: Identity exists - update last_active_at and enrich with visitor_id if needed
   if (all.length > 0) {
     const identity = { ...all[0], last_active_at: now };
     if (visitorId && !identity.visitor_id) {
@@ -270,6 +272,41 @@ export const getDeviceIdentity = async (): Promise<DeviceIdentity> => {
     await tx.done;
     return identity;
   }
+
+  // Case 2: No identity exists, but we have visitor_id - try to recover by visitor_id
+  if (visitorId) {
+    // Try to recover by visitor_id using index if available
+    let recovered: DeviceIdentity | undefined;
+    try {
+      // Use index if it exists (new installs)
+      if (store.indexNames.contains("by-visitor")) {
+        recovered = await store.index("by-visitor").get(visitorId);
+      } else {
+        // Fallback: manual filter for existing installs without index
+        const allIdentities = await store.getAll();
+        recovered = allIdentities.find((id) => id.visitor_id === visitorId);
+      }
+    } catch (e) {
+      console.warn("Visitor ID lookup failed, falling back to manual filter", e);
+      const allIdentities = await store.getAll();
+      recovered = allIdentities.find((id) => id.visitor_id === visitorId);
+    }
+
+    if (recovered) {
+      // Restore the original device_id but update timestamps
+      const restored: DeviceIdentity = {
+        ...recovered,
+        last_active_at: now,
+        created_at: now, // Reset created_at to mark re-registration
+      };
+      await store.put(restored);
+      await tx.done;
+      await backfillOwnerDeviceId(restored.device_id);
+      return restored;
+    }
+  }
+
+  // Case 3: No identity exists - create new
   const device_id = generateId();
   const identity: DeviceIdentity = {
     device_id,
@@ -354,6 +391,23 @@ export const getTransactionsInRange = async (
   const range = IDBKeyRange.bound(start, upperBound);
   const results = await collectTransactions(index, range, limit);
   const filtered = results.filter((tx) => !isDeleted(tx));
+  return setCached(cacheKey, filtered);
+};
+
+export const getPersonalTransactionsInRange = async (
+  start: number,
+  end: number,
+  limit?: number,
+  before?: number,
+  deviceId?: string
+): Promise<Transaction[]> => {
+  const targetDeviceId = deviceId ?? (await getDeviceIdentity()).device_id;
+  const cacheKey = cacheKeyFor(["personal", start, end, limit, before, targetDeviceId]);
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
+  const allTx = await getTransactionsInRange(start, end, limit, before);
+  const filtered = allTx.filter((tx) => tx.owner_device_id === targetDeviceId);
   return setCached(cacheKey, filtered);
 };
 

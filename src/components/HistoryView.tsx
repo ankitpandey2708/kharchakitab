@@ -11,9 +11,10 @@ import {
 } from "lucide-react";
 import {
   deleteTransaction,
-  getTransactionsInRange,
+  getPersonalTransactionsInRange,
   updateTransaction,
   isTransactionShared,
+  getDeviceIdentity,
 } from "@/src/db/db";
 import type { Transaction } from "@/src/types";
 import { useEscapeKey } from "@/src/hooks/useEscapeKey";
@@ -307,6 +308,7 @@ export const HistoryView = ({
   const [cursor, setCursor] = useState<number | undefined>(undefined);
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
+  const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null);
   const customStartRef = useRef<HTMLInputElement | null>(null);
   const customEndRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -375,6 +377,14 @@ export const HistoryView = ({
     if (isOpen) return;
     closeMobileSheet();
   }, [closeMobileSheet, isOpen]);
+
+  // Get current device ID on mount
+  useEffect(() => {
+    void (async () => {
+      const identity = await getDeviceIdentity();
+      setCurrentDeviceId(identity.device_id);
+    })();
+  }, []);
 
   const [allocationMode, setAllocationMode] = useState<"amount" | "count">(
     "amount"
@@ -454,15 +464,16 @@ export const HistoryView = ({
 
   const fetchPage = useCallback(
     (cursorValue?: number) =>
-      range
-        ? getTransactionsInRange(
+      range && currentDeviceId
+        ? getPersonalTransactionsInRange(
           range.start,
           range.end,
           HISTORY_PAGE_SIZE,
-          cursorValue
+          cursorValue,
+          currentDeviceId
         )
         : Promise.resolve([] as Transaction[]),
-    [range]
+    [range, currentDeviceId]
   );
 
   const loadFirstPage = useCallback(async () => {
@@ -630,11 +641,11 @@ export const HistoryView = ({
             }
             : null;
 
-        const baseTransactionsPromise = base
-          ? getTransactionsInRange(base.start, base.end)
+        const baseTransactionsPromise = base && currentDeviceId
+          ? getPersonalTransactionsInRange(base.start, base.end, undefined, undefined, currentDeviceId)
           : Promise.resolve([] as Transaction[]);
-        const prevTransactionsPromise = prevRange
-          ? getTransactionsInRange(prevRange.start, prevRange.end)
+        const prevTransactionsPromise = prevRange && currentDeviceId
+          ? getPersonalTransactionsInRange(prevRange.start, prevRange.end, undefined, undefined, currentDeviceId)
           : Promise.resolve([] as Transaction[]);
         const rangeMatchesBase =
           !!base &&
@@ -642,8 +653,8 @@ export const HistoryView = ({
           base.start === range.start &&
           base.end === range.end;
         const rangeTransactionsPromise =
-          range && !rangeMatchesBase
-            ? getTransactionsInRange(range.start, range.end)
+          range && !rangeMatchesBase && currentDeviceId
+            ? getPersonalTransactionsInRange(range.start, range.end, undefined, undefined, currentDeviceId)
             : Promise.resolve([] as Transaction[]);
 
         const [baseTransactions, prevTransactions, rangeTransactions] =
@@ -915,12 +926,15 @@ export const HistoryView = ({
 
   const exportTransactions = async () => {
     if (isExporting) return;
-    if (!range) return;
+    if (!range || !currentDeviceId) return;
     setIsExporting(true);
     try {
-      const transactions = await getTransactionsInRange(
+      const transactions = await getPersonalTransactionsInRange(
         range.start,
-        range.end
+        range.end,
+        undefined,
+        undefined,
+        currentDeviceId
       );
 
       const headers = [

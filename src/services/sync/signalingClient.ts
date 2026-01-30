@@ -34,8 +34,10 @@ export class SignalingClient {
         };
 
         ws.onmessage = (event) => {
+          console.log(`[SignalingClient] ${new Date().toISOString()} WS_MESSAGE: ${event.data}`);
           try {
             const message = JSON.parse(String(event.data)) as SignalingMessage;
+            console.log(`[SignalingClient] ${new Date().toISOString()} WS_MESSAGE_PARSED: type=${message.type} request_id=${message.request_id}`);
             if (message.request_id && this.pending.has(message.request_id)) {
               const resolver = this.pending.get(message.request_id);
               this.pending.delete(message.request_id);
@@ -43,16 +45,17 @@ export class SignalingClient {
               return;
             }
             const set = this.handlers.get(message.type);
+            console.log(`[SignalingClient] ${new Date().toISOString()} WS_MESSAGE_HANDLERS: type=${message.type} handlerCount=${set?.size ?? 0}`);
             if (set) {
               set.forEach((handler) => handler(message.payload));
             }
-          } catch {
+          } catch (e) {
+            console.error(`[SignalingClient] ${new Date().toISOString()} WS_MESSAGE_ERROR: ${e}`);
             // ignore malformed messages
           }
         };
 
         ws.onclose = () => {
-          this.handlers.clear();
           this.pending.clear();
         };
       };
@@ -65,15 +68,16 @@ export class SignalingClient {
     this.ws?.close();
     this.ws = null;
     this.pending.clear();
-    this.handlers.clear();
   }
 
   on(type: string, handler: Handler) {
+    console.log(`[SignalingClient] ${new Date().toISOString()} HANDLER_REGISTER: type=${type}`);
     if (!this.handlers.has(type)) {
       this.handlers.set(type, new Set());
     }
     this.handlers.get(type)?.add(handler);
     return () => {
+      console.log(`[SignalingClient] ${new Date().toISOString()} HANDLER_UNREGISTER: type=${type}`);
       this.handlers.get(type)?.delete(handler);
     };
   }

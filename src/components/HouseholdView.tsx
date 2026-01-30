@@ -35,6 +35,8 @@ import { getRangeForFilter } from "@/src/utils/dates";
 import { formatCurrency } from "@/src/utils/money";
 import { TransactionRow } from "@/src/components/TransactionRow";
 import { useSyncEvents } from "@/src/hooks/useSyncEvents";
+import { useAppContext } from "@/src/context/AppContext";
+import { useSignaling } from "@/src/context/SignalingContext";
 
 const generateCode = () => Math.floor(1000 + Math.random() * 9000).toString();
 
@@ -63,10 +65,6 @@ export const HouseholdView = () => {
     total: number;
     chunks: { current: number; total: number };
   } | null>(null);
-  const [incomingPair, setIncomingPair] = useState<
-    | { session_id: string; from_device_id: string; from_display_name: string }
-    | null
-  >(null);
   const [activePartnerId, setActivePartnerId] = useState<string | null>(null);
   const [incomingCode, setIncomingCode] = useState("");
   const [outgoingPair, setOutgoingPair] = useState<
@@ -84,12 +82,19 @@ export const HouseholdView = () => {
   const [conflictVersions, setConflictVersions] = useState<
     { snapshot: Transaction; editorId: string; updatedAt: number }[]
   >([]);
+  const [isErrorFading, setIsErrorFading] = useState(false);
 
   // UX State: Control filtering and view limit
   const [householdFilter, setHouseholdFilter] = useState<"all" | "you" | "partner">("all");
   const [isEditingName, setIsEditingName] = useState(false);
   const [viewMode, setViewMode] = useState<"recent" | "full">("recent");
   const [householdTransactions, setHouseholdTransactions] = useState<Transaction[]>([]);
+
+  // Get tab control from AppContext for auto-switch on pairing request
+  const { setActiveTab, incomingPair, setIncomingPair } = useAppContext();
+
+  // Get shared signaling client from context
+  const { client } = useSignaling();
 
   const clientRef = useRef<SignalingClient | null>(null);
   const pairingKeyRef = useRef<{
@@ -111,6 +116,27 @@ export const HouseholdView = () => {
   useEffect(() => { outgoingPairRef.current = outgoingPair; }, [outgoingPair]);
   useEffect(() => { incomingPairRef.current = incomingPair; }, [incomingPair]);
   useEffect(() => { pairingsRef.current = pairings; }, [pairings]);
+
+  // Reset incoming code when a new pairing request arrives
+  useEffect(() => {
+    if (incomingPair) {
+      setIncomingCode("");
+    }
+  }, [incomingPair]);
+
+  // Auto-clear error messages after 5 seconds with fade animation
+  useEffect(() => {
+    if (errorMessage) {
+      setIsErrorFading(false);
+      const timer = setTimeout(() => {
+        setIsErrorFading(true);
+        setTimeout(() => {
+          setErrorMessage(null);
+        }, 500); // Wait for fade-out animation to complete
+      }, 5000); // Show error for 5 seconds
+      return () => clearTimeout(timer);
+    }
+  }, [errorMessage]);
 
   const { refreshTrigger } = useSyncEvents(pairings[0]?.partner_device_id);
 
@@ -235,6 +261,29 @@ export const HouseholdView = () => {
       to_device_id: incomingPair.from_device_id,
       code: incomingCode.trim(),
     });
+  };
+
+  const handleIncomingPairCancel = async () => {
+    if (!incomingPair || !identity) return;
+    const timestamp = new Date().toISOString();
+    console.log(`[Client-DeviceB] ${timestamp} PAIRING_REJECT_CLICKED: User clicked Cancel Pairing button`);
+    console.log(`[Client-DeviceB] ${timestamp} PAIRING_REJECT_STATE: sessionId=${incomingPair.session_id}, from_device_id=${incomingPair.from_device_id}`);
+
+    const client = await connectSignaling();
+    client.send("pairing:reject", {
+      session_id: incomingPair.session_id,
+      from_device_id: identity.device_id,
+      to_device_id: incomingPair.from_device_id,
+      reason: "cancelled",
+      message: "Pairing request cancelled by receiver",
+    });
+
+    console.log(`[Client-DeviceB] ${timestamp} PAIRING_REJECT_SENT: pairing:reject sent to ${incomingPair.from_device_id}`);
+
+    // Clear local state
+    setIncomingPair(null);
+    setIncomingCode("");
+    console.log(`[Client-DeviceB] ${timestamp} PAIRING_REJECT_LOCAL_CLEARED: incomingPair and incomingCode cleared`);
   };
 
   const handleSyncWith = async (partnerDeviceId: string) => {
@@ -416,21 +465,22 @@ export const HouseholdView = () => {
   }, [refreshTrigger, fetchHouseholdTransactions, refreshSyncState]);
 
   useEffect(() => {
-    if (!identity) return;
-    const client = new SignalingClient(SIGNALING_URL);
-    clientRef.current = client;
-    client.connect().catch(() => setErrorMessage("Unable to connect to signaling server"));
+    if (!identity) {
+      console.log(`[Client] ${new Date().toISOString()} SIGNALING_SKIP: No identity yet`);
+      return;
+    }
 
-    // Signaling event handlers (abbreviated for clarity, same logic as before)
-    const offPairRequest = client.on("pairing:request", (payload) => {
-      if (!payload || payload.to_device_id !== identityRef.current?.device_id) return;
-      setIncomingPair({
-        session_id: payload.session_id,
-        from_device_id: payload.from_device_id,
-        from_display_name: payload.from_display_name,
-      });
-      setIncomingCode("");
-    });
+    if (!client) {
+      console.log(`[Client] ${new Date().toISOString()} SIGNALING_SKIP: No shared client yet`);
+      return;
+    }
+
+    console.log(`[Client] ${new Date().toISOString()} SIGNALING_INIT: Using shared signaling client for device ${identity.device_id}`);
+    clientRef.current = client;
+
+    // Signaling event handlers
+    const offPairRequest = () => { };
+
 
     const offPairAccept = client.on("pairing:accept", async (payload) => {
       if (!payload || !pairingKeyRef.current || payload.session_id !== pairingKeyRef.current.session_id) return;
@@ -451,14 +501,61 @@ export const HouseholdView = () => {
     });
 
     const offPairReject = client.on("pairing:reject", (payload) => {
-      if (!payload || !incomingPairRef.current || payload.session_id !== incomingPairRef.current.session_id) return;
-      if (payload.reason === "wrong_code") {
-        setErrorMessage(payload.message || "Incorrect code. Please try again.");
-        setIncomingCode("");
-      } else if (payload.reason === "max_attempts" || payload.reason === "expired") {
-        setErrorMessage("Pairing failed: " + (payload.message || "Session ended."));
+      const timestamp = new Date().toISOString();
+
+      // Check if this is for incoming pair (Device B receiving rejection - shouldn't happen but just in case)
+      if (payload && incomingPairRef.current && payload.session_id === incomingPairRef.current.session_id) {
+        console.log(`[Client-DeviceB] ${timestamp} PAIRING_REJECT_RECEIVED: Received pairing:reject for incoming pair`);
+        if (payload.reason === "wrong_code") {
+          setErrorMessage(payload.message || "Incorrect code. Please try again.");
+          setIncomingCode("");
+        } else if (payload.reason === "max_attempts" || payload.reason === "expired" || payload.reason === "cancelled") {
+          console.log(`[Client-DeviceB] ${timestamp} PAIRING_REJECT_RECEIVED_CANCELLED: Pairing was cancelled by other party`);
+          setErrorMessage(payload.message || "Pairing failed: " + (payload.message || "Session ended."));
+          setIncomingPair(null);
+          setIncomingCode("");
+        }
+        return;
+      }
+
+      // Check if this is for outgoing pair (Device A receiving rejection from Device B)
+      if (payload && pairingKeyRef.current && payload.session_id === pairingKeyRef.current.session_id) {
+        console.log(`[Client-DeviceA] ${timestamp} PAIRING_REJECT_RECEIVED: Received pairing:reject from ${payload.from_device_id}`);
+        console.log(`[Client-DeviceA] ${timestamp} PAIRING_REJECT_REASON: ${payload.reason} - ${payload.message}`);
+
+        if (payload.reason === "cancelled") {
+          console.log(`[Client-DeviceA] ${timestamp} PAIRING_REJECT_CANCELLED_BY_RECEIVER: Device B cancelled the pairing request`);
+          setErrorMessage("Pairing request was declined by the other device.");
+        } else if (payload.reason === "wrong_code") {
+          setErrorMessage(payload.message || "Incorrect code. Please try again.");
+        } else {
+          setErrorMessage(payload.message || "Pairing failed.");
+        }
+
+        // Clear outgoing pair state
+        pairingKeyRef.current = null;
+        setOutgoingPair(null);
+        console.log(`[Client-DeviceA] ${timestamp} PAIRING_REJECT_CLEARED: outgoingPair and pairingKeyRef cleared`);
+        return;
+      }
+    });
+
+    const offPairCancel = client.on("pairing:cancel", (payload) => {
+      const timestamp = new Date().toISOString();
+      console.log(`[Client-DeviceB] ${timestamp} PAIRING_CANCEL_RECEIVED: Received pairing:cancel from server`);
+      console.log(`[Client-DeviceB] ${timestamp} PAIRING_CANCEL_PAYLOAD:`, JSON.stringify(payload, null, 2));
+      if (!payload || !incomingPairRef.current) {
+        console.log(`[Client-DeviceB] ${timestamp} PAIRING_CANCEL_IGNORED: No payload or no incomingPairRef`);
+        return;
+      }
+      if (payload.session_id === incomingPairRef.current.session_id) {
+        console.log(`[Client-DeviceB] ${timestamp} PAIRING_CANCEL_MATCH: sessionId matches, clearing incomingPair`);
+        console.log(`[Client-DeviceB] ${timestamp} PAIRING_CANCEL_FROM: from_device_id=${payload.from_device_id}, from_display_name=${payload.from_display_name}`);
         setIncomingPair(null);
         setIncomingCode("");
+        console.log(`[Client-DeviceB] ${timestamp} PAIRING_CANCEL_HIDDEN: "Pairing Request" section hidden successfully`);
+      } else {
+        console.log(`[Client-DeviceB] ${timestamp} PAIRING_CANCEL_NO_MATCH: sessionId ${payload.session_id} !== ${incomingPairRef.current.session_id}`);
       }
     });
 
@@ -559,8 +656,8 @@ export const HouseholdView = () => {
 
     return () => {
       offPairRequest(); offPairAccept(); offPairConfirm(); offPairConfirmResponse();
-      offOffer(); offAnswer(); offCandidate(); offPairReject(); offError();
-      client.disconnect();
+      offOffer(); offAnswer(); offCandidate(); offPairReject(); offPairCancel(); offError();
+      // Don't disconnect - client is shared with SignalingProvider
       clientRef.current = null;
     };
   }, [identity?.device_id, refreshSyncState, fetchHouseholdTransactions]);
@@ -703,7 +800,7 @@ export const HouseholdView = () => {
 
       {/* ERROR / ALERTS */}
       {errorMessage && (
-        <div className="kk-badge-error flex w-full items-center gap-2 rounded-lg p-3 px-4 text-sm font-medium animate-fade-up">
+        <div className={`kk-badge-error flex w-full items-center gap-2 rounded-lg p-3 px-4 text-sm font-medium transition-opacity duration-500 ${isErrorFading ? 'opacity-0' : 'opacity-100'}`}>
           <AlertCircle className="h-4 w-4" />
           {errorMessage}
           <button onClick={() => setErrorMessage(null)} className="ml-auto"><X className="h-4 w-4" /></button>
@@ -805,7 +902,7 @@ export const HouseholdView = () => {
                             }`} />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-medium text-[var(--kk-ink)]">
+                          <div className="text-sm font-medium text-[var(--kk-ink)]">
                             {device.display_name}
                           </div>
                           <div className="text-[10px] uppercase tracking-wider text-[var(--kk-ash)]">
@@ -857,6 +954,9 @@ export const HouseholdView = () => {
                   <button onClick={handleIncomingPairAccept} className="kk-btn-primary">
                     Confirm Connection <ArrowRight className="ml-2 h-4 w-4" />
                   </button>
+                  <button onClick={handleIncomingPairCancel} className="kk-btn-ghost text-xs">
+                    Cancel
+                  </button>
                 </div>
               </div>
             </div>
@@ -878,7 +978,38 @@ export const HouseholdView = () => {
                   </div>
                 ))}
               </div>
-              <button onClick={() => { setOutgoingPair(null); pairingKeyRef.current = null; }} className="kk-btn-ghost text-xs">
+              <button
+                onClick={async () => {
+                  const timestamp = new Date().toISOString();
+                  console.log(`[Client-DeviceA] ${timestamp} CANCEL_PAIRING_CLICKED: User clicked Cancel Pairing button`);
+                  const toDeviceId = pairingKeyRef.current?.to_device_id;
+                  const sessionId = pairingKeyRef.current?.session_id;
+                  const fromDeviceId = identityRef.current?.device_id;
+                  const fromDisplayName = identityRef.current?.display_name;
+                  console.log(`[Client-DeviceA] ${timestamp} CANCEL_PAIRING_STATE: sessionId=${sessionId}, toDeviceId=${toDeviceId}, fromDeviceId=${fromDeviceId}`);
+                  setOutgoingPair(null);
+                  pairingKeyRef.current = null;
+                  console.log(`[Client-DeviceA] ${timestamp} CANCEL_PAIRING_LOCAL_CLEARED: outgoingPair and pairingKeyRef cleared`);
+                  if (toDeviceId && sessionId && identityRef.current) {
+                    try {
+                      console.log(`[Client-DeviceA] ${timestamp} PAIRING_CANCEL_SENDING: Sending pairing:cancel to server...`);
+                      const client = await connectSignaling();
+                      client.send("pairing:cancel", {
+                        session_id: sessionId,
+                        to_device_id: toDeviceId,
+                        from_device_id: fromDeviceId,
+                        from_display_name: fromDisplayName,
+                      });
+                      console.log(`[Client-DeviceA] ${timestamp} PAIRING_CANCEL_SENT: pairing:cancel sent successfully to toDeviceId=${toDeviceId}`);
+                    } catch (error) {
+                      console.error(`[Client-DeviceA] ${timestamp} PAIRING_CANCEL_ERROR: Failed to send pairing:cancel`, error);
+                    }
+                  } else {
+                    console.log(`[Client-DeviceA] ${timestamp} PAIRING_CANCEL_SKIPPED: Missing required data toDeviceId=${toDeviceId}, sessionId=${sessionId}, identity=${!!identityRef.current}`);
+                  }
+                }}
+                className="kk-btn-ghost text-xs"
+              >
                 Cancel Pairing
               </button>
             </div>

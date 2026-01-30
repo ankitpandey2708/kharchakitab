@@ -1,0 +1,15 @@
+GEMINI_API_KEY = ""
+SARVAM_KEY = ""
+
+UPSTASH_REDIS_REST_URL=""
+UPSTASH_REDIS_REST_TOKEN=""
+
+NEXT_PUBLIC_POSTHOG_KEY=phc_LKH3QfwzQUTZfBc4iYUfDbmMan11caZ43j3TedC46TK
+NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
+
+NEXT_PUBLIC_POSTHOG_ENABLED=false
+
+******************
+
+npm i 
+npm run dev

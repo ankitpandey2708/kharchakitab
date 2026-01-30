@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppProvider, useAppContext } from "@/src/context/AppContext";
+import { SignalingProvider, useSignaling } from "@/src/context/SignalingContext";
 import { MicButton } from "@/src/components/MicButton";
 import { EditModal } from "@/src/components/EditModal";
 import { TransactionList } from "@/src/components/TransactionList";
@@ -10,7 +11,6 @@ import { HistoryView } from "@/src/components/HistoryView";
 import { RecordingStatus } from "@/src/components/RecordingStatus";
 import { HouseholdView } from "@/src/components/HouseholdView";
 import { useAudioRecorder } from "@/src/hooks/useAudioRecorder";
-import { usePresence } from "@/src/hooks/usePresence";
 import { parseWithGeminiFlash } from "@/src/services/gemini";
 import { parseReceiptWithGemini } from "@/src/services/receipt";
 import { transcribeAudio } from "@/src/services/sarvam";
@@ -88,9 +88,9 @@ const dataUrlToBlob = (dataUrl: string): Blob => {
 };
 
 const AppShell = () => {
-  const { isRecording, setIsRecording } = useAppContext();
+  const { isRecording, setIsRecording, activeTab, setActiveTab, setIncomingPair } = useAppContext();
   // Initialize presence at app level for discoverability
-  const { isConnected, error } = usePresence();
+  const { isConnected, error } = useSignaling();
   const [refreshKey, setRefreshKey] = useState(0);
   const [deletedTx, setDeletedTx] = useState<Transaction | null>(null);
   const [editedTx, setEditedTx] = useState<Transaction | null>(null);
@@ -114,9 +114,6 @@ const AppShell = () => {
   const [isTxnSheetOpen, setIsTxnSheetOpen] = useState(false);
   const [isAboutVisible, setIsAboutVisible] = useState(false);
   const [isReceiptProcessing, setIsReceiptProcessing] = useState(false);
-  const [activeTab, setActiveTab] = useState<"personal" | "household">(
-    "personal"
-  );
   // Show by default on localhost, or if PostHog is not enabled
   const [showHousehold, setShowHousehold] = useState(false);
 
@@ -125,6 +122,57 @@ const AppShell = () => {
       window.location.hostname === "localhost" || process.env.NEXT_PUBLIC_POSTHOG_ENABLED !== "true"
     );
   }, []);
+
+  const { client } = useSignaling();
+  const identityRef = useRef<any>(null);
+
+  useEffect(() => {
+    void (async () => {
+      const device = await getDeviceIdentity();
+      identityRef.current = device;
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!client) return;
+
+    const offReq = client.on("pairing:request", (payload) => {
+      console.log(`[AppShell] ${new Date().toISOString()} PAIRING_REQUEST_GLOBAL: Received pairing:request payload=`, payload);
+
+      if (!payload || payload.to_device_id !== identityRef.current?.device_id) {
+        console.log(`[AppShell] ${new Date().toISOString()} PAIRING_REQUEST_GLOBAL_IGNORED: Not for this device. Target=${payload?.to_device_id}, Me=${identityRef.current?.device_id}`);
+        return;
+      }
+
+      console.log(`[AppShell] ${new Date().toISOString()} PAIRING_REQUEST_GLOBAL_MATCH: Auto-switching to household and capturing request`);
+
+      // Capture the request in global state
+      setIncomingPair({
+        session_id: payload.session_id,
+        from_device_id: payload.from_device_id,
+        from_display_name: payload.from_display_name,
+      });
+
+      // Auto-switch to Household tab after 300ms delay for smoother UX
+      setTimeout(() => {
+        console.log(`[AppShell] ${new Date().toISOString()} AUTO_SWITCH_EXECUTE: Calling setActiveTab("household")`);
+        setActiveTab("household");
+      }, 300);
+    });
+
+    const offCancel = client.on("pairing:cancel", (payload) => {
+      console.log(`[AppShell] ${new Date().toISOString()} PAIRING_CANCEL_GLOBAL: Received pairing:cancel payload=`, payload);
+      // We don't have access to current incomingPair here without a ref, 
+      // but we can just call a function that checks it or rely on HouseholdView 
+      // once it's mounted. For now, let's at least clear it if it exists.
+      setIncomingPair(null);
+    });
+
+    return () => {
+      offReq();
+      offCancel();
+    };
+  }, [client, setActiveTab, setIncomingPair]);
 
   useEffect(() => {
     // Only check feature flags if PostHog is enabled for prod
@@ -837,7 +885,9 @@ const AppShell = () => {
 export default function Home() {
   return (
     <AppProvider>
-      <AppShell />
+      <SignalingProvider>
+        <AppShell />
+      </SignalingProvider>
     </AppProvider>
   );
 }

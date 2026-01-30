@@ -18,6 +18,7 @@ export interface Transaction {
 
 export interface AppState {
   isRecording: boolean;
+  activeTab: "personal" | "household";
 }
 
 export interface TransactionVersion {
