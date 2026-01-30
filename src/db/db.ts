@@ -374,6 +374,24 @@ export const getRecentTransactions = async (
   return setCached(cacheKey, filtered);
 };
 
+export const getPersonalRecentTransactions = async (
+  limit: number,
+  deviceId?: string
+): Promise<Transaction[]> => {
+  const targetDeviceId = deviceId ?? (await getDeviceIdentity()).device_id;
+  const cacheKey = cacheKeyFor(["personal-recent", limit, targetDeviceId]);
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
+  const db = await getDb();
+  const index = db.transaction("transactions").store.index("by-date");
+  const results = await collectTransactions(index, null);
+  const filtered = results
+    .filter((tx) => !isDeleted(tx) && tx.owner_device_id === targetDeviceId)
+    .slice(0, limit);
+  return setCached(cacheKey, filtered);
+};
+
 export const getTransactionsInRange = async (
   start: number,
   end: number,

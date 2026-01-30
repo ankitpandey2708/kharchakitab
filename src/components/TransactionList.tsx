@@ -5,10 +5,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Info, Wallet } from "lucide-react";
 import {
   deleteTransaction,
-  getRecentTransactions,
-  getTransactionsInRange,
+  getPersonalRecentTransactions,
+  getPersonalTransactionsInRange,
   updateTransaction,
   isTransactionShared,
+  getDeviceIdentity,
 } from "@/src/db/db";
 import type { Transaction } from "@/src/types";
 import { getRangeForFilter, isToday } from "@/src/utils/dates";
@@ -59,6 +60,7 @@ export const TransactionList = ({
   const [todayTransactions, setTodayTransactions] = useState<Transaction[]>([]);
   const [periodTransactions, setPeriodTransactions] = useState<Transaction[]>([]);
   const [monthTotal, setMonthTotal] = useState<number | null>(null);
+  const [identity, setIdentity] = useState<{ device_id: string } | null>(null);
   const [budgets, setBudgets] = useState<{
     monthly: number | null;
     coachmarkDismissedMonth?: string | null;
@@ -109,6 +111,13 @@ export const TransactionList = ({
     },
   });
 
+  useEffect(() => {
+    void (async () => {
+      const id = await getDeviceIdentity();
+      setIdentity(id);
+    })();
+  }, []);
+
   const isInCurrentMonth = useCallback((timestamp: number) => {
     const now = new Date();
     const date = new Date(timestamp);
@@ -119,9 +128,10 @@ export const TransactionList = ({
   }, []);
 
   const reloadTransactions = useCallback((isActive?: () => boolean) => {
+    if (!identity) return;
     const shouldUpdate = () => (isActive ? isActive() : true);
     setIsLoading(true);
-    const recentPromise = getRecentTransactions(5)
+    const recentPromise = getPersonalRecentTransactions(5, identity.device_id)
       .then((items) => {
         if (shouldUpdate()) setTransactions(sortTransactions(items));
       })
@@ -131,7 +141,7 @@ export const TransactionList = ({
 
     const range = getRangeForFilter(summaryView === "today" ? "today" : "month");
     const rangePromise = range
-      ? getTransactionsInRange(range.start, range.end)
+      ? getPersonalTransactionsInRange(range.start, range.end, undefined, undefined, identity.device_id)
         .then((items) => {
           if (!shouldUpdate()) return;
           const sorted = sortTransactions(items);
@@ -155,7 +165,7 @@ export const TransactionList = ({
         ? (() => {
           const monthRange = getRangeForFilter("month");
           if (!monthRange) return Promise.resolve([]);
-          return getTransactionsInRange(monthRange.start, monthRange.end);
+          return getPersonalTransactionsInRange(monthRange.start, monthRange.end, undefined, undefined, identity.device_id);
         })()
           .then((items) => {
             if (!shouldUpdate()) return;
@@ -174,7 +184,7 @@ export const TransactionList = ({
     Promise.allSettled(promises).then(() => {
       if (shouldUpdate()) setIsLoading(false);
     });
-  }, [summaryView]);
+  }, [summaryView, identity]);
 
   useEffect(() => {
     let active = true;
