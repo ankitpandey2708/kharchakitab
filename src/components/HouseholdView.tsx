@@ -442,18 +442,35 @@ export const HouseholdView = () => {
       const device = await getDeviceIdentity();
       setIdentity(device);
       setDisplayNameDraft(device.display_name);
+
+      // Load pairings first to know our state - avoid stale state issue
+      console.log('[HouseholdView] Loading pairings from DB...');
+      const pairingsList = await getPairings();
+      console.log('[HouseholdView] Loaded pairings from DB:', pairingsList.length, 'records');
+      pairingsList.forEach((p, i) => {
+        console.log(`[HouseholdView] Pairing[${i}]: device_id=${p.partner_device_id}, name=${p.partner_display_name}, created=${new Date(p.created_at).toISOString()}`);
+      });
+      setPairings(pairingsList);
+
       await refreshSyncState();
       await fetchHouseholdTransactions();
+
       // Auto-trigger device discovery on first load
-      console.log('[HouseholdView] Pairings count:', pairings.length);
       console.log('[HouseholdView] Device identity:', device.display_name, device.device_id);
-      if (!pairings[0]) {
-        console.log('[HouseholdView] No paired devices, triggering auto-discovery...');
-        // Call refreshNearby with device directly to avoid race condition
+      console.log('[HouseholdView] Current pairings state count:', pairings.length);
+
+      // Check if we have any pairings - use the loaded list directly (not stale state)
+      if (pairingsList.length === 0) {
+        console.log('[HouseholdView] No paired devices found, triggering auto-discovery...');
         await refreshNearby();
       } else {
-        console.log('[HouseholdView] Already paired with:', pairings[0].partner_display_name);
+        console.log('[HouseholdView] Already paired with:', pairingsList.map(p => p.partner_display_name).join(', '));
+        // Refresh nearby to show paired devices (even if offline)
+        console.log('[HouseholdView] Refreshing nearby devices to show paired devices...');
+        await refreshNearby();
       }
+
+      console.log('[HouseholdView] Initialization complete. visibleDevices will update...');
     })();
   }, []);
 
@@ -695,11 +712,31 @@ export const HouseholdView = () => {
 
   const visibleDevices = useMemo(() => {
     const map = new Map<string, { device_id: string; display_name: string; status: 'online' | 'offline' }>();
-    nearbyDevices.forEach(d => map.set(d.device_id, { ...d, status: 'online' }));
-    pairings.forEach(p => {
-      if (!map.has(p.partner_device_id)) { map.set(p.partner_device_id, { device_id: p.partner_device_id, display_name: p.partner_display_name, status: 'offline' }); }
+
+    console.log('[visibleDevices] Computing. nearbyDevices:', nearbyDevices.length, 'pairings:', pairings.length);
+
+    // Add online devices from discovery
+    nearbyDevices.forEach(d => {
+      console.log('[visibleDevices] Adding online device:', d.device_id, d.display_name);
+      map.set(d.device_id, { ...d, status: 'online' });
     });
-    return Array.from(map.values());
+
+    // Add paired devices (even if offline)
+    pairings.forEach(p => {
+      const existing = map.get(p.partner_device_id);
+      if (existing) {
+        console.log('[visibleDevices] Paired device is ONLINE:', p.partner_device_id, p.partner_display_name);
+        // Update status to online if already present
+        existing.status = 'online';
+      } else {
+        console.log('[visibleDevices] Adding paired device (OFFLINE):', p.partner_device_id, p.partner_display_name);
+        map.set(p.partner_device_id, { device_id: p.partner_device_id, display_name: p.partner_display_name, status: 'offline' });
+      }
+    });
+
+    const result = Array.from(map.values());
+    console.log('[visibleDevices] Result:', result.length, 'devices:', result.map(d => `${d.display_name}(${d.device_id.slice(-4)}):${d.status}`));
+    return result;
   }, [nearbyDevices, pairings]);
 
   // UX Calculation: Totals for the "Monthly Pulse"
@@ -883,6 +920,8 @@ export const HouseholdView = () => {
                   visibleDevices.map(device => {
                     const isPaired = partnerIds.has(device.device_id);
                     const isOnline = device.status === 'online';
+
+                    console.log('[DeviceList] Rendering device:', device.display_name, 'id:', device.device_id.slice(-4), 'paired:', isPaired, 'online:', isOnline);
 
                     return (
                       <div key={device.device_id}

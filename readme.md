@@ -11,5 +11,6 @@ NEXT_PUBLIC_POSTHOG_ENABLED=false
 
 ******************
 
-npm i 
+npm i
+
 npm run dev
