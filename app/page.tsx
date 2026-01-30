@@ -114,6 +114,15 @@ const AppShell = () => {
   const [activeTab, setActiveTab] = useState<"personal" | "household">(
     "personal"
   );
+  const [showHousehold, setShowHousehold] = useState(false);
+
+  useEffect(() => {
+    // Check feature flag for household view
+    posthog.onFeatureFlags(() => {
+      const isEnabled = posthog.isFeatureEnabled("household-view");
+      setShowHousehold(!!isEnabled);
+    });
+  }, []);
   const processedBlobRef = useRef<Blob | null>(null);
   const processingRef = useRef(false);
   const receiptProcessingRef = useRef(false);
@@ -624,23 +633,25 @@ const AppShell = () => {
 
       {/* Main Content */}
       <main className="relative z-10 mx-auto max-w-4xl px-4 pb-24 pt-6 sm:px-6">
-        <div className="mb-6 flex items-center justify-center">
-          <div className="flex rounded-full border border-[var(--kk-smoke)] bg-white/70 p-1 shadow-[var(--kk-shadow-sm)]">
-            {(["personal", "household"] as const).map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveTab(tab)}
-                className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${activeTab === tab
-                  ? "bg-[var(--kk-ember)] text-white"
-                  : "text-[var(--kk-ink)] hover:bg-[var(--kk-cream)]"
-                  }`}
-              >
-                {tab === "personal" ? "Personal" : "Household"}
-              </button>
-            ))}
+        {showHousehold && (
+          <div className="mb-6 flex items-center justify-center">
+            <div className="flex rounded-full border border-[var(--kk-smoke)] bg-white/70 p-1 shadow-[var(--kk-shadow-sm)]">
+              {(["personal", "household"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${activeTab === tab
+                    ? "bg-[var(--kk-ember)] text-white"
+                    : "text-[var(--kk-ink)] hover:bg-[var(--kk-cream)]"
+                    }`}
+                >
+                  {tab === "personal" ? "Personal" : "Household"}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {activeTab === "personal" && isAboutVisible && (
           <section className="mb-6 kk-card px-5 py-4">
