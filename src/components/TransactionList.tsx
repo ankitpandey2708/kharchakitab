@@ -192,7 +192,7 @@ export const TransactionList = ({
     return () => {
       active = false;
     };
-  }, [refreshKey, summaryView]);
+  }, [refreshKey, summaryView, identity]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("kk_budgets");
