@@ -111,7 +111,8 @@ export const RecurringEditModal = ({
     if (!startTs || !endTs) return;
 
     const existing = transaction;
-    let nextDue = existing?.timestamp ?? startTs;
+    const existingTimestamp = existing?.timestamp ?? startTs;
+    let nextDue = existing?.recurring_next_due_at ?? existingTimestamp;
     if (nextDue < startTs || nextDue > endTs) {
       nextDue = startTs;
     }
@@ -123,11 +124,12 @@ export const RecurringEditModal = ({
       item: name.trim(),
       category,
       paymentMethod,
-      timestamp: nextDue,
+      timestamp: existingTimestamp,
       recurring: true,
       recurring_frequency: frequency,
       recurring_start_date: startTs,
       recurring_end_date: endTs,
+      recurring_next_due_at: nextDue,
       recurring_template_id: template?.id ?? existing?.recurring_template_id,
       recurring_reminder_days: reminderDays,
     };

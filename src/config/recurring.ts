@@ -426,12 +426,30 @@ export const calculateNextDueDate = (
   return date.getTime();
 };
 
+export const getNextUpcomingDueDate = (
+  fromDate: number,
+  frequency: Frequency,
+  now = Date.now(),
+  endDate?: number
+): number => {
+  let nextDue = fromDate;
+  let guard = 0;
+  const maxIterations = 1200;
+
+  while (nextDue < now && guard < maxIterations) {
+    nextDue = calculateNextDueDate(nextDue, frequency);
+    guard += 1;
+    if (endDate && nextDue > endDate) {
+      return endDate;
+    }
+  }
+
+  return nextDue;
+};
+
 export const isDueSoon = (nextDue: number, withinDays = 5): boolean => {
   const now = Date.now();
   const daysUntilDue = (nextDue - now) / (1000 * 60 * 60 * 24);
   return daysUntilDue >= 0 && daysUntilDue <= withinDays;
 };
 
-export const isOverdue = (nextDue: number): boolean => {
-  return nextDue < Date.now();
-};

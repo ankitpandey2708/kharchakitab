@@ -18,8 +18,8 @@ import {
   TEMPLATE_GROUPS,
   FREQUENCY_LABEL_MAP,
   calculateNextDueDate,
+  getNextUpcomingDueDate,
   isDueSoon,
-  isOverdue,
   type TemplateGroup,
   type RecurringTemplate,
 } from "@/src/config/recurring";
@@ -45,7 +45,12 @@ const formatDueDate = (timestamp: number): string => {
   if (date.toDateString() === tomorrow.toDateString()) return "Tomorrow";
 
   const diffDays = Math.ceil((timestamp - Date.now()) / (1000 * 60 * 60 * 24));
-  if (diffDays < 0) return `${Math.abs(diffDays)} days overdue`;
+  if (diffDays < 0) {
+    return date.toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+    });
+  }
   if (diffDays <= 7) return `In ${diffDays} days`;
 
   return date.toLocaleDateString("en-IN", {
@@ -66,6 +71,9 @@ const isActiveRecurring = (tx: Transaction) =>
   isRecurringTransaction(tx) &&
   Date.now() <= (tx.recurring_end_date ?? 0);
 
+const getDueTimestamp = (tx: Transaction) =>
+  tx.recurring_next_due_at ?? tx.timestamp;
+
 export const RecurringView = ({
   refreshKey,
   onAddRecurring,
@@ -83,7 +91,26 @@ export const RecurringView = ({
     try {
       const all = await getPersonalTransactions();
       const active = all.filter(isActiveRecurring);
-      setRecurringItems(active);
+      const now = Date.now();
+      const updates: Promise<unknown>[] = [];
+      const normalized = active.map((tx) => {
+        if (!tx.recurring_frequency) return tx;
+        const dueAt = getDueTimestamp(tx);
+        if (dueAt >= now) return tx;
+        const nextDue = getNextUpcomingDueDate(
+          dueAt,
+          tx.recurring_frequency,
+          now,
+          tx.recurring_end_date
+        );
+        if (nextDue === dueAt) return tx;
+        updates.push(updateTransaction(tx.id, { recurring_next_due_at: nextDue }));
+        return { ...tx, recurring_next_due_at: nextDue };
+      });
+      if (updates.length > 0) {
+        await Promise.allSettled(updates);
+      }
+      setRecurringItems(normalized);
     } finally {
       setIsLoading(false);
     }
@@ -99,17 +126,17 @@ export const RecurringView = ({
     console.group("Recurring debug");
     console.log("now", new Date(now).toString(), now);
     for (const tx of recurringItems) {
+      const dueAt = getDueTimestamp(tx);
       const reminder = tx.recurring_reminder_days ?? 5;
-      const daysUntilDue = (tx.timestamp - now) / (1000 * 60 * 60 * 24);
+      const daysUntilDue = (dueAt - now) / (1000 * 60 * 60 * 24);
       console.log({
         id: tx.id,
         item: tx.item,
-        due: new Date(tx.timestamp).toString(),
-        dueMs: tx.timestamp,
+        due: new Date(dueAt).toString(),
+        dueMs: dueAt,
         reminderDays: reminder,
         daysUntilDue,
-        dueSoon: isDueSoon(tx.timestamp, reminder),
-        overdue: isOverdue(tx.timestamp),
+        dueSoon: isDueSoon(dueAt, reminder),
       });
     }
     console.groupEnd();
@@ -118,8 +145,9 @@ export const RecurringView = ({
   const dueSoonItems = useMemo(
     () =>
       recurringItems.filter((tx) => {
+        const dueAt = getDueTimestamp(tx);
         const reminder = tx.recurring_reminder_days ?? 5;
-        return isDueSoon(tx.timestamp, reminder);
+        return isDueSoon(dueAt, reminder);
       }),
     [recurringItems]
   );
@@ -146,10 +174,11 @@ export const RecurringView = ({
 
   const handleMarkAsPaid = async (tx: Transaction) => {
     if (!tx.recurring_frequency) return;
-    if (tx.timestamp <= Date.now()) return;
-    const nextDue = calculateNextDueDate(tx.timestamp, tx.recurring_frequency);
+    const dueAt = getDueTimestamp(tx);
+    if (dueAt <= Date.now()) return;
+    const nextDue = calculateNextDueDate(dueAt, tx.recurring_frequency);
     await updateTransaction(tx.id, {
-      timestamp: nextDue,
+      recurring_next_due_at: nextDue,
       recurring_last_paid_at: Date.now(),
     });
     await loadRecurring();
@@ -162,9 +191,9 @@ export const RecurringView = ({
 
   const renderCard = (tx: Transaction, showDueStatus = false) => {
     const CategoryIcon = CATEGORY_ICON_MAP[tx.category as CategoryKey] ?? CATEGORY_ICON_MAP.Other;
-    const overdue = isOverdue(tx.timestamp);
-    const dueSoon = isDueSoon(tx.timestamp, tx.recurring_reminder_days ?? 5);
-    const canMarkPaid = tx.timestamp > Date.now();
+    const dueAt = getDueTimestamp(tx);
+    const dueSoon = isDueSoon(dueAt, tx.recurring_reminder_days ?? 5);
+    const canMarkPaid = dueAt > Date.now();
 
     return (
       <motion.div
@@ -173,14 +202,12 @@ export const RecurringView = ({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -8 }}
-        className={`kk-card p-4 ${overdue ? "border-[var(--kk-danger-ink)]/30" : dueSoon ? "border-[var(--kk-saffron)]/50" : ""}`}
+        className={`kk-card p-4 ${dueSoon ? "border-[var(--kk-saffron)]/50" : ""}`}
       >
         <div className="flex items-start gap-3">
           <div
             className={`flex h-10 w-10 items-center justify-center rounded-full ${
-              overdue
-                ? "bg-[var(--kk-danger-ink)]/10 text-[var(--kk-danger-ink)]"
-                : dueSoon
+              dueSoon
                 ? "bg-[var(--kk-saffron)]/10 text-[var(--kk-saffron)]"
                 : "bg-[var(--kk-cream)] text-[var(--kk-ash)]"
             }`}
@@ -206,15 +233,13 @@ export const RecurringView = ({
               {showDueStatus && (
                 <span
                   className={`flex items-center gap-1 ${
-                    overdue
-                      ? "text-[var(--kk-danger-ink)] font-medium"
-                      : dueSoon
+                    dueSoon
                       ? "text-[var(--kk-saffron)] font-medium"
                       : ""
                   }`}
                 >
                   <Calendar className="h-3 w-3" />
-                  {formatDueDate(tx.timestamp)}
+                  {formatDueDate(dueAt)}
                 </span>
               )}
             </div>

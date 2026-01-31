@@ -90,35 +90,41 @@
 6. User cancels: disconnect safely and clear session keys.
 7. Storage eviction risk: warn user and suggest install/PWA for better persistence (optional).
 
-
-
-### 7) Bottom Tab Bar (Summary + Recurring) with Mic
-User story:
-- As a user, I can switch between Summary and Recurring using a bottom tab bar so I can access the two primary sections quickly.
-
-Acceptance criteria:
-- A fixed bottom tab bar is visible at the bottom of the screen.
-- Tabs exist for Summary and Recurring only (no Transactions/Profile tabs).
-- Tapping a tab switches the main content to that view.
-- The active tab is visually highlighted.
-- The mic button remains centered and its behavior is unchanged (start/stop logic and processing flow remain exactly as before).
-
-### 8) Recurring (template-driven creation + management as Transactions)
+### 7) Recurring (template-driven creation + management as Transactions)
 User story:
 - As a user, I can create and manage recurring transactions from templates so I can track bills and subscriptions without manual duplication.
 
-Acceptance criteria:
-- Recurring items are stored as Transactions with extra fields (no separate recurring store/table/type).
-- A recurring transaction must have `recurring = true` and mandatory `startDate`, `endDate`, and `frequency` fields.
-- Categories come from the existing single category source in `src/config/categories`.
-- The Recurring tab is only for creating and managing recurring transactions via templates.
-- Templates prefill name/category/frequency; user completes required fields before saving.
-- I can edit and delete a recurring transaction.
-- Only future-dated recurring transactions can be marked as paid.
-- Marking paid updates the same transaction record (no new transaction is created).
 
-Out of scope (explicitly excluded)
-- Analyze view (charts/filters/export/search) as a separate tab or page.
-- Transactions tab.
-- Profile tab and currency settings.
-- Separate recurring DB schema or RecurringExpense type.
+Eligibility (appears in Recurring view at all)
+
+  - recurring (required) → must be true
+  - recurring_frequency (required) → must be set
+  - recurring_start_date (required) → must be set
+  - recurring_end_date (required) → must be set
+  - recurring_end_date must be >= now (active)
+  - deleted_at → if set, it’s filtered out (via DB layer)
+
+  Bucket: “Due Soon” vs “All recurring”
+
+  - timestamp (next due date)
+  - recurring_reminder_days (window size; default 5)
+  - recurring_end_date (must still be active)
+
+  Auto‑roll (current behavior)
+
+  - timestamp (rolled forward)
+  - recurring_frequency (how far to roll)
+  - recurring_end_date (clamp if rolling past end)
+
+  “Mark as Paid” button
+
+  - timestamp (shown only if timestamp > now)
+  - recurring_frequency (next due calculation)
+  - recurring_last_paid_at (set when paid)
+
+  Other fields that affect recurring UX indirectly
+
+  - recurring_template_id → used to build/edit from templates (not logic, but flow)
+  - category → controls icon/label in recurring cards
+  - paymentMethod → shown on card
+  - amount, item → shown on card

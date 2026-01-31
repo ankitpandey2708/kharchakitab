@@ -19,6 +19,7 @@ export interface Transaction {
   recurring_frequency?: Frequency;
   recurring_start_date?: number;
   recurring_end_date?: number;
+  recurring_next_due_at?: number;
   recurring_last_paid_at?: number;
   recurring_template_id?: string;
   recurring_reminder_days?: number;
