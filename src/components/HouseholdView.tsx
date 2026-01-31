@@ -171,7 +171,7 @@ export const HouseholdView = () => {
     const pairingsList = await getPairings();
     setPairings(pairingsList);
     if (pairingsList.length === 0) {
-      setSyncStatus("No paired device yet");
+      setSyncStatus("No device paired");
       return;
     }
     const state = await getSyncState(pairingsList[0].partner_device_id);
@@ -186,7 +186,7 @@ export const HouseholdView = () => {
       if (hours > 0) relative = `${hours}h ago`;
       if (days > 0) relative = `${days}d ago`;
 
-      setSyncStatus(`Synced ${relative}`);
+      setSyncStatus(`Last sync: ${relative}`);
     }
     setConflictIds(state?.conflicts ?? []);
   }, []);
@@ -337,7 +337,7 @@ export const HouseholdView = () => {
             });
           }
           if (state === 'failed' || state === 'disconnected') {
-            setErrorMessage("Connection lost. Please retry.");
+            setErrorMessage("Connection lost. Try again.");
             setIsSyncing(false);
             setConnectionType(null);
           }
@@ -411,7 +411,7 @@ export const HouseholdView = () => {
 
       window.setTimeout(() => {
         if (peerConnectionRef.current && peerConnectionRef.current.connectionState !== 'connected') {
-          setErrorMessage("Connection timed out. Partner might be offline.");
+          setErrorMessage("Connection timed out. Partner may be offline.");
           setIsSyncing(false);
         }
       }, 15000);
@@ -767,42 +767,56 @@ export const HouseholdView = () => {
   // RENDER
   // ---------------------------------------------------------------------------
   return (
-    <div className="animate-fade-up space-y-8 pb-12">
+    <div className="animate-fade-up space-y-6 pb-12 mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
       {/* HEADER: Identity & Actions */}
-      <header className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h2 className="kk-heading text-2xl tracking-tight">Household Sync</h2>
-          <p className="kk-meta mt-1">Unified ledger without cloud storage</p>
-        </div>
-
-        {/* Device Identity Pill */}
-        <div className="flex items-center self-start md:self-auto gap-2 rounded-full bg-white p-1.5 pr-4 shadow-sm border border-[var(--kk-smoke-heavy)]">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--kk-ember)] text-white shadow-sm">
-            <Smartphone className="h-4 w-4" />
-          </div>
-          {isEditingName ? (
-            <div className="flex items-center gap-2">
-              <input
-                autoFocus
-                className="w-32 bg-transparent text-sm font-semibold text-[var(--kk-ink)] focus:outline-none"
-                value={displayNameDraft}
-                onChange={(e) => setDisplayNameDraft(e.target.value)}
-                onBlur={saveDisplayName}
-                onKeyDown={(e) => e.key === 'Enter' && saveDisplayName()}
-              />
-              <button onClick={saveDisplayName} className="text-[var(--kk-sage)] hover:bg-[var(--kk-sage-bg)] rounded-full p-1">
-                <Check className="h-3.5 w-3.5" />
-              </button>
+      <header className="overflow-hidden rounded-2xl border border-[var(--kk-smoke)] bg-white p-6 shadow-lg md:p-8">
+        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+          <div className="max-w-xl">
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-[var(--kk-smoke-heavy)] bg-[var(--kk-paper)] px-3 py-1">
+              <div className="h-1.5 w-1.5 rounded-full bg-[var(--kk-ember)] shadow-[0_0_6px_var(--kk-ember)]" />
+              <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--kk-ash)]">Household Sync</span>
             </div>
-          ) : (
-            <button
-              onClick={() => setIsEditingName(true)}
-              className="group flex items-center gap-2 text-sm font-semibold text-[var(--kk-ink)] hover:text-[var(--kk-ember)] transition-colors"
-            >
-              <span>{identity?.display_name || "Unknown Device"}</span>
-              <Copy className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100" />
-            </button>
-          )}
+            <h2 className="kk-heading text-3xl tracking-tight text-[var(--kk-ink)] sm:text-4xl">
+              Shared <span className="bg-gradient-to-r from-[var(--kk-ember)] to-[var(--kk-saffron)] bg-clip-text text-transparent">Ledger</span>
+            </h2>
+            <p className="mt-2 text-sm text-[var(--kk-ash)]">Private, device-to-device syncing. No cloud, no accounts.</p>
+          </div>
+
+          {/* Device Identity Pill */}
+          <div className="group flex items-center self-start gap-3 rounded-2xl border border-[var(--kk-smoke-heavy)] bg-[var(--kk-paper)] px-4 py-3 transition-all duration-300 hover:border-[var(--kk-ember)]/40 hover:shadow-md md:self-auto">
+            <div className="relative">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--kk-ember)] to-[var(--kk-ember-deep)] text-white shadow-lg shadow-[var(--kk-ember)]/30">
+                <Smartphone className="h-5 w-5" />
+              </div>
+              <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-[var(--kk-sage)]" />
+            </div>
+            <div className="flex flex-col leading-tight">
+              <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-[var(--kk-ash)]">This device</span>
+              {isEditingName ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    autoFocus
+                    className="w-28 bg-transparent text-sm font-semibold text-[var(--kk-ink)] focus:outline-none"
+                    value={displayNameDraft}
+                    onChange={(e) => setDisplayNameDraft(e.target.value)}
+                    onBlur={saveDisplayName}
+                    onKeyDown={(e) => e.key === 'Enter' && saveDisplayName()}
+                  />
+                  <button onClick={saveDisplayName} className="rounded-full p-1 text-[var(--kk-sage)] hover:bg-[var(--kk-sage-bg)]">
+                    <Check className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setIsEditingName(true)}
+                  className="flex items-center gap-2 text-sm font-semibold text-[var(--kk-ink)] transition-colors hover:text-[var(--kk-ember)]"
+                >
+                  <span>{identity?.display_name || "Unknown Device"}</span>
+                  <Copy className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100" />
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </header>
 
@@ -816,145 +830,187 @@ export const HouseholdView = () => {
       )}
 
       {/* GRID LAYOUT */}
-      <div className="grid gap-6 md:grid-cols-12">
+      <div className="grid gap-5 lg:grid-cols-12 lg:gap-8">
 
         {/* LEFT COLUMN: Status & Discovery (4 cols) */}
-        <div className="md:col-span-4 lg:col-span-3">
+        <div className="lg:col-span-4">
+          <div className="space-y-5">
 
-          {/* Combined Sync & Device Card */}
-          <div className="kk-card relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-4 opacity-10">
-              <Shield className="h-24 w-24 -rotate-12" />
-            </div>
+            {/* Sync Status Card - Enhanced */}
+            <div className="group relative overflow-hidden rounded-2xl border border-[var(--kk-smoke)] bg-white p-[1px] shadow-lg transition-all duration-300 hover:shadow-xl">
+              {/* Animated gradient border on hover */}
+              <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[var(--kk-ember)]/20 via-transparent to-[var(--kk-saffron)]/20 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
 
-            <div className="relative z-10 p-5">
-              {/* Sync Status Section */}
-              <div className="kk-label mb-2">Sync Status</div>
-              <div className="flex items-center gap-2">
-                <div className={`h-2.5 w-2.5 rounded-full ${connectionState === 'connected' ? 'bg-[var(--kk-sage)] shadow-[0_0_8px_var(--kk-sage)]' :
-                  connectionState === 'connecting' ? 'bg-[var(--kk-saffron)] animate-pulse' :
-                    'bg-[var(--kk-ash)]'
+              <div className="relative rounded-2xl bg-white p-6">
+                {/* Status orb decoration */}
+                <div className={`absolute -right-8 -top-8 h-24 w-24 rounded-full transition-all duration-500 ${connectionState === 'connected' ? 'bg-[var(--kk-sage)]/10' :
+                  connectionState === 'connecting' ? 'bg-[var(--kk-saffron)]/15 animate-pulse' :
+                    'bg-[var(--kk-smoke)]'
                   }`} />
-                <span className="font-semibold text-[var(--kk-ink)]">
-                  {connectionState === 'connected' ? "Connected" :
-                    connectionState === 'connecting' ? "Connecting..." :
-                      syncStatus}
-                </span>
-              </div>
 
-              {connectionType && (
-                <div className="mt-1 text-xs font-medium text-[var(--kk-ash)] flex items-center gap-1">
-                  <Wifi className="h-3 w-3" /> via {connectionType}
+                <div className="relative z-10">
+                  <div className="mb-4 flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--kk-ash)]">Connection</span>
+                    <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider ${connectionState === 'connected' ? 'bg-[var(--kk-sage-bg)] text-[var(--kk-sage)]' :
+                      connectionState === 'connecting' ? 'bg-[var(--kk-saffron)]/10 text-[var(--kk-saffron)]' :
+                        'bg-[var(--kk-smoke)] text-[var(--kk-ash)]'
+                      }`}>
+                      <div className={`h-1.5 w-1.5 rounded-full ${connectionState === 'connected' ? 'bg-[var(--kk-sage)] shadow-[0_0_6px_var(--kk-sage)]' :
+                        connectionState === 'connecting' ? 'bg-[var(--kk-saffron)] animate-pulse' :
+                          'bg-[var(--kk-ash)]'
+                        }`} />
+                      {connectionState === 'connected' ? 'Live' : connectionState === 'connecting' ? 'Syncing' : 'Idle'}
+                    </div>
+                  </div>
+
+                  <div className="mb-1 text-xl font-bold text-[var(--kk-ink)]">
+                    {connectionState === 'connected' ? "Connected" :
+                      connectionState === 'connecting' ? "Syncing..." :
+                        syncStatus}
+                  </div>
+
+                  {connectionType && (
+                    <div className="mb-4 flex items-center gap-1.5 text-xs font-medium text-[var(--kk-ash)]">
+                      <Wifi className="h-3.5 w-3.5" /> via {connectionType}
+                    </div>
+                  )}
+
+                  <div className="mt-5">
+                    {isSyncing ? (
+                      <button onClick={cancelSync} className="w-full rounded-xl border-2 border-[var(--kk-danger)]/20 bg-[var(--kk-danger-bg)] px-4 py-3 text-sm font-semibold text-[var(--kk-danger)] transition-all hover:border-[var(--kk-danger)]/40 hover:bg-[var(--kk-danger)]/10">
+                        Cancel sync
+                      </button>
+                    ) : pairings[0] ? (
+                      <button
+                        onClick={() => handleSyncWith(pairings[0].partner_device_id)}
+                        className="w-full kk-btn-primary py-3.5"
+                        disabled={connectionState === 'connecting'}
+                      >
+                        <RefreshCw className={`mr-2 h-4 w-4 ${connectionState === 'connecting' ? 'animate-spin' : ''}`} />
+                        Sync now
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => { refreshNearby(); }}
+                        className="w-full kk-btn-primary py-3.5"
+                        disabled={isSearching}
+                      >
+                        <Users className="mr-2 h-4 w-4" />
+                        {isSearching ? 'Searching...' : 'Search nearby'}
+                      </button>
+                    )}
+                  </div>
                 </div>
-              )}
-
-              {/* Sync Button */}
-              <div className="mt-4">
-                {isSyncing ? (
-                  <button onClick={cancelSync} className="w-full kk-btn-secondary border-[var(--kk-danger-bg)] text-[var(--kk-danger)] hover:bg-[var(--kk-danger-bg)]">
-                    Cancel
-                  </button>
-                ) : pairings[0] ? (
-                  <button
-                    onClick={() => handleSyncWith(pairings[0].partner_device_id)}
-                    className="w-full kk-btn-primary"
-                    disabled={connectionState === 'connecting'}
-                  >
-                    <RefreshCw className={`mr-2 h-4 w-4 ${connectionState === 'connecting' ? 'animate-spin' : ''}`} />
-                    Sync Now
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => {
-                      refreshNearby();
-                    }}
-                    className="w-full kk-btn-primary"
-                    disabled={isSearching}
-                  >
-                    <Users className="mr-2 h-4 w-4" />
-                    Refresh Devices
-                  </button>
-                )}
               </div>
             </div>
 
-            {/* Device List Section */}
-            <div className="p-4">
-
-              <div className="space-y-2">
-                {visibleDevices.length === 0 ? (
-                  <div className="py-4 text-center">
-                    <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-[var(--kk-smoke)] text-[var(--kk-ash)]">
-                      <WifiOff className="h-4 w-4" />
+            {/* Device List Card - Enhanced */}
+            <div className="overflow-hidden rounded-2xl border border-[var(--kk-smoke)] bg-white shadow-md">
+              <div className="border-b border-[var(--kk-smoke)] bg-gradient-to-r from-[var(--kk-cream)] to-white px-5 py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--kk-ink)] text-white">
+                      <Users className="h-3.5 w-3.5" />
                     </div>
-                    <p className="text-xs text-[var(--kk-ash)]">No devices found</p>
+                    <span className="text-sm font-semibold text-[var(--kk-ink)]">Nearby</span>
                   </div>
-                ) : (
-                  visibleDevices.map(device => {
-                    const isPaired = partnerIds.has(device.device_id);
-                    const isOnline = device.status === 'online';
+                  <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${isSearching ? 'animate-pulse bg-[var(--kk-saffron)]/10 text-[var(--kk-saffron)]' : 'bg-[var(--kk-smoke)] text-[var(--kk-ash)]'
+                    }`}>
+                    {isSearching ? "Scanning..." : `${visibleDevices.length} found`}
+                  </span>
+                </div>
+              </div>
 
+              <div className="p-4">
+                <p className="mb-4 text-xs text-[var(--kk-ash)]">Tap to pair, or tap a paired device to sync.</p>
 
-
-                    return (
-                      <div key={device.device_id}
-                        onClick={() => {
-                          if (!isOnline && !isPaired) return;
-                          if (isPaired) handleSyncWith(device.device_id);
-                          else preparePairing(device.device_id, device.display_name);
-                        }}
-                        className={`group relative flex cursor-pointer items-center gap-3 rounded-lg border border-transparent p-2.5 transition-all hover:border-[var(--kk-smoke-heavy)] hover:bg-[var(--kk-paper)] ${activePartnerId === device.device_id ? 'bg-[var(--kk-mist)] border-[var(--kk-ember)]' : ''
-                          }`}
-                      >
-                        <div className="relative">
-                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--kk-cream)] text-[var(--kk-ink)] font-bold text-xs">
-                            {device.display_name.charAt(0)}
-                          </div>
-                          <div className={`absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border-2 border-white ${isOnline ? 'bg-[var(--kk-sage)]' : 'bg-[var(--kk-ash)]'
-                            }`} />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-medium text-[var(--kk-ink)]">
-                            {device.display_name}
-                          </div>
-                          <div className="text-[10px] uppercase tracking-wider text-[var(--kk-ash)]">
-                            {isPaired ? (isOnline ? 'Paired' : 'Offline') : isOnline ? 'Tap to Pair' : 'Offline'}
-                          </div>
-                        </div>
-                        {isPaired && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleForgetPartner(device.device_id); }}
-                            className="opacity-40 transition-all hover:opacity-100 md:opacity-0 md:group-hover:opacity-100 p-1 text-[var(--kk-ash)] hover:text-[var(--kk-danger)]"
-                          >
-                            <XCircle className="h-4 w-4" />
-                          </button>
-                        )}
+                <div className="space-y-2">
+                  {visibleDevices.length === 0 ? (
+                    <div className="py-8 text-center">
+                      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--kk-smoke)] text-[var(--kk-ash)]">
+                        <WifiOff className="h-5 w-5" />
                       </div>
-                    );
-                  })
-                )}
+                      <p className="text-sm font-medium text-[var(--kk-ash)]">No devices nearby</p>
+                      <p className="mt-1 text-xs text-[var(--kk-ash)]/70">Make sure both devices have the app open</p>
+                    </div>
+                  ) : (
+                    visibleDevices.map((device, idx) => {
+                      const isPaired = partnerIds.has(device.device_id);
+                      const isOnline = device.status === 'online';
+
+                      return (
+                        <div key={device.device_id}
+                          onClick={() => {
+                            if (!isOnline && !isPaired) return;
+                            if (isPaired) handleSyncWith(device.device_id);
+                            else preparePairing(device.device_id, device.display_name);
+                          }}
+                          className={`group relative flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-all duration-200 ${activePartnerId === device.device_id
+                            ? 'border-[var(--kk-ember)] bg-[var(--kk-ember)]/5 shadow-md'
+                            : isPaired
+                              ? 'border-[var(--kk-sage)]/30 bg-[var(--kk-sage-bg)] hover:border-[var(--kk-sage)]/50'
+                              : 'border-transparent bg-[var(--kk-paper)] hover:border-[var(--kk-smoke-heavy)] hover:bg-[var(--kk-cream)]'
+                            }`}
+                          style={{ animationDelay: `${idx * 50}ms` }}
+                        >
+                          <div className="relative">
+                            <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-sm font-bold ${isPaired
+                              ? 'bg-gradient-to-br from-[var(--kk-sage)] to-[var(--kk-forest)] text-white shadow-md'
+                              : 'bg-[var(--kk-cream)] text-[var(--kk-ink)]'
+                              }`}>
+                              {device.display_name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${isOnline ? 'bg-[var(--kk-sage)] shadow-[0_0_4px_var(--kk-sage)]' : 'bg-[var(--kk-ash)]'
+                              }`} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold text-[var(--kk-ink)]">{device.display_name}</span>
+                              {isPaired && (
+                                <span className="rounded-full bg-[var(--kk-sage-bg)] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[var(--kk-sage)]">Paired</span>
+                              )}
+                            </div>
+                            <div className="text-[10px] font-medium uppercase tracking-wider text-[var(--kk-ash)]">
+                              {isPaired ? (isOnline ? 'Tap to sync' : 'Offline') : isOnline ? 'Tap to pair' : 'Offline'}
+                            </div>
+                          </div>
+                          {isPaired ? (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleForgetPartner(device.device_id); }}
+                              className="rounded-lg p-2 text-[var(--kk-ash)] opacity-0 transition-all hover:bg-[var(--kk-danger-bg)] hover:text-[var(--kk-danger)] group-hover:opacity-100"
+                            >
+                              <XCircle className="h-4 w-4" />
+                            </button>
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-[var(--kk-ash)] opacity-0 transition-opacity group-hover:opacity-100" />
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             </div>
           </div>
         </div>
 
         {/* RIGHT COLUMN: Active Tasks & Ledger (8 cols) */}
-        <div className="space-y-6 md:col-span-8 lg:col-span-9">
+        <div className="space-y-5 lg:col-span-8">
 
           {/* PAIRING REQUESTS (High Emphasis) */}
           {incomingPair && (
             <div className="kk-card-emphasis overflow-hidden rounded-2xl p-0 animate-fade-up">
-              <div className="bg-[var(--kk-ember)] px-6 py-4 text-white">
+              <div className="bg-[var(--kk-ember)] px-5 py-3 text-white">
                 <div className="flex items-center gap-3">
                   <div className="rounded-full bg-white/20 p-2"><Users className="h-5 w-5" /></div>
                   <div>
-                    <h3 className="font-bold text-lg leading-tight">Pairing Request</h3>
+                    <h3 className="font-bold text-lg leading-tight">New pairing request</h3>
                     <p className="text-xs opacity-90">From {incomingPair.from_display_name}</p>
                   </div>
                 </div>
               </div>
-              <div className="p-6">
-                <p className="mb-4 text-sm text-[var(--kk-ash)]">Enter the 4-digit code displayed on their device to confirm secure connection.</p>
+              <div className="p-5">
+                <p className="mb-4 text-sm text-[var(--kk-ash)]">Enter the 4-digit code shown on their screen to verify and connect.</p>
                 <div className="flex flex-wrap items-center gap-4">
                   <input
                     value={incomingCode}
@@ -964,10 +1020,10 @@ export const HouseholdView = () => {
                     className="w-32 rounded-xl border-2 border-[var(--kk-smoke-heavy)] px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-[var(--kk-ink)] focus:border-[var(--kk-ember)] focus:outline-none"
                   />
                   <button onClick={handleIncomingPairAccept} className="kk-btn-primary">
-                    Confirm Connection <ArrowRight className="ml-2 h-4 w-4" />
+                    Verify & connect <ArrowRight className="ml-2 h-4 w-4" />
                   </button>
                   <button onClick={handleIncomingPairCancel} className="kk-btn-ghost text-xs">
-                    Cancel
+                    Not now
                   </button>
                 </div>
               </div>
@@ -975,13 +1031,13 @@ export const HouseholdView = () => {
           )}
 
           {outgoingPair && (
-            <div className="kk-card border-[var(--kk-ember)] p-6 text-center animate-fade-up">
+            <div className="kk-card border-[var(--kk-ember)] p-5 text-center animate-fade-up">
               <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--kk-cream)] text-[var(--kk-ember)]">
                 <Shield className="h-6 w-6" />
               </div>
-              <h3 className="text-lg font-bold text-[var(--kk-ink)]">Pair with {outgoingPair.to_display_name}</h3>
+              <h3 className="text-lg font-bold text-[var(--kk-ink)]">Pairing with {outgoingPair.to_display_name}</h3>
               <p className="mx-auto mt-2 max-w-xs text-sm text-[var(--kk-ash)]">
-                Share this code with your partner to verify the connection.
+                Ask them to type this code to confirm the secure link.
               </p>
               <div className="my-6 flex justify-center gap-3">
                 {outgoingPair.code.split('').map((digit, i) => (
@@ -1022,7 +1078,7 @@ export const HouseholdView = () => {
                 }}
                 className="kk-btn-ghost text-xs"
               >
-                Cancel Pairing
+                Cancel request
               </button>
             </div>
           )}
@@ -1034,8 +1090,8 @@ export const HouseholdView = () => {
                 <div className="flex items-center gap-3">
                   <AlertCircle className="h-5 w-5 text-amber-600" />
                   <div>
-                    <div className="font-bold text-amber-900">{conflictIds.length} Sync Conflict{conflictIds.length > 1 ? 's' : ''}</div>
-                    <div className="text-xs text-amber-700">Different versions of transactions found.</div>
+                    <div className="font-bold text-amber-900">{conflictIds.length} sync conflict{conflictIds.length > 1 ? 's' : ''}</div>
+                    <div className="text-xs text-amber-700">Pick which version should stay in your ledger.</div>
                   </div>
                 </div>
                 <button onClick={() => setShowConflicts(!showConflicts)} className="kk-btn-secondary text-xs h-8">
@@ -1061,10 +1117,10 @@ export const HouseholdView = () => {
 
           {/* CONFLICT RESOLUTION MODAL/CARD */}
           {selectedConflict && conflictVersions.length >= 2 && (
-            <div className="kk-card p-6 animate-fade-up ring-4 ring-amber-100">
+            <div className="kk-card p-5 animate-fade-up ring-4 ring-amber-100">
               <h3 className="mb-4 font-bold text-lg flex items-center gap-2">
                 <AlertCircle className="h-5 w-5 text-[var(--kk-ember)]" />
-                Choose version to keep
+                Choose the version to keep
               </h3>
               <div className="grid gap-4 sm:grid-cols-2">
                 {conflictVersions.map((version, i) => (
@@ -1095,7 +1151,7 @@ export const HouseholdView = () => {
           {syncProgress && (
             <div className="rounded-xl bg-[var(--kk-ink)] p-4 text-white shadow-lg animate-fade-up">
               <div className="mb-2 flex justify-between text-xs font-medium opacity-80">
-                <span>Syncing...</span>
+                <span>Sync in progress</span>
                 <span>{Math.round((syncProgress.current / syncProgress.total) * 100)}%</span>
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-white/20">
@@ -1109,65 +1165,102 @@ export const HouseholdView = () => {
             </div>
           )}
 
-          {/* MONTHLY PULSE (Summary Card) - First Class UX Addition */}
-          <div className="kk-card overflow-hidden p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-[var(--kk-ember)]" />
-                <h3 className="kk-label text-[var(--kk-ink)]">Monthly Pulse</h3>
+          {/* MONTHLY PULSE (Summary Card) */}
+          <div className="overflow-hidden rounded-2xl border border-[var(--kk-smoke)] bg-white p-6 shadow-md">
+            <div>
+              <div className="mb-5 flex items-start justify-between">
+                <div>
+                  <div className="mb-1 flex items-center gap-2">
+                    <div className="rounded-lg bg-[var(--kk-ember)]/10 p-1.5">
+                      <TrendingUp className="h-4 w-4 text-[var(--kk-ember)]" />
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--kk-ash)]">Month to date</span>
+                  </div>
+                  <div className="text-3xl font-bold text-[var(--kk-ink)]">
+                    <span className="text-[var(--kk-ash)]">₹</span>{formatCurrency(totals.total)}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[10px] uppercase tracking-wider text-[var(--kk-ash)]">Split</div>
+                  <div className="mt-1 text-lg font-bold text-[var(--kk-ink)]">{Math.round(totals.youPct)}:{Math.round(100 - totals.youPct)}</div>
+                </div>
               </div>
-              <span className="font-mono text-lg font-bold text-[var(--kk-ink)]">₹{formatCurrency(totals.total)}</span>
-            </div>
 
-            {/* Split Bar */}
-            <div className="mb-2 flex h-4 w-full overflow-hidden rounded-full bg-[var(--kk-smoke-heavy)]">
-              <div className="h-full bg-[var(--kk-ocean)] transition-all duration-500" style={{ width: `${totals.youPct}%` }} />
-              <div className="h-full bg-[var(--kk-ember)] transition-all duration-500" style={{ width: `${100 - totals.youPct}%` }} />
-            </div>
+              {/* Enhanced Split Bar */}
+              <div className="mb-3 flex h-3.5 w-full overflow-hidden rounded-full bg-[var(--kk-smoke-heavy)]">
+                <div className="h-full bg-gradient-to-r from-[var(--kk-ocean)] to-[#5b7dea] transition-all duration-700 ease-out" style={{ width: `${totals.youPct}%` }} />
+                <div className="h-full bg-gradient-to-r from-[var(--kk-ember)] to-[var(--kk-saffron)] transition-all duration-700 ease-out" style={{ width: `${100 - totals.youPct}%` }} />
+              </div>
 
-            <div className="flex justify-between text-xs font-medium text-[var(--kk-ash)]">
-              <span className="flex items-center gap-1.5"><div className="h-2 w-2 rounded-full bg-[var(--kk-ocean)]" />You ({Math.round(totals.youPct)}%)</span>
-              <span className="flex items-center gap-1.5"><div className="h-2 w-2 rounded-full bg-[var(--kk-ember)]" />Partner ({Math.round(100 - totals.youPct)}%)</span>
+              <div className="flex justify-between text-xs">
+                <span className="flex items-center gap-2 text-[var(--kk-ink)]">
+                  <div className="h-2.5 w-2.5 rounded-full bg-gradient-to-r from-[var(--kk-ocean)] to-[#5b7dea] shadow-sm" />
+                  <span className="font-medium">You</span>
+                  <span className="font-mono text-[var(--kk-ash)]">₹{formatCurrency(totals.you)}</span>
+                </span>
+                <span className="flex items-center gap-2 text-[var(--kk-ink)]">
+                  <span className="font-mono text-[var(--kk-ash)]">₹{formatCurrency(totals.partner)}</span>
+                  <span className="font-medium">Partner</span>
+                  <div className="h-2.5 w-2.5 rounded-full bg-gradient-to-r from-[var(--kk-ember)] to-[var(--kk-saffron)] shadow-sm" />
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* HOUSEHOLD LEDGER */}
-          <div className="kk-card min-h-[400px] overflow-hidden p-0">
-            <div className="border-b border-[var(--kk-smoke)] bg-[var(--kk-mist)] p-4 sm:flex sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2 mb-3 sm:mb-0">
-                <Shield className="h-4 w-4 text-[var(--kk-ember)]" />
-                <h3 className="kk-label text-[var(--kk-ink)]">{viewMode === 'recent' ? "Recent Activity" : "Full History"}</h3>
-              </div>
+          {/* HOUSEHOLD LEDGER - Premium Redesign */}
+          <div className="overflow-hidden rounded-2xl border border-[var(--kk-smoke)] bg-white shadow-xl">
+            {/* Header with gradient accent */}
+            <div className="relative overflow-hidden border-b border-[var(--kk-smoke)] bg-gradient-to-r from-white via-white to-[var(--kk-cream)] px-6 py-5">
+              <div className="absolute -right-4 top-0 h-full w-32 bg-gradient-to-l from-[var(--kk-ember)]/5 to-transparent" />
 
-              {/* Filter Controls */}
-              <div className="flex rounded-lg bg-[var(--kk-smoke)] p-1">
-                {(["all", "you", "partner"] as const).map((filter) => (
-                  <button
-                    key={filter}
-                    onClick={() => setHouseholdFilter(filter)}
-                    className={`rounded-md px-3 py-1 text-xs font-semibold capitalize transition-all ${householdFilter === filter ? 'bg-white text-[var(--kk-ink)] shadow-sm' : 'text-[var(--kk-ash)] hover:text-[var(--kk-ink)]'
-                      }`}
-                  >
-                    {filter}
-                  </button>
-                ))}
+              <div className="relative z-10 sm:flex sm:items-center sm:justify-between">
+                <div className="mb-4 flex items-center gap-3 sm:mb-0">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--kk-ember)] to-[var(--kk-ember-deep)] text-white shadow-lg shadow-[var(--kk-ember)]/20">
+                    <Shield className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="text-lg font-bold text-[var(--kk-ink)]">Shared Ledger</div>
+                    <div className="text-xs text-[var(--kk-ash)]">
+                      {viewMode === 'recent' ? "Recent shared activity" : `${filteredTransactions.length} shared entries`}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Filter Controls - Enhanced */}
+                <div className="flex rounded-xl border border-[var(--kk-smoke)] bg-[var(--kk-paper)] p-1">
+                  {(["all", "you", "partner"] as const).map((filter) => (
+                    <button
+                      key={filter}
+                      onClick={() => setHouseholdFilter(filter)}
+                      className={`rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all ${householdFilter === filter
+                        ? 'bg-gradient-to-r from-[var(--kk-ember)] to-[var(--kk-ember-deep)] text-white shadow-md'
+                        : 'text-[var(--kk-ash)] hover:bg-white hover:text-[var(--kk-ink)]'
+                        }`}
+                    >
+                      {filter === "all" ? "All" : filter}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <div className="divide-y divide-[var(--kk-smoke)]">
+            <div>
               {filteredTransactions.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <div className="mb-4 rounded-full bg-[var(--kk-paper)] p-4">
-                    <Clock className="h-8 w-8 text-[var(--kk-smoke-heavy)]" />
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <div className="relative mb-6">
+                    <div className="absolute inset-0 rounded-full bg-[var(--kk-ember)]/10 blur-xl" />
+                    <div className="relative rounded-2xl bg-gradient-to-br from-[var(--kk-paper)] to-[var(--kk-cream)] p-5 shadow-lg">
+                      <Clock className="h-10 w-10 text-[var(--kk-ash)]" />
+                    </div>
                   </div>
-                  <h4 className="font-semibold text-[var(--kk-ink)]">No transactions found</h4>
-                  <p className="mt-1 max-w-xs text-sm text-[var(--kk-ash)]">
-                    {viewMode === 'recent' ? "Sync with your partner to see shared activity." : "Try changing your filter settings."}
+                  <h4 className="text-lg font-bold text-[var(--kk-ink)]">No shared activity yet</h4>
+                  <p className="mt-2 max-w-xs text-sm text-[var(--kk-ash)]">
+                    {viewMode === 'recent' ? "Sync with a paired device to see shared transactions here." : "Try a different filter to find entries."}
                   </p>
                 </div>
               ) : (
                 <>
-                  <div className="space-y-1 p-2">
+                  <div className="space-y-1 p-4">
                     {filteredTransactions.map((tx, index) => {
                       const ownerLabel = tx.owner_device_id === identity?.device_id
                         ? "You"
@@ -1192,24 +1285,25 @@ export const HouseholdView = () => {
 
                   {/* View All Button (Only in Recent Mode) */}
                   {viewMode === 'recent' && householdTransactions.length > 5 && (
-                    <div className="p-2">
+                    <div className="border-t border-[var(--kk-smoke)] bg-[var(--kk-paper)] px-4 py-4">
                       <button
                         onClick={() => setViewMode('full')}
-                        className="w-full flex items-center justify-center gap-2 rounded-xl border border-[var(--kk-smoke)] bg-white p-3 text-sm font-semibold text-[var(--kk-ink)] hover:border-[var(--kk-ember)] transition-colors"
+                        className="group w-full flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[var(--kk-smoke-heavy)] bg-white p-4 text-sm font-semibold text-[var(--kk-ink)] transition-all hover:border-[var(--kk-ember)] hover:bg-[var(--kk-ember)]/5"
                       >
-                        View all {householdTransactions.length} transactions <ChevronRight className="h-4 w-4" />
+                        View all {householdTransactions.length} entries
+                        <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                       </button>
                     </div>
                   )}
 
                   {/* Show Less Button (Only in Full Mode) */}
                   {viewMode === 'full' && (
-                    <div className="p-2">
+                    <div className="border-t border-[var(--kk-smoke)] px-4 py-4">
                       <button
                         onClick={() => setViewMode('recent')}
-                        className="w-full flex items-center justify-center gap-2 rounded-xl p-3 text-sm font-semibold text-[var(--kk-ash)] hover:text-[var(--kk-ink)]"
+                        className="w-full flex items-center justify-center gap-2 rounded-xl p-3 text-sm font-semibold text-[var(--kk-ash)] transition-colors hover:text-[var(--kk-ink)]"
                       >
-                        Show less
+                        Show recent only
                       </button>
                     </div>
                   )}

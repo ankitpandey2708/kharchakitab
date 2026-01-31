@@ -107,6 +107,15 @@ export const RecurringView = ({
           tx.recurring_end_date
         );
         if (nextDue === dueAt) return tx;
+        console.info("[recurring:normalize] next-due-updated", {
+          id: tx.id,
+          item: tx.item,
+          previousDue: dueAt,
+          nextDue,
+          frequency: tx.recurring_frequency,
+          now,
+          endAt: tx.recurring_end_date ?? null,
+        });
         updates.push(updateTransaction(tx.id, { recurring_next_due_at: nextDue }));
         return { ...tx, recurring_next_due_at: nextDue };
       });
@@ -186,7 +195,7 @@ export const RecurringView = ({
     await loadRecurring();
   };
 
-  const renderCard = (tx: Transaction, showDueStatus = false) => {
+  const renderCard = (tx: Transaction, showDueStatus = false, showMarkPaid = false) => {
     const CategoryIcon = CATEGORY_ICON_MAP[tx.category as CategoryKey] ?? CATEGORY_ICON_MAP.Other;
     const dueAt = getDueTimestamp(tx);
     const dueSoon = dueAt ? isDueSoon(dueAt, tx.recurring_reminder_days ?? 5) : false;
@@ -260,7 +269,7 @@ export const RecurringView = ({
             <Trash2 className="h-3.5 w-3.5" />
             Delete
           </button>
-          {canMarkPaid && (
+          {showMarkPaid && canMarkPaid && (
             <button
               type="button"
               onClick={() => handleMarkAsPaid(tx)}
@@ -344,7 +353,9 @@ export const RecurringView = ({
             <div className="kk-label text-[var(--kk-saffron)]">Due Soon</div>
             <div className="flex-1 border-t border-[var(--kk-smoke)]" />
           </div>
-          <AnimatePresence>{dueSoonItems.map((tx) => renderCard(tx, true))}</AnimatePresence>
+          <AnimatePresence>
+            {dueSoonItems.map((tx) => renderCard(tx, true, true))}
+          </AnimatePresence>
         </div>
       )}
 
@@ -354,7 +365,9 @@ export const RecurringView = ({
             <div className="kk-label">All recurring</div>
             <div className="flex-1 border-t border-[var(--kk-smoke)]" />
           </div>
-          <AnimatePresence>{upcomingItems.map((tx) => renderCard(tx, true))}</AnimatePresence>
+          <AnimatePresence>
+            {upcomingItems.map((tx) => renderCard(tx, true, false))}
+          </AnimatePresence>
         </div>
       )}
 

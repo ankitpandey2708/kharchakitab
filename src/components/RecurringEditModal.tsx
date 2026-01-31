@@ -125,6 +125,31 @@ export const RecurringEditModal = ({
       nextDue = startTs;
     }
 
+    if (mode === "new") {
+      console.info("[recurring:add] due-date-calculation", {
+        now: Date.now(),
+        startDate,
+        endDate,
+        startTs,
+        endTs,
+        nextDue,
+        frequency,
+        reminderDays,
+      });
+    } else {
+      console.info("[recurring:edit] due-date-calculation", {
+        now: Date.now(),
+        startDate,
+        endDate,
+        startTs,
+        endTs,
+        nextDue,
+        frequency,
+        reminderDays,
+        existingNextDue: existing?.recurring_next_due_at ?? null,
+      });
+    }
+
     const next: Transaction = {
       ...(existing ?? {}),
       id: existing?.id ?? "",
