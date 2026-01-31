@@ -25,8 +25,8 @@ import {
   Newspaper,
   type LucideIcon,
 } from "lucide-react";
+import type { CategoryKey } from "@/src/config/categories";
 
-// Frequency types for recurring expenses
 export type Frequency =
   | "daily"
   | "weekly"
@@ -61,7 +61,6 @@ export const FREQUENCY_LABEL_MAP: Record<Frequency, string> = {
   yearly: "Yearly",
 };
 
-// Template groups
 export type TemplateGroup =
   | "insurance"
   | "subscriptions"
@@ -85,12 +84,11 @@ export const TEMPLATE_GROUPS: {
   { key: "other", label: "Other", description: "Miscellaneous recurring" },
 ];
 
-// Recurring expense template
 export interface RecurringTemplate {
   id: string;
   name: string;
   hindiName?: string;
-  category: string;
+  category: CategoryKey;
   group: TemplateGroup;
   suggestedFrequency: Frequency;
   icon: LucideIcon;
@@ -98,12 +96,11 @@ export interface RecurringTemplate {
 }
 
 export const RECURRING_TEMPLATES: RecurringTemplate[] = [
-  // Insurance
   {
     id: "health-insurance",
     name: "Health Insurance",
     hindiName: "स्वास्थ्य बीमा",
-    category: "Health",
+    category: "Insurance",
     group: "insurance",
     suggestedFrequency: "yearly",
     icon: HeartPulse,
@@ -112,7 +109,7 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
     id: "life-insurance",
     name: "Life Insurance",
     hindiName: "जीवन बीमा",
-    category: "Bills",
+    category: "Insurance",
     group: "insurance",
     suggestedFrequency: "yearly",
     icon: Shield,
@@ -121,7 +118,7 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
     id: "vehicle-insurance",
     name: "Vehicle Insurance",
     hindiName: "वाहन बीमा",
-    category: "Travel",
+    category: "Insurance",
     group: "insurance",
     suggestedFrequency: "yearly",
     icon: Car,
@@ -130,17 +127,15 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
     id: "home-insurance",
     name: "Home Insurance",
     hindiName: "गृह बीमा",
-    category: "Bills",
+    category: "Insurance",
     group: "insurance",
     suggestedFrequency: "yearly",
     icon: Home,
   },
-
-  // Subscriptions
   {
     id: "netflix",
     name: "Netflix",
-    category: "Bills",
+    category: "Entertainment",
     group: "subscriptions",
     suggestedFrequency: "monthly",
     icon: Tv,
@@ -149,7 +144,7 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
   {
     id: "spotify",
     name: "Spotify",
-    category: "Bills",
+    category: "Entertainment",
     group: "subscriptions",
     suggestedFrequency: "monthly",
     icon: Music,
@@ -158,7 +153,7 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
   {
     id: "amazon-prime",
     name: "Amazon Prime",
-    category: "Bills",
+    category: "Entertainment",
     group: "subscriptions",
     suggestedFrequency: "yearly",
     icon: Film,
@@ -167,7 +162,7 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
   {
     id: "hotstar",
     name: "Disney+ Hotstar",
-    category: "Bills",
+    category: "Entertainment",
     group: "subscriptions",
     suggestedFrequency: "yearly",
     icon: Tv,
@@ -176,7 +171,7 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
   {
     id: "youtube-premium",
     name: "YouTube Premium",
-    category: "Bills",
+    category: "Entertainment",
     group: "subscriptions",
     suggestedFrequency: "monthly",
     icon: Film,
@@ -195,18 +190,16 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
     id: "newspaper",
     name: "Newspaper",
     hindiName: "अखबार",
-    category: "Bills",
+    category: "Subscriptions",
     group: "subscriptions",
     suggestedFrequency: "monthly",
     icon: Newspaper,
   },
-
-  // Home Services
   {
     id: "cook",
     name: "Cook",
     hindiName: "रसोइया",
-    category: "Food",
+    category: "Home Services",
     group: "home_services",
     suggestedFrequency: "monthly",
     icon: CookingPot,
@@ -215,7 +208,7 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
     id: "maid",
     name: "Maid / House Help",
     hindiName: "नौकरानी",
-    category: "Bills",
+    category: "Home Services",
     group: "home_services",
     suggestedFrequency: "monthly",
     icon: Sparkles,
@@ -224,7 +217,7 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
     id: "driver",
     name: "Driver",
     hindiName: "ड्राइवर",
-    category: "Travel",
+    category: "Home Services",
     group: "home_services",
     suggestedFrequency: "monthly",
     icon: Car,
@@ -233,7 +226,7 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
     id: "milkman",
     name: "Milk",
     hindiName: "दूध",
-    category: "Food",
+    category: "Home Services",
     group: "home_services",
     suggestedFrequency: "monthly",
     icon: Droplets,
@@ -242,18 +235,16 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
     id: "laundry",
     name: "Laundry / Dhobi",
     hindiName: "धोबी",
-    category: "Bills",
+    category: "Home Services",
     group: "home_services",
     suggestedFrequency: "monthly",
     icon: Sparkles,
   },
-
-  // Utilities
   {
     id: "rent",
     name: "Rent",
     hindiName: "किराया",
-    category: "Bills",
+    category: "Housing",
     group: "utilities",
     suggestedFrequency: "monthly",
     icon: Building2,
@@ -262,7 +253,7 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
     id: "wifi",
     name: "WiFi / Broadband",
     hindiName: "वाईफाई",
-    category: "Bills",
+    category: "Utilities",
     group: "utilities",
     suggestedFrequency: "monthly",
     icon: Wifi,
@@ -271,7 +262,7 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
     id: "mobile-recharge",
     name: "Mobile Recharge",
     hindiName: "मोबाइल रिचार्ज",
-    category: "Bills",
+    category: "Utilities",
     group: "utilities",
     suggestedFrequency: "monthly",
     icon: Smartphone,
@@ -280,7 +271,7 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
     id: "electricity",
     name: "Electricity Bill",
     hindiName: "बिजली बिल",
-    category: "Bills",
+    category: "Utilities",
     group: "utilities",
     suggestedFrequency: "monthly",
     icon: Zap,
@@ -289,7 +280,7 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
     id: "gas",
     name: "Gas / LPG",
     hindiName: "गैस",
-    category: "Bills",
+    category: "Utilities",
     group: "utilities",
     suggestedFrequency: "monthly",
     icon: Flame,
@@ -298,7 +289,7 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
     id: "dth",
     name: "DTH / Cable TV",
     hindiName: "डीटीएच",
-    category: "Bills",
+    category: "Utilities",
     group: "utilities",
     suggestedFrequency: "monthly",
     icon: Satellite,
@@ -307,7 +298,7 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
     id: "water",
     name: "Water Bill",
     hindiName: "पानी बिल",
-    category: "Bills",
+    category: "Utilities",
     group: "utilities",
     suggestedFrequency: "monthly",
     icon: Droplets,
@@ -316,18 +307,16 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
     id: "society-maintenance",
     name: "Society Maintenance",
     hindiName: "सोसायटी मेंटेनेंस",
-    category: "Bills",
+    category: "Housing",
     group: "utilities",
     suggestedFrequency: "monthly",
     icon: Building2,
   },
-
-  // Financial
   {
     id: "home-loan-emi",
     name: "Home Loan EMI",
     hindiName: "होम लोन EMI",
-    category: "Bills",
+    category: "Financial",
     group: "financial",
     suggestedFrequency: "monthly",
     icon: Home,
@@ -336,7 +325,7 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
     id: "car-loan-emi",
     name: "Car Loan EMI",
     hindiName: "कार लोन EMI",
-    category: "Bills",
+    category: "Financial",
     group: "financial",
     suggestedFrequency: "monthly",
     icon: Car,
@@ -345,7 +334,7 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
     id: "personal-loan-emi",
     name: "Personal Loan EMI",
     hindiName: "पर्सनल लोन EMI",
-    category: "Bills",
+    category: "Financial",
     group: "financial",
     suggestedFrequency: "monthly",
     icon: Landmark,
@@ -354,7 +343,7 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
     id: "credit-card-bill",
     name: "Credit Card Bill",
     hindiName: "क्रेडिट कार्ड बिल",
-    category: "Bills",
+    category: "Financial",
     group: "financial",
     suggestedFrequency: "monthly",
     icon: CreditCard,
@@ -363,18 +352,16 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
     id: "sip",
     name: "SIP / Mutual Fund",
     hindiName: "SIP",
-    category: "Other",
+    category: "Financial",
     group: "financial",
     suggestedFrequency: "monthly",
     icon: PiggyBank,
   },
-
-  // Education
   {
     id: "school-fees",
     name: "School Fees",
     hindiName: "स्कूल फीस",
-    category: "Other",
+    category: "Education",
     group: "education",
     suggestedFrequency: "quarterly",
     icon: GraduationCap,
@@ -383,7 +370,7 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
     id: "tuition",
     name: "Tuition / Coaching",
     hindiName: "ट्यूशन",
-    category: "Other",
+    category: "Education",
     group: "education",
     suggestedFrequency: "monthly",
     icon: GraduationCap,
@@ -392,24 +379,21 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
     id: "daycare",
     name: "Daycare / Creche",
     hindiName: "डेकेयर",
-    category: "Other",
+    category: "Education",
     group: "education",
     suggestedFrequency: "monthly",
     icon: Baby,
   },
 ];
 
-// Helper to get templates by group
 export const getTemplatesByGroup = (group: TemplateGroup): RecurringTemplate[] =>
   RECURRING_TEMPLATES.filter((t) => t.group === group);
 
-// Helper to get frequency days
 export const getFrequencyDays = (frequency: Frequency): number => {
   const option = FREQUENCY_OPTIONS.find((f) => f.key === frequency);
   return option?.days ?? 30;
 };
 
-// Calculate next due date from a given date and frequency
 export const calculateNextDueDate = (
   fromDate: number,
   frequency: Frequency
@@ -443,14 +427,12 @@ export const calculateNextDueDate = (
   return date.getTime();
 };
 
-// Check if a recurring expense is due soon (within N days)
 export const isDueSoon = (nextDue: number, withinDays = 5): boolean => {
   const now = Date.now();
   const daysUntilDue = (nextDue - now) / (1000 * 60 * 60 * 24);
   return daysUntilDue >= 0 && daysUntilDue <= withinDays;
 };
 
-// Check if a recurring expense is overdue
 export const isOverdue = (nextDue: number): boolean => {
   return nextDue < Date.now();
 };

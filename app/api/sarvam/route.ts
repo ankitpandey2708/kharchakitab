@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimitByIp } from "@/src/lib/ratelimit";
+import { getPostHogClient } from "@/src/lib/posthog-server";
 
 const SARVAM_ENDPOINT = "https://api.sarvam.ai/speech-to-text-translate";
 
@@ -64,5 +65,21 @@ export async function POST(request: NextRequest) {
   }
 
   const data = (await response.json()) as { text?: string; transcript?: string };
-  return NextResponse.json({ text: data.text || data.transcript || "" });
+  const transcriptText = data.text || data.transcript || "";
+
+  // Track successful transcription server-side
+  const distinctId = request.headers.get("x-posthog-distinct-id") || "anonymous";
+  const posthog = getPostHogClient();
+  if (posthog) {
+    posthog.capture({
+      distinctId,
+      event: "transcription_completed",
+      properties: {
+        transcript_length: transcriptText.length,
+        audio_file_size: buffer.byteLength,
+      },
+    });
+  }
+
+  return NextResponse.json({ text: transcriptText });
 }

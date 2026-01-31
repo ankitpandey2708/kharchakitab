@@ -5,8 +5,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Info, Wallet } from "lucide-react";
 import {
   deleteTransaction,
-  getRecentTransactions,
-  getTransactionsInRange,
+  getPersonalRecentTransactions,
+  getPersonalTransactionsInRange,
+  updateTransaction,
+  isTransactionShared,
+  getDeviceIdentity,
 } from "@/src/db/db";
 import type { Transaction } from "@/src/types";
 import { getRangeForFilter, isToday } from "@/src/utils/dates";
@@ -57,6 +60,7 @@ export const TransactionList = ({
   const [todayTransactions, setTodayTransactions] = useState<Transaction[]>([]);
   const [periodTransactions, setPeriodTransactions] = useState<Transaction[]>([]);
   const [monthTotal, setMonthTotal] = useState<number | null>(null);
+  const [identity, setIdentity] = useState<{ device_id: string } | null>(null);
   const [budgets, setBudgets] = useState<{
     monthly: number | null;
     coachmarkDismissedMonth?: string | null;
@@ -75,9 +79,16 @@ export const TransactionList = ({
     activeId: mobileSheetTxId,
     confirmDelete: mobileConfirmDelete,
     setConfirmDelete: setMobileConfirmDelete,
-    openSheet: openMobileSheet,
+    openSheet: baseOpenMobileSheet,
     closeSheet: closeMobileSheet,
   } = useMobileSheet({ onOpenChange: onMobileSheetChange });
+  const [isMobileSheetShared, setIsMobileSheetShared] = useState(false);
+
+  const openMobileSheet = useCallback(async (id: string) => {
+    const shared = await isTransactionShared(id);
+    setIsMobileSheetShared(shared);
+    baseOpenMobileSheet(id);
+  }, [baseOpenMobileSheet]);
   const transactionsRef = React.useRef<Transaction[]>([]);
   const todayTransactionsRef = React.useRef<Transaction[]>([]);
   const periodTransactionsRef = React.useRef<Transaction[]>([]);
@@ -100,6 +111,13 @@ export const TransactionList = ({
     },
   });
 
+  useEffect(() => {
+    void (async () => {
+      const id = await getDeviceIdentity();
+      setIdentity(id);
+    })();
+  }, []);
+
   const isInCurrentMonth = useCallback((timestamp: number) => {
     const now = new Date();
     const date = new Date(timestamp);
@@ -110,9 +128,10 @@ export const TransactionList = ({
   }, []);
 
   const reloadTransactions = useCallback((isActive?: () => boolean) => {
+    if (!identity) return;
     const shouldUpdate = () => (isActive ? isActive() : true);
     setIsLoading(true);
-    const recentPromise = getRecentTransactions(5)
+    const recentPromise = getPersonalRecentTransactions(5, identity.device_id)
       .then((items) => {
         if (shouldUpdate()) setTransactions(sortTransactions(items));
       })
@@ -122,23 +141,23 @@ export const TransactionList = ({
 
     const range = getRangeForFilter(summaryView === "today" ? "today" : "month");
     const rangePromise = range
-      ? getTransactionsInRange(range.start, range.end)
-      .then((items) => {
-        if (!shouldUpdate()) return;
-        const sorted = sortTransactions(items);
-        setPeriodTransactions(sorted);
-        if (summaryView === "today") {
-          setTodayTransactions(sorted);
-        } else {
-          setTodayTransactions(sorted.filter((tx) => isToday(tx.timestamp)));
-        }
-      })
-      .catch(() => {
-        if (shouldUpdate()) {
-          setPeriodTransactions([]);
-          setTodayTransactions([]);
-        }
-      })
+      ? getPersonalTransactionsInRange(range.start, range.end, undefined, undefined, identity.device_id)
+        .then((items) => {
+          if (!shouldUpdate()) return;
+          const sorted = sortTransactions(items);
+          setPeriodTransactions(sorted);
+          if (summaryView === "today") {
+            setTodayTransactions(sorted);
+          } else {
+            setTodayTransactions(sorted.filter((tx) => isToday(tx.timestamp)));
+          }
+        })
+        .catch(() => {
+          if (shouldUpdate()) {
+            setPeriodTransactions([]);
+            setTodayTransactions([]);
+          }
+        })
       : Promise.resolve();
 
     const monthPromise =
@@ -146,7 +165,7 @@ export const TransactionList = ({
         ? (() => {
           const monthRange = getRangeForFilter("month");
           if (!monthRange) return Promise.resolve([]);
-          return getTransactionsInRange(monthRange.start, monthRange.end);
+          return getPersonalTransactionsInRange(monthRange.start, monthRange.end, undefined, undefined, identity.device_id);
         })()
           .then((items) => {
             if (!shouldUpdate()) return;
@@ -165,7 +184,7 @@ export const TransactionList = ({
     Promise.allSettled(promises).then(() => {
       if (shouldUpdate()) setIsLoading(false);
     });
-  }, [summaryView]);
+  }, [summaryView, identity]);
 
   useEffect(() => {
     let active = true;
@@ -173,7 +192,7 @@ export const TransactionList = ({
     return () => {
       active = false;
     };
-  }, [refreshKey, summaryView]);
+  }, [refreshKey, summaryView, identity]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("kk_budgets");
@@ -280,10 +299,10 @@ export const TransactionList = ({
       } else if (nowInMonth) {
         delta = editedTx.amount;
       }
-    if (delta !== 0) {
-      setMonthTotal((prev) => (prev === null ? prev : prev + delta));
+      if (delta !== 0) {
+        setMonthTotal((prev) => (prev === null ? prev : prev + delta));
+      }
     }
-  }
   }, [editedTx, summaryView, isInCurrentMonth]);
 
   useEffect(() => {
@@ -389,15 +408,15 @@ export const TransactionList = ({
   const pacingSpent = viewTotal;
   const pacingTarget =
     hasBudget &&
-    isPacingView &&
-    rawRemaining !== null &&
-    daysLeftInMonth > 0
+      isPacingView &&
+      rawRemaining !== null &&
+      daysLeftInMonth > 0
       ? (() => {
-          // Solve (B - (M + x)) / D = T + x for x.
-          // B = activeBudget, M = monthToDateTotal (includes today), T = pacingSpent, D = daysLeftInMonth.
-          return (activeBudget - (monthToDateTotal ?? viewTotal) - daysLeftInMonth * pacingSpent) /
-            (daysLeftInMonth + 1);
-        })()
+        // Solve (B - (M + x)) / D = T + x for x.
+        // B = activeBudget, M = monthToDateTotal (includes today), T = pacingSpent, D = daysLeftInMonth.
+        return (activeBudget - (monthToDateTotal ?? viewTotal) - daysLeftInMonth * pacingSpent) /
+          (daysLeftInMonth + 1);
+      })()
       : 0;
   const pacingCap =
     summaryView === "today" ? pacingSpent + Math.max(pacingTarget, 0) : 0;
@@ -599,17 +618,17 @@ export const TransactionList = ({
     !hasBudget || !isPacingView ? null : (
       <div className="mt-4 rounded-[var(--kk-radius-md)] border border-[var(--kk-smoke)] bg-white/70 p-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex w-full items-center justify-between gap-2">
-          <div className="kk-label">Safe to spend today</div>
-          <button
-            type="button"
-            onClick={openBudgetEditorFromPacing}
-            className="text-xs font-medium text-[var(--kk-ember)] transition hover:text-[var(--kk-ember-ink)]"
-            aria-label="Edit monthly budget"
-          >
-            Edit
-          </button>
-        </div>
+          <div className="flex w-full items-center justify-between gap-2">
+            <div className="kk-label">Safe to spend today</div>
+            <button
+              type="button"
+              onClick={openBudgetEditorFromPacing}
+              className="text-xs font-medium text-[var(--kk-ember)] transition hover:text-[var(--kk-ember-ink)]"
+              aria-label="Edit monthly budget"
+            >
+              Edit
+            </button>
+          </div>
         </div>
         <div className="mt-3 flex items-center justify-start gap-4">
           {pacingOverspend ? (
@@ -679,9 +698,30 @@ export const TransactionList = ({
     [findTxById, onEdit]
   );
 
+  const handleTogglePrivate = useCallback(
+    async (id: string, nextPrivate: boolean) => {
+      const shared = await isTransactionShared(id);
+      if (shared && nextPrivate) return; // Prevent marking shared as private
+      const tx = findTxById(id);
+      if (!tx) return;
+      await updateTransaction(id, { is_private: nextPrivate });
+      reloadTransactions();
+    },
+    [findTxById, reloadTransactions]
+  );
+
   const mobileSheetTx = mobileSheetTxId ? findTxById(mobileSheetTxId) : null;
 
-  if (!isLoading && transactions.length === 0) {
+  if (isLoading) {
+    return (
+      <div className="space-y-5">
+        <div className="kk-card h-36 animate-pulse bg-[var(--kk-mist)]/50 sm:h-44" />
+        <div className="kk-card h-64 animate-pulse bg-[var(--kk-mist)]/50" />
+      </div>
+    );
+  }
+
+  if (transactions.length === 0) {
     return (
       <motion.div
         initial={{ opacity: 0, y: 16 }}
@@ -814,6 +854,8 @@ export const TransactionList = ({
         onClose={closeMobileSheet}
         onEdit={hasEdit ? handleEdit : undefined}
         onDelete={handleDelete}
+        onTogglePrivate={handleTogglePrivate}
+        isShared={isMobileSheetShared}
         formatCurrency={formatCurrency}
       />
     </div>

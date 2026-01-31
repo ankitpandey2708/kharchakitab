@@ -2,9 +2,9 @@
 
 import React, { useMemo } from "react";
 import { motion } from "framer-motion";
-import { BarChart3, Mic, Receipt, RefreshCw, User } from "lucide-react";
+import { BarChart3, Mic, RefreshCw } from "lucide-react";
 
-export type TabType = "summary" | "transactions" | "recurring" | "profile";
+export type TabType = "summary" | "recurring";
 
 interface BottomTabBarProps {
   activeTab: TabType;
@@ -15,9 +15,7 @@ interface BottomTabBarProps {
 
 const tabs: { key: TabType; label: string; icon: React.ElementType }[] = [
   { key: "summary", label: "Summary", icon: BarChart3 },
-  { key: "transactions", label: "Txns", icon: Receipt },
   { key: "recurring", label: "Recurring", icon: RefreshCw },
-  { key: "profile", label: "Profile", icon: User },
 ];
 
 export const BottomTabBar = ({
@@ -49,12 +47,11 @@ export const BottomTabBar = ({
     onMicPress();
   };
 
-  const leftTabs = tabs.slice(0, 2);
-  const rightTabs = tabs.slice(2);
+  const leftTabs = tabs.slice(0, 1);
+  const rightTabs = tabs.slice(1);
 
   return (
     <div className="kk-bottom-tab-bar">
-      {/* Left tabs */}
       {leftTabs.map((tab) => {
         const Icon = tab.icon;
         return (
@@ -70,12 +67,10 @@ export const BottomTabBar = ({
         );
       })}
 
-      {/* Center Mic Button */}
       <div className="kk-center-fab-container">
         <div className="relative">
           {isRecording && (
             <>
-              {/* Outer glow ring */}
               <motion.div
                 className="absolute inset-0 rounded-full"
                 style={{
@@ -85,7 +80,6 @@ export const BottomTabBar = ({
                 transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
               />
 
-              {/* Expanding ring 1 */}
               <motion.div
                 className="absolute inset-0 rounded-full border-2 border-[var(--kk-ember)]"
                 initial={{ scale: 1, opacity: 0.6 }}
@@ -93,7 +87,6 @@ export const BottomTabBar = ({
                 transition={{ duration: 1.2, repeat: Infinity, ease: "easeOut" }}
               />
 
-              {/* Expanding ring 2 */}
               <motion.div
                 className="absolute inset-0 rounded-full border border-[var(--kk-saffron)]"
                 initial={{ scale: 1, opacity: 0.4 }}
@@ -101,7 +94,6 @@ export const BottomTabBar = ({
                 transition={{ duration: 1.5, repeat: Infinity, ease: "easeOut", delay: 0.4 }}
               />
 
-              {/* Spark particles */}
               {particles.map((particle) => (
                 <motion.div
                   key={particle.id}
@@ -155,7 +147,6 @@ export const BottomTabBar = ({
             }
             whileTap={{ scale: 0.95 }}
           >
-            {/* Inner glow */}
             <div
               className="absolute inset-0 rounded-full opacity-50"
               style={{
@@ -164,7 +155,6 @@ export const BottomTabBar = ({
               }}
             />
 
-            {/* Icon with pulse when recording */}
             <motion.div
               animate={{
                 scale: isRecording ? [1, 1.15, 1] : 1,
@@ -181,7 +171,6 @@ export const BottomTabBar = ({
         </div>
       </div>
 
-      {/* Right tabs */}
       {rightTabs.map((tab) => {
         const Icon = tab.icon;
         return (

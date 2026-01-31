@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { RECEIPT_PROMPT } from "@/src/utils/prompts";
 import { formatDateYMD } from "@/src/utils/dates";
+import { getPostHogClient } from "@/src/lib/posthog-server";
 
 export const runtime = "nodejs";
 
@@ -58,5 +59,21 @@ export async function POST(request: NextRequest) {
     }>;
   };
   const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+
+  // Track successful receipt parsing server-side
+  const distinctId = request.headers.get("x-posthog-distinct-id") || "anonymous";
+  const posthog = getPostHogClient();
+  if (posthog) {
+    posthog.capture({
+      distinctId,
+      event: "receipt_parsed",
+      properties: {
+        image_size_bytes: buffer.byteLength,
+        image_mime_type: mimeType,
+        output_length: rawText.length,
+      },
+    });
+  }
+
   return NextResponse.json({ text: rawText });
 }

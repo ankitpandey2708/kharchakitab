@@ -134,13 +134,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${bodyFont.variable} ${displayFont.variable} ${monoFont.variable} antialiased`}
-      >
+      <head>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         />
+      </head>
+      <body
+        className={`${bodyFont.variable} ${displayFont.variable} ${monoFont.variable} antialiased`}
+      >
         {children}
       </body>
     </html>

@@ -11,7 +11,10 @@ import {
 } from "lucide-react";
 import {
   deleteTransaction,
-  getTransactionsInRange,
+  getPersonalTransactionsInRange,
+  updateTransaction,
+  isTransactionShared,
+  getDeviceIdentity,
 } from "@/src/db/db";
 import type { Transaction } from "@/src/types";
 import { useEscapeKey } from "@/src/hooks/useEscapeKey";
@@ -22,6 +25,8 @@ import { TransactionActionSheet } from "@/src/components/TransactionActionSheet"
 import { formatCurrency as formatCurrencyUtil } from "@/src/utils/money";
 import { useMobileSheet } from "@/src/hooks/useMobileSheet";
 import { useSummaryViewSync } from "@/src/hooks/useSummaryViewSync";
+import posthog from "posthog-js";
+
 const HISTORY_PAGE_SIZE = 30;
 
 type SummaryView = "today" | "week" | "month";
@@ -303,6 +308,7 @@ export const HistoryView = ({
   const [cursor, setCursor] = useState<number | undefined>(undefined);
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
+  const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null);
   const customStartRef = useRef<HTMLInputElement | null>(null);
   const customEndRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -333,9 +339,17 @@ export const HistoryView = ({
     activeId: mobileSheetTxId,
     confirmDelete: mobileConfirmDelete,
     setConfirmDelete: setMobileConfirmDelete,
-    openSheet: openMobileSheet,
+    openSheet: baseOpenMobileSheet,
     closeSheet: closeMobileSheet,
   } = useMobileSheet();
+  const [isMobileSheetShared, setIsMobileSheetShared] = useState(false);
+
+  const openMobileSheet = useCallback(async (id: string) => {
+    const shared = await isTransactionShared(id);
+    setIsMobileSheetShared(shared);
+    baseOpenMobileSheet(id);
+  }, [baseOpenMobileSheet]);
+
   const hasEdit = Boolean(onEdit);
   const metricsCacheRef = useRef(
     new Map<
@@ -363,6 +377,14 @@ export const HistoryView = ({
     if (isOpen) return;
     closeMobileSheet();
   }, [closeMobileSheet, isOpen]);
+
+  // Get current device ID on mount
+  useEffect(() => {
+    void (async () => {
+      const identity = await getDeviceIdentity();
+      setCurrentDeviceId(identity.device_id);
+    })();
+  }, []);
 
   const [allocationMode, setAllocationMode] = useState<"amount" | "count">(
     "amount"
@@ -442,15 +464,16 @@ export const HistoryView = ({
 
   const fetchPage = useCallback(
     (cursorValue?: number) =>
-      range
-        ? getTransactionsInRange(
+      range && currentDeviceId
+        ? getPersonalTransactionsInRange(
           range.start,
           range.end,
           HISTORY_PAGE_SIZE,
-          cursorValue
+          cursorValue,
+          currentDeviceId
         )
         : Promise.resolve([] as Transaction[]),
-    [range]
+    [range, currentDeviceId]
   );
 
   const loadFirstPage = useCallback(async () => {
@@ -618,11 +641,11 @@ export const HistoryView = ({
             }
             : null;
 
-        const baseTransactionsPromise = base
-          ? getTransactionsInRange(base.start, base.end)
+        const baseTransactionsPromise = base && currentDeviceId
+          ? getPersonalTransactionsInRange(base.start, base.end, undefined, undefined, currentDeviceId)
           : Promise.resolve([] as Transaction[]);
-        const prevTransactionsPromise = prevRange
-          ? getTransactionsInRange(prevRange.start, prevRange.end)
+        const prevTransactionsPromise = prevRange && currentDeviceId
+          ? getPersonalTransactionsInRange(prevRange.start, prevRange.end, undefined, undefined, currentDeviceId)
           : Promise.resolve([] as Transaction[]);
         const rangeMatchesBase =
           !!base &&
@@ -630,8 +653,8 @@ export const HistoryView = ({
           base.start === range.start &&
           base.end === range.end;
         const rangeTransactionsPromise =
-          range && !rangeMatchesBase
-            ? getTransactionsInRange(range.start, range.end)
+          range && !rangeMatchesBase && currentDeviceId
+            ? getPersonalTransactionsInRange(range.start, range.end, undefined, undefined, currentDeviceId)
             : Promise.resolve([] as Transaction[]);
 
         const [baseTransactions, prevTransactions, rangeTransactions] =
@@ -903,14 +926,16 @@ export const HistoryView = ({
 
   const exportTransactions = async () => {
     if (isExporting) return;
-    if (!range) return;
+    if (!range || !currentDeviceId) return;
     setIsExporting(true);
     try {
-      const transactions = await getTransactionsInRange(
+      const transactions = await getPersonalTransactionsInRange(
         range.start,
-        range.end
+        range.end,
+        undefined,
+        undefined,
+        currentDeviceId
       );
-
       const headers = [
         "Date",
         "Amount",
@@ -938,6 +963,11 @@ export const HistoryView = ({
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
+      posthog.capture("expenses_exported", {
+        transaction_count: transactions.length,
+        filter_type: filter,
+        date_range_label: getExportLabel(),
+      });
     } finally {
       setIsExporting(false);
     }
@@ -1109,6 +1139,18 @@ export const HistoryView = ({
       if (tx) onEdit(tx);
     },
     [findTxById, onEdit]
+  );
+
+  const handleTogglePrivate = useCallback(
+    async (id: string, nextPrivate: boolean) => {
+      const shared = await isTransactionShared(id);
+      if (shared && nextPrivate) return; // Prevent marking shared as private
+      const tx = findTxById(id);
+      if (!tx) return;
+      await updateTransaction(id, { is_private: nextPrivate });
+      void loadFirstPage();
+    },
+    [findTxById, loadFirstPage]
   );
 
   const mobileSheetTx = mobileSheetTxId ? findTxById(mobileSheetTxId) : null;
@@ -1583,6 +1625,8 @@ export const HistoryView = ({
             onClose={closeMobileSheet}
             onEdit={hasEdit ? handleEdit : undefined}
             onDelete={handleDelete}
+            onTogglePrivate={handleTogglePrivate}
+            isShared={isMobileSheetShared}
             formatCurrency={formatCurrency}
           />
         </motion.div>
