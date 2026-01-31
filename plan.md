@@ -90,14 +90,35 @@
 6. User cancels: disconnect safely and clear session keys.
 7. Storage eviction risk: warn user and suggest install/PWA for better persistence (optional).
 
-## Risks & Mitigations
-- Web-only storage eviction risk -> show gentle warning and recommend periodic local exports (optional).
-- NAT or firewall blocks P2P -> TURN fallback with E2E encryption.
-- Accidental pairing -> confirm code entry + explicit device names.
 
-## Milestones
-1. Data model + local storage + versioned edits.
-2. Signaling server + discovery list.
-3. WebRTC handshake + encrypted DataChannel sync.
-4. Household UI + conflict resolution.
-5. QA: network failures, conflict cases, privacy checks.
+
+### 7) Bottom Tab Bar (Summary + Recurring) with Mic
+User story:
+- As a user, I can switch between Summary and Recurring using a bottom tab bar so I can access the two primary sections quickly.
+
+Acceptance criteria:
+- A fixed bottom tab bar is visible at the bottom of the screen.
+- Tabs exist for Summary and Recurring only (no Transactions/Profile tabs).
+- Tapping a tab switches the main content to that view.
+- The active tab is visually highlighted.
+- The mic button remains centered and its behavior is unchanged (start/stop logic and processing flow remain exactly as before).
+
+### 8) Recurring (template-driven creation + management as Transactions)
+User story:
+- As a user, I can create and manage recurring transactions from templates so I can track bills and subscriptions without manual duplication.
+
+Acceptance criteria:
+- Recurring items are stored as Transactions with extra fields (no separate recurring store/table/type).
+- A recurring transaction must have `recurring = true` and mandatory `startDate`, `endDate`, and `frequency` fields.
+- Categories come from the existing single category source in `src/config/categories`.
+- The Recurring tab is only for creating and managing recurring transactions via templates.
+- Templates prefill name/category/frequency; user completes required fields before saving.
+- I can edit and delete a recurring transaction.
+- Only future-dated recurring transactions can be marked as paid.
+- Marking paid updates the same transaction record (no new transaction is created).
+
+Out of scope (explicitly excluded)
+- Analyze view (charts/filters/export/search) as a separate tab or page.
+- Transactions tab.
+- Profile tab and currency settings.
+- Separate recurring DB schema or RecurringExpense type.

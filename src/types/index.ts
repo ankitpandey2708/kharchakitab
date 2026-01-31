@@ -1,3 +1,5 @@
+import type { Frequency } from "@/src/config/recurring";
+
 export interface Transaction {
   id: string;
   amount: number;
@@ -14,6 +16,13 @@ export interface Transaction {
   version_group_id?: string;
   deleted_at?: number | null;
   conflict?: boolean;
+  recurring?: boolean;
+  recurring_frequency?: Frequency;
+  recurring_start_date?: number;
+  recurring_end_date?: number;
+  recurring_last_paid_at?: number;
+  recurring_template_id?: string;
+  recurring_reminder_days?: number;
 }
 
 export interface AppState {

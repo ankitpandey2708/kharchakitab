@@ -936,7 +936,6 @@ export const HistoryView = ({
         undefined,
         currentDeviceId
       );
-
       const headers = [
         "Date",
         "Amount",

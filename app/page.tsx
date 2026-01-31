@@ -4,12 +4,14 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppProvider, useAppContext } from "@/src/context/AppContext";
 import { SignalingProvider, useSignaling } from "@/src/context/SignalingContext";
-import { MicButton } from "@/src/components/MicButton";
+import { BottomTabBar, type TabType } from "@/src/components/BottomTabBar";
 import { EditModal } from "@/src/components/EditModal";
 import { TransactionList } from "@/src/components/TransactionList";
 import { HistoryView } from "@/src/components/HistoryView";
 import { RecordingStatus } from "@/src/components/RecordingStatus";
 import { HouseholdView } from "@/src/components/HouseholdView";
+import { RecurringView } from "@/src/components/RecurringView";
+import { RecurringEditModal } from "@/src/components/RecurringEditModal";
 import { useAudioRecorder } from "@/src/hooks/useAudioRecorder";
 import { parseWithGeminiFlash } from "@/src/services/gemini";
 import { parseReceiptWithGemini } from "@/src/services/receipt";
@@ -21,6 +23,7 @@ import {
   updateTransaction,
   isTransactionShared,
 } from "@/src/db/db";
+import type { RecurringTemplate } from "@/src/config/recurring";
 import type { Expense } from "@/src/utils/schemas";
 import type { Transaction } from "@/src/types";
 import { AlertCircle, PenLine, ImageUp } from "lucide-react";
@@ -114,6 +117,11 @@ const AppShell = () => {
   const [isTxnSheetOpen, setIsTxnSheetOpen] = useState(false);
   const [isAboutVisible, setIsAboutVisible] = useState(false);
   const [isReceiptProcessing, setIsReceiptProcessing] = useState(false);
+  const [activeSection, setActiveSection] = useState<TabType>("summary");
+  const [isRecurringModalOpen, setIsRecurringModalOpen] = useState(false);
+  const [recurringModalMode, setRecurringModalMode] = useState<"new" | "edit">("new");
+  const [selectedTemplate, setSelectedTemplate] = useState<RecurringTemplate | null>(null);
+  const [selectedRecurringTx, setSelectedRecurringTx] = useState<Transaction | null>(null);
   // Show by default on localhost, or if PostHog is not enabled
   const [showHousehold, setShowHousehold] = useState(false);
 
@@ -173,7 +181,13 @@ const AppShell = () => {
   }, [client, setActiveTab, setIncomingPair, showHousehold]);
 
   useEffect(() => {
-    const isLocal = window.location.hostname === "localhost";
+    const host = window.location.hostname;
+    const isLocal = host === "localhost" || host === "127.0.0.1" || host === "::1";
+    if (isLocal) {
+      // Ignore the feature flag locally so household view is always visible.
+      setShowHousehold(true);
+      return;
+    }
 
     // Always check for feature flags if PostHog initialized
     posthog.onFeatureFlags(() => {
@@ -181,7 +195,6 @@ const AppShell = () => {
       const isEnabled = !!posthog.isFeatureEnabled("household-view");
       setShowHousehold(isEnabled);
     });
-
   }, []);
 
   useEffect(() => {
@@ -191,6 +204,12 @@ const AppShell = () => {
       setActiveTab("personal");
     }
   }, [showHousehold, activeTab, setActiveTab]);
+
+  useEffect(() => {
+    if (activeTab !== "personal") {
+      setActiveSection("summary");
+    }
+  }, [activeTab]);
   const processedBlobRef = useRef<Blob | null>(null);
   const processingRef = useRef(false);
   const receiptProcessingRef = useRef(false);
@@ -204,6 +223,11 @@ const AppShell = () => {
   useEffect(() => {
     void getDeviceIdentity();
   }, []);
+  useEffect(() => {
+    if (activeSection !== "summary") {
+      setIsTxnSheetOpen(false);
+    }
+  }, [activeSection]);
   useEffect(() => {
     setIsRecording(audioRecorder.isRecording);
     if (audioRecorder.isRecording) {
@@ -263,6 +287,41 @@ const AppShell = () => {
   const refreshTransactions = useCallback(() => {
     setRefreshKey((prev) => prev + 1);
   }, []);
+
+  const handleAddRecurring = useCallback((template?: RecurringTemplate) => {
+    setSelectedTemplate(template ?? null);
+    setSelectedRecurringTx(null);
+    setRecurringModalMode("new");
+    setIsRecurringModalOpen(true);
+  }, []);
+
+  const handleEditRecurring = useCallback((tx: Transaction) => {
+    setSelectedRecurringTx(tx);
+    setSelectedTemplate(null);
+    setRecurringModalMode("edit");
+    setIsRecurringModalOpen(true);
+  }, []);
+
+  const handleCloseRecurringModal = useCallback(() => {
+    setIsRecurringModalOpen(false);
+    setSelectedTemplate(null);
+    setSelectedRecurringTx(null);
+  }, []);
+
+  const handleSaveRecurring = useCallback(
+    async (data: Transaction) => {
+      if (recurringModalMode === "edit" && selectedRecurringTx) {
+        await updateTransaction(selectedRecurringTx.id, data, { source: "manual" });
+        setEditedTx({ ...selectedRecurringTx, ...data, id: selectedRecurringTx.id });
+      } else {
+        const id = await addTransaction(data);
+        setAddedTx({ ...data, id });
+      }
+      setRefreshKey((prev) => prev + 1);
+      handleCloseRecurringModal();
+    },
+    [recurringModalMode, selectedRecurringTx, handleCloseRecurringModal]
+  );
 
   const startProcessing = () => {
     if (processingRef.current) return false;
@@ -700,7 +759,7 @@ const AppShell = () => {
       </header>
 
       {/* Main Content */}
-      <main className="relative z-10 mx-auto max-w-4xl px-4 pb-24 pt-6 sm:px-6">
+      <main className="relative z-10 mx-auto max-w-4xl px-4 pb-28 pt-6 sm:px-6">
         {showHousehold && (
           <div className="mb-6 flex items-center justify-center">
             <div className="flex rounded-full border border-[var(--kk-smoke)] bg-white/70 p-1 shadow-[var(--kk-shadow-sm)]">
@@ -771,82 +830,96 @@ const AppShell = () => {
         )}
         {activeTab === "personal" ? (
           <>
-            {/* Error Banner */}
-            <AnimatePresence>
-              {lastError && (
-                <motion.div
-                  initial={{ opacity: 0, y: -12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -12 }}
-                  transition={{ duration: 0.24 }}
-                  className="mb-5 overflow-hidden rounded-[var(--kk-radius-lg)] border border-[rgba(229,72,77,0.24)] bg-[rgba(229,72,77,0.06)] px-4 py-3 shadow-[var(--kk-shadow-sm)]"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-[rgba(229,72,77,0.25)] bg-white text-[var(--kk-danger-ink)]">
-                      <AlertCircle className="h-4 w-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start gap-2">
-                        <div className="flex-1 min-w-0 text-sm font-semibold text-[var(--kk-danger-ink)]">
-                          {lastError}
+            {activeSection === "summary" && (
+              <>
+                {/* Error Banner */}
+                <AnimatePresence>
+                  {lastError && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -12 }}
+                      transition={{ duration: 0.24 }}
+                      className="mb-5 overflow-hidden rounded-[var(--kk-radius-lg)] border border-[rgba(229,72,77,0.24)] bg-[rgba(229,72,77,0.06)] px-4 py-3 shadow-[var(--kk-shadow-sm)]"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-[rgba(229,72,77,0.25)] bg-white text-[var(--kk-danger-ink)]">
+                          <AlertCircle className="h-4 w-4" />
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setLastError(null);
-                            setEditState({
-                              mode: "new",
-                              amount: 0,
-                              item: "",
-                              category: "Food",
-                            });
-                            setIsEditing(true);
-                            posthog.capture("manual_entry_opened");
-                          }}
-                          className="kk-btn-secondary kk-btn-compact"
-                        >
-                          <PenLine className="h-3 w-3" />
-                          Enter manually
-                        </button>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start gap-2">
+                            <div className="flex-1 min-w-0 text-sm font-semibold text-[var(--kk-danger-ink)]">
+                              {lastError}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setLastError(null);
+                                setEditState({
+                                  mode: "new",
+                                  amount: 0,
+                                  item: "",
+                                  category: "Food",
+                                });
+                                setIsEditing(true);
+                                posthog.capture("manual_entry_opened");
+                              }}
+                              className="kk-btn-secondary kk-btn-compact"
+                            >
+                              <PenLine className="h-3 w-3" />
+                              Enter manually
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-            {/* Recording/Processing Status */}
-            <RecordingStatus
-              isRecording={isRecording}
-              isProcessing={isProcessing}
-              isReceiptProcessing={isReceiptProcessing}
-            />
+                {/* Recording/Processing Status */}
+                <RecordingStatus
+                  isRecording={isRecording}
+                  isProcessing={isProcessing}
+                  isReceiptProcessing={isReceiptProcessing}
+                />
 
-            {/* Transaction List */}
-            <section>
-              <TransactionList
-                refreshKey={refreshKey}
-                addedTx={addedTx}
-                deletedTx={deletedTx}
-                editedTx={editedTx}
-                onViewAll={handleOpenHistory}
-                onEdit={openEdit}
-                onMobileSheetChange={setIsTxnSheetOpen}
-                onDeleted={handleTransactionDeleted}
-              />
-            </section>
+                {/* Transaction List */}
+                <section>
+                  <TransactionList
+                    refreshKey={refreshKey}
+                    addedTx={addedTx}
+                    deletedTx={deletedTx}
+                    editedTx={editedTx}
+                    onViewAll={handleOpenHistory}
+                    onEdit={openEdit}
+                    onMobileSheetChange={setIsTxnSheetOpen}
+                    onDeleted={handleTransactionDeleted}
+                  />
+                </section>
+              </>
+            )}
+            {activeSection === "recurring" && (
+              <section>
+                <RecurringView
+                  refreshKey={refreshKey}
+                  onAddRecurring={handleAddRecurring}
+                  onEditRecurring={handleEditRecurring}
+                />
+              </section>
+            )}
           </>
         ) : showHousehold ? (
           <HouseholdView />
         ) : null}
       </main>
 
-      {/* Mic Button */}
+      {/* Bottom Tab Bar */}
       {!isTxnSheetOpen && activeTab === "personal" && (
-        <MicButton
+        <BottomTabBar
+          activeTab={activeSection}
+          onTabChange={setActiveSection}
           isRecording={isRecording}
-          startRecording={handleStartRecording}
-          stopRecording={handleStopRecording}
+          onMicPress={isRecording ? handleStopRecording : handleStartRecording}
         />
       )}
       <input
@@ -870,6 +943,16 @@ const AppShell = () => {
         isShared={editState?.isShared ?? false}
         onClose={handleCloseEdit}
         onSave={handleSaveEdit}
+      />
+
+      {/* Recurring Edit Modal */}
+      <RecurringEditModal
+        isOpen={isRecurringModalOpen}
+        mode={recurringModalMode}
+        template={selectedTemplate}
+        transaction={selectedRecurringTx}
+        onClose={handleCloseRecurringModal}
+        onSave={handleSaveRecurring}
       />
 
       {/* History View */}

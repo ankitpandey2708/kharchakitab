@@ -416,6 +416,21 @@ export const getPersonalTransactionsInRange = async (
   return setCached(cacheKey, filtered);
 };
 
+export const getPersonalTransactions = async (
+  deviceId?: string
+): Promise<Transaction[]> => {
+  const targetDeviceId = deviceId ?? (await getDeviceIdentity()).device_id;
+  const cacheKey = cacheKeyFor(["personal-all", targetDeviceId]);
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
+  const db = await getDb();
+  const index = db.transaction("transactions").store.index("by-owner");
+  const results = await collectTransactions(index, IDBKeyRange.only(targetDeviceId));
+  const filtered = results.filter((tx) => !isDeleted(tx));
+  return setCached(cacheKey, filtered);
+};
+
 export const getTransactionsUpdatedSince = async (
   since: number,
   limit?: number

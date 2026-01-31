@@ -1205,3 +1205,104 @@ body::before {
   color: var(--kk-ember);
   margin-top: 0.25rem;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Bottom Tab Bar
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.kk-bottom-tab-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  height: 80px;
+  padding: 0 16px;
+  padding-bottom: env(safe-area-inset-bottom, 8px);
+  background: rgba(250, 248, 245, 0.95);
+  border-top: 1px solid var(--kk-smoke);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.kk-tab-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex: 1;
+  max-width: 120px;
+  padding: 8px 12px 12px;
+  color: var(--kk-ash);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color var(--kk-duration-fast) var(--kk-ease-out);
+}
+
+.kk-tab-item:hover {
+  color: var(--kk-ink);
+}
+
+.kk-tab-item:focus-visible {
+  outline: none;
+  color: var(--kk-ember);
+}
+
+.kk-tab-active {
+  color: var(--kk-ember);
+}
+
+.kk-tab-active:hover {
+  color: var(--kk-ember);
+}
+
+.kk-tab-label {
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.kk-center-fab-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  max-width: 80px;
+  padding-bottom: 20px;
+}
+
+.kk-center-fab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  color: white;
+  cursor: pointer;
+  box-shadow: 0 6px 24px rgba(255, 107, 53, 0.35);
+  transition: transform var(--kk-duration-fast) var(--kk-ease-out),
+    box-shadow var(--kk-duration-fast) var(--kk-ease-out);
+}
+
+.kk-center-fab:hover {
+  transform: scale(1.05);
+  box-shadow: 0 8px 28px rgba(255, 107, 53, 0.45);
+}
+
+.kk-center-fab:active {
+  transform: scale(0.95);
+}
+
+.kk-center-fab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.3), 0 6px 24px rgba(255, 107, 53, 0.35);
+}
