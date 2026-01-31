@@ -49,6 +49,7 @@ const formatDueDate = (timestamp: number): string => {
     return date.toLocaleDateString("en-IN", {
       day: "numeric",
       month: "short",
+      year: "numeric",
     });
   }
   if (diffDays <= 7) return `In ${diffDays} days`;
@@ -56,15 +57,16 @@ const formatDueDate = (timestamp: number): string => {
   return date.toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",
+    year: "numeric",
   });
 };
 
 const isRecurringTransaction = (tx: Transaction) =>
   Boolean(
     tx.recurring &&
-      tx.recurring_frequency &&
-      tx.recurring_start_date &&
-      tx.recurring_end_date
+    tx.recurring_frequency &&
+    tx.recurring_start_date &&
+    tx.recurring_end_date
   );
 
 const isActiveRecurring = (tx: Transaction) =>
@@ -124,25 +126,16 @@ export const RecurringView = ({
   useEffect(() => {
     if (recurringItems.length === 0) return;
     const now = Date.now();
-    console.group("Recurring debug");
-    console.log("now", new Date(now).toString(), now);
+    const nowDate = new Date(now);
     for (const tx of recurringItems) {
       const dueAt = getDueTimestamp(tx);
       const reminder = tx.recurring_reminder_days ?? 5;
       const daysUntilDue = dueAt
         ? (dueAt - now) / (1000 * 60 * 60 * 24)
         : null;
-      console.log({
-        id: tx.id,
-        item: tx.item,
-        due: dueAt ? new Date(dueAt).toString() : "Missing due date",
-        dueMs: dueAt,
-        reminderDays: reminder,
-        daysUntilDue,
-        dueSoon: dueAt ? isDueSoon(dueAt, reminder) : false,
-      });
+      const dueDate = dueAt ? new Date(dueAt) : null;
+      const dueLabel = dueAt ? formatDueDate(dueAt) : "—";
     }
-    console.groupEnd();
   }, [recurringItems]);
 
   const dueSoonItems = useMemo(
@@ -199,6 +192,7 @@ export const RecurringView = ({
     const dueSoon = dueAt ? isDueSoon(dueAt, tx.recurring_reminder_days ?? 5) : false;
     const canMarkPaid = dueAt ? dueAt > Date.now() : false;
     const dueLabel = dueAt ? formatDueDate(dueAt) : "—";
+    const dueCopy = dueAt ? `Due ${dueLabel}` : "No due date";
 
     return (
       <motion.div
@@ -211,11 +205,10 @@ export const RecurringView = ({
       >
         <div className="flex items-start gap-3">
           <div
-            className={`flex h-10 w-10 items-center justify-center rounded-full ${
-              dueSoon
-                ? "bg-[var(--kk-saffron)]/10 text-[var(--kk-saffron)]"
-                : "bg-[var(--kk-cream)] text-[var(--kk-ash)]"
-            }`}
+            className={`flex h-10 w-10 items-center justify-center rounded-full ${dueSoon
+              ? "bg-[var(--kk-saffron)]/10 text-[var(--kk-saffron)]"
+              : "bg-[var(--kk-cream)] text-[var(--kk-ash)]"
+              }`}
           >
             <CategoryIcon className="h-5 w-5" />
           </div>
@@ -231,20 +224,19 @@ export const RecurringView = ({
             </div>
 
             <div className="mt-1 flex items-center gap-3 text-xs text-[var(--kk-ash)]">
-              <span className="flex items-center gap-1">
+              <span className="flex min-w-[4rem] items-center gap-1">
                 <Clock className="h-3 w-3" />
                 {FREQUENCY_LABEL_MAP[tx.recurring_frequency ?? "monthly"]}
               </span>
               {showDueStatus && (
                 <span
-                  className={`flex items-center gap-1 ${
-                    dueSoon
-                      ? "text-[var(--kk-saffron)] font-medium"
-                      : ""
-                  }`}
+                  className={`flex min-w-[4rem] items-center gap-1 ${dueSoon
+                    ? "text-[var(--kk-saffron)] font-medium"
+                    : ""
+                    }`}
                 >
                   <Calendar className="h-3 w-3" />
-                  {dueLabel}
+                  {dueCopy}
                 </span>
               )}
             </div>

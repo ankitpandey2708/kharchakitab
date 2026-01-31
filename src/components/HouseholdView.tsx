@@ -204,15 +204,11 @@ export const HouseholdView = () => {
 
   const refreshNearby = useCallback(async () => {
     if (isSearchingRef.current) {
-      console.log("[HouseholdView] refreshNearby: blocked (already searching)", {
-        at: new Date().toISOString(),
-      });
       return;
     }
 
     isSearchingRef.current = true;
     setIsSearching(true);
-    console.log("[HouseholdView] refreshNearby: start", { at: new Date().toISOString() });
     setErrorMessage(null);
     try {
       // Fetch identity directly to avoid stale state
@@ -220,7 +216,6 @@ export const HouseholdView = () => {
       if (!device) {
 
         setIsSearching(false);
-        console.log("[HouseholdView] refreshNearby: no identity", { at: new Date().toISOString() });
         return;
       }
 
@@ -241,7 +236,6 @@ export const HouseholdView = () => {
     } finally {
       isSearchingRef.current = false;
       setIsSearching(false);
-      console.log("[HouseholdView] refreshNearby: done", { at: new Date().toISOString() });
     }
   }, [connectSignaling]);
 
@@ -872,7 +866,6 @@ export const HouseholdView = () => {
                 ) : (
                   <button
                     onClick={() => {
-                      console.log("[HouseholdView] Refresh Devices click", { at: new Date().toISOString() });
                       refreshNearby();
                     }}
                     className="w-full kk-btn-primary"

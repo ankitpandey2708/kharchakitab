@@ -31,7 +31,7 @@ Pricing
 3. custom alerts.
 *******
 
-await new Promise((res, rej) => { const r = indexedDB.open("QuickLogDB"); r.onerror = () => rej(r.error); r.onsuccess = () => { const g = r.result.transaction("transactions").objectStore("transactions").getAll(); g.onerror = () => rej(g.error); g.onsuccess = () => res(g.result); }; });
+await new Promise(r => indexedDB.open("QuickLogDB").onsuccess = e => e.target.result.transaction("transactions").objectStore("transactions").getAll().onsuccess = e => r(e.target.result));
 ———
   Create iOS Shortcut for KharchaKitab share
 

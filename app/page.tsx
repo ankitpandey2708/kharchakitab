@@ -18,7 +18,6 @@ import { parseReceiptWithGemini } from "@/src/services/receipt";
 import { transcribeAudio } from "@/src/services/sarvam";
 import {
   addTransaction,
-  deleteTransaction,
   getDeviceIdentity,
   updateTransaction,
   isTransactionShared,
@@ -111,6 +110,7 @@ const AppShell = () => {
   } | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [pendingTransactions, setPendingTransactions] = useState<Transaction[]>([]);
   const [lastAudioBlob, setLastAudioBlob] = useState<Blob | null>(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isTxnSheetOpen, setIsTxnSheetOpen] = useState(false);
@@ -346,22 +346,22 @@ const AppShell = () => {
     receiptProcessingRef.current = false;
   };
 
-  const addPendingTransaction = async () => {
-    const tempId = await addTransaction({
-      id: "",
+  const addPendingTransaction = (label: string) => {
+    const pending: Transaction = {
+      id: `pending-${Date.now()}-${Math.random().toString(16).slice(2)}`,
       amount: 0,
-      item: "Processing…",
+      item: label,
       category: "Other",
       paymentMethod: "unknown",
       timestamp: Date.now(),
-    });
-    refreshTransactions();
-    return tempId;
+      is_private: false,
+    };
+    setPendingTransactions((prev) => [pending, ...prev]);
+    return pending.id;
   };
 
-  const removePendingTransaction = async (tempId: string) => {
-    await deleteTransaction(tempId);
-    refreshTransactions();
+  const removePendingTransaction = (id: string) => {
+    setPendingTransactions((prev) => prev.filter((tx) => tx.id !== id));
   };
 
   const parseTranscript = async (text: string) => {
@@ -403,42 +403,31 @@ const AppShell = () => {
     // Prevent duplicate processing (race condition)
     if (!startProcessing()) return;
     setLastError(null);
-    const tempId = await addPendingTransaction();
+    const pendingId = addPendingTransaction("Processing…");
     try {
       const text = await transcribeAudio(audioBlob);
       const normalized = text.trim().toLowerCase();
       if (DISMISS_TRANSCRIPTS.has(normalized)) {
-        await removePendingTransaction(tempId);
         stopProcessing();
         return;
       }
       const expense = await parseTranscript(text || "Auto 50");
       const now = Date.now();
       if (expense.amount <= 0) {
-        await removePendingTransaction(tempId);
         setLastError(ERROR_MESSAGES.amountGreaterThanZero);
         stopProcessing();
         return;
       }
-      const updatedTx: Transaction = {
-        id: tempId,
+      const transaction: Transaction = {
+        id: "",
         amount: expense.amount,
         item: expense.item,
         category: expense.category,
         paymentMethod: expense.paymentMethod ?? "cash",
         timestamp: toTimestamp(expense.date, now),
       };
-      await updateTransaction(
-        tempId,
-        {
-          amount: expense.amount,
-          item: expense.item,
-          category: expense.category,
-          paymentMethod: expense.paymentMethod ?? "cash",
-          timestamp: toTimestamp(expense.date, now),
-        }
-      );
-      setEditedTx(updatedTx);
+      const id = await addTransaction(transaction);
+      setAddedTx({ ...transaction, id });
       refreshTransactions();
       posthog.capture("transaction_added", {
         amount: expense.amount,
@@ -446,13 +435,13 @@ const AppShell = () => {
         payment_method: expense.paymentMethod ?? "cash",
       });
     } catch (error) {
-      await removePendingTransaction(tempId);
       setLastError(toUserMessage(error, "unableToTranscribeAudio"));
       posthog.capture("error_occurred", {
         error_type: "transcription_failed",
         error_message: toUserMessage(error, "unableToTranscribeAudio"),
       });
     } finally {
+      removePendingTransaction(pendingId);
       stopProcessing();
     }
   };
@@ -460,17 +449,8 @@ const AppShell = () => {
   const processReceiptDataUrl = async (dataUrl: string) => {
     if (!startReceiptProcessing()) return;
     setLastError(null);
-    const tempId = await addTransaction({
-      id: "",
-      amount: 0,
-      item: "Processing receipt...",
-      category: "Other",
-      paymentMethod: "unknown",
-      timestamp: Date.now(),
-    });
-    refreshTransactions();
+    const pendingId = addPendingTransaction("Processing receipt...");
     try {
-      const prefix = dataUrl.slice(0, 64);
       const blob = dataUrlToBlob(dataUrl);
       const normalized = await prepareReceiptImage(blob);
       const expense = await parseReceiptWithGemini(normalized);
@@ -478,25 +458,16 @@ const AppShell = () => {
       if (expense.amount <= 0) {
         throw new Error(ERROR_MESSAGES.amountGreaterThanZero);
       }
-      const updatedTx: Transaction = {
-        id: tempId,
+      const transaction: Transaction = {
+        id: "",
         amount: expense.amount,
         item: expense.item,
         category: expense.category,
         paymentMethod: expense.paymentMethod ?? "cash",
         timestamp: toTimestamp(expense.date, now),
       };
-      await updateTransaction(
-        tempId,
-        {
-          amount: expense.amount,
-          item: expense.item,
-          category: expense.category,
-          paymentMethod: expense.paymentMethod ?? "cash",
-          timestamp: toTimestamp(expense.date, now),
-        }
-      );
-      setEditedTx(updatedTx);
+      const id = await addTransaction(transaction);
+      setAddedTx({ ...transaction, id });
       refreshTransactions();
       posthog.capture("receipt_processed", {
         amount: expense.amount,
@@ -509,13 +480,13 @@ const AppShell = () => {
         payment_method: expense.paymentMethod ?? "cash",
       });
     } catch (error) {
-      await removePendingTransaction(tempId);
       setLastError(toUserMessage(error, "unableToProcessReceipt"));
       posthog.capture("error_occurred", {
         error_type: "receipt_processing_failed",
         error_message: toUserMessage(error, "unableToProcessReceipt"),
       });
     } finally {
+      removePendingTransaction(pendingId);
       stopReceiptProcessing();
     }
   };
@@ -879,6 +850,7 @@ const AppShell = () => {
                     addedTx={addedTx}
                     deletedTx={deletedTx}
                     editedTx={editedTx}
+                    pendingTransactions={pendingTransactions}
                     onViewAll={handleOpenHistory}
                     onEdit={openEdit}
                     onMobileSheetChange={setIsTxnSheetOpen}

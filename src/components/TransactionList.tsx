@@ -28,6 +28,7 @@ interface TransactionListProps {
   addedTx?: Transaction | null;
   deletedTx?: Transaction | null;
   editedTx?: Transaction | null;
+  pendingTransactions?: Transaction[];
   onMobileSheetChange?: (isOpen: boolean) => void;
 }
 
@@ -54,6 +55,7 @@ export const TransactionList = ({
   addedTx,
   deletedTx,
   editedTx,
+  pendingTransactions = [],
   onMobileSheetChange,
 }: TransactionListProps) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -329,7 +331,10 @@ export const TransactionList = ({
       };
     }, [summaryView, todayTransactions, periodTransactions]);
 
-  const recentTransactions = transactions;
+  const recentTransactions = useMemo(
+    () => [...pendingTransactions, ...transactions].slice(0, 5),
+    [pendingTransactions, transactions]
+  );
   const monthToDateTotal = summaryView === "month" ? viewTotal : monthTotal;
   const activeBudget = budgets.monthly;
   const hasBudget = typeof activeBudget === "number" && activeBudget > 0;
@@ -838,6 +843,7 @@ export const TransactionList = ({
                   formatCurrency={formatCurrency}
                   amountMaxWidthClass="max-w-[24vw]"
                   isProcessing={processing}
+                  showActions={!processing}
                 />
               );
             })}
