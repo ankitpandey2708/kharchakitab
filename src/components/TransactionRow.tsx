@@ -2,7 +2,7 @@
 
 import React from "react";
 import { motion } from "framer-motion";
-import { EyeOff, MoreHorizontal } from "lucide-react";
+import { EyeOff, MoreHorizontal, RefreshCw } from "lucide-react";
 import type { Transaction } from "@/src/types";
 import { PAYMENT_ICON_MAP, type PaymentKey } from "@/src/config/payments";
 import { CategoryIcon } from "@/src/components/CategoryIcon";
@@ -82,9 +82,9 @@ export const TransactionRow = React.memo(
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96 }}
         transition={{ duration: 0.28, delay: index * 0.035 }}
-        className={`group relative flex items-center justify-between gap-3 overflow-hidden kk-radius-md border border-[var(--kk-smoke)] p-4 pl-5 pr-4 transition-all hover:border-[var(--kk-smoke-heavy)] hover:shadow-[var(--kk-shadow-sm)] ${
-          tx.is_private && !isProcessing ? "bg-[var(--kk-cream)]" : "bg-white"
-        } ${isClickable ? "cursor-pointer active:scale-[0.995]" : ""}`}
+        className={`group relative flex items-center justify-between gap-3 overflow-hidden kk-radius-md border border-[var(--kk-smoke)] p-4 pl-5 pr-4 transition-all hover:border-[var(--kk-smoke-heavy)] hover:shadow-[var(--kk-shadow-sm)] bg-white ${
+          isClickable ? "cursor-pointer active:scale-[0.995]" : ""
+        }`}
         role={isClickable ? "button" : "listitem"}
         tabIndex={isClickable ? 0 : -1}
       >
@@ -129,7 +129,16 @@ export const TransactionRow = React.memo(
                       <EyeOff className="h-3.5 w-3.5" />
                     </span>
                   )}
-                  <span className={tx.is_private ? "kk-pill kk-pill-muted" : "kk-pill"}>
+                  {tx.recurring && (
+                    <span
+                      className="inline-flex items-center rounded-full border border-[var(--kk-smoke-heavy)] bg-white px-2 py-1 text-[0.6875rem] font-semibold uppercase tracking-[var(--kk-tracking-chip)] text-[var(--kk-ash)]"
+                      aria-label="Recurring transaction"
+                      title="Recurring transaction"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    </span>
+                  )}
+                  <span className="kk-pill">
                     <PaymentIcon
                       aria-label={paymentLabel}
                       title={paymentLabel}
