@@ -88,13 +88,7 @@ export const TransactionRow = React.memo(
         role={isClickable ? "button" : "listitem"}
         tabIndex={isClickable ? 0 : -1}
       >
-        <div
-          className={`absolute left-0 top-3 bottom-3 w-[3px] rounded-r-sm transition-opacity ${
-            tx.is_private && !isProcessing
-              ? "bg-gradient-to-b from-[var(--kk-ash)] to-[var(--kk-smoke-heavy)] opacity-100"
-              : "bg-gradient-to-b from-[var(--kk-ember)] to-[var(--kk-saffron)] opacity-0 group-hover:opacity-100"
-          }`}
-        />
+
 
         <div className="flex flex-1 min-w-0 items-center gap-3">
           <div className="kk-category-icon h-9 w-9 flex-none shrink-0">
@@ -122,20 +116,20 @@ export const TransactionRow = React.memo(
                   )}
                   {tx.is_private && (
                     <span
-                      className="inline-flex items-center rounded-full border border-[var(--kk-smoke-heavy)] bg-white px-2 py-1 text-[0.6875rem] font-semibold uppercase tracking-[var(--kk-tracking-chip)] text-[var(--kk-ash)]"
+                      className="kk-pill"
                       aria-label="Private transaction"
                       title="Private transaction"
                     >
-                      <EyeOff className="h-3.5 w-3.5" />
+                      <EyeOff className="h-3 w-3" />
                     </span>
                   )}
                   {tx.recurring && (
                     <span
-                      className="inline-flex items-center rounded-full border border-[var(--kk-smoke-heavy)] bg-white px-2 py-1 text-[0.6875rem] font-semibold uppercase tracking-[var(--kk-tracking-chip)] text-[var(--kk-ash)]"
+                      className="kk-pill"
                       aria-label="Recurring transaction"
                       title="Recurring transaction"
                     >
-                      <RefreshCw className="h-3.5 w-3.5" />
+                      <RefreshCw className="h-3 w-3" />
                     </span>
                   )}
                   <span className="kk-pill">

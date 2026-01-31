@@ -110,7 +110,7 @@ export const EditModal = ({
               damping: 30,
               stiffness: 300,
             }}
-            className="w-full max-w-md overflow-hidden kk-radius-top-xl bg-white kk-shadow-lg"
+            className="w-full max-w-md overflow-hidden kk-radius-top-xl border border-[var(--kk-smoke)] bg-[var(--kk-cream)] kk-shadow-lg"
           >
             {/* Handle bar */}
             <div className="flex justify-center pt-3 pb-2">
@@ -119,26 +119,37 @@ export const EditModal = ({
 
             <div className="px-5 pb-6">
               {/* Header */}
-              <div className="flex items-center justify-between">
+              <div className="flex items-start justify-between gap-4">
                 <div>
-                  <div className="mt-1 text-xl font-semibold font-[family:var(--font-display)]">
-                    {mode === "new" ? "Add Expense" : "Edit Expense"}
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--kk-ash)]">
+                    Expense
+                  </div>
+                  <div className="mt-1 text-2xl font-semibold font-[family:var(--font-display)] text-[var(--kk-ink)]">
+                    {mode === "new" ? "Add expense" : "Edit expense"}
+                  </div>
+                  <div className="mt-1 text-xs text-[var(--kk-ash)]">
+                    Keep details clean for smarter insights.
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={onClose}
-                  className="kk-icon-btn"
+                  className="kk-icon-btn mt-1"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
 
               {/* Amount Input */}
-              <div className="mt-5 kk-radius-md border border-[var(--kk-smoke)] bg-[var(--kk-cream)] p-4">
-                <div className="kk-label">Amount</div>
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-3xl font-bold text-[var(--kk-ember)]">₹</span>
+              <div className="mt-5 kk-radius-xl border border-[var(--kk-smoke)] bg-white p-4">
+                <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--kk-ash)]">
+                  <span>Amount</span>
+                  <span>Required</span>
+                </div>
+                <div className="mt-3 flex items-end gap-3">
+                  <span className="rounded-full border border-[var(--kk-smoke-heavy)] bg-[var(--kk-cream)] px-2 py-1 text-2xl font-semibold text-[var(--kk-ember)]">
+                    ₹
+                  </span>
                   <input
                     type="number"
                     inputMode="decimal"
@@ -147,43 +158,45 @@ export const EditModal = ({
                     onChange={(event) =>
                       setAmountValue(sanitizeAmountInput(event.target.value))
                     }
-                    className="w-full bg-transparent text-3xl font-bold tracking-tight outline-none font-[family:var(--font-mono)] placeholder:text-[var(--kk-ash)]"
+                    className="w-full bg-transparent text-4xl font-bold tracking-tight outline-none font-[family:var(--font-mono)] placeholder:text-[var(--kk-ash)]"
                     placeholder="0"
                   />
                 </div>
               </div>
 
               {/* Item Input */}
-              <div className="mt-4">
-                <div className="kk-label">Description</div>
+              <div className="mt-4 kk-radius-xl border border-[var(--kk-smoke)] bg-white p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--kk-ash)]">
+                  Details
+                </div>
                 <input
                   value={itemValue}
                   onChange={(event) => setItemValue(event.target.value)}
-                  placeholder="What did you spend on?"
-                  className="kk-input mt-2"
+                  placeholder="What was this for?"
+                  className="kk-input mt-3"
                 />
-              </div>
-
-              {/* Category Pills */}
-              <div className="mt-4">
-                <div className="kk-label">Category</div>
-                <select
-                  value={categoryValue}
-                  onChange={(event) => setCategoryValue(event.target.value)}
-                  className="kk-input kk-select mt-2 text-sm"
-                >
-                  {CATEGORY_OPTIONS.map((option) => (
-                    <option key={option.key} value={option.key}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                <div className="mt-3">
+                  <div className="kk-label">Category</div>
+                  <select
+                    value={categoryValue}
+                    onChange={(event) => setCategoryValue(event.target.value)}
+                    className="kk-input kk-select mt-2 text-sm"
+                  >
+                    {CATEGORY_OPTIONS.map((option) => (
+                      <option key={option.key} value={option.key}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Payment & Date Row */}
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <div>
-                  <div className="kk-label">Payment</div>
+                <div className="kk-radius-xl border border-[var(--kk-smoke)] bg-white p-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--kk-ash)]">
+                    Payment
+                  </div>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {PAYMENT_OPTIONS.map((option) => {
                       const Icon = option.icon;
@@ -205,13 +218,15 @@ export const EditModal = ({
                     })}
                   </div>
                 </div>
-                <div>
-                  <div className="kk-label">Date</div>
+                <div className="kk-radius-xl border border-[var(--kk-smoke)] bg-white p-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--kk-ash)]">
+                    Date
+                  </div>
                   <input
                     type="date"
                     value={dateValue}
                     onChange={(event) => setDateValue(event.target.value)}
-                    className="kk-input mt-2 text-sm"
+                    className="kk-input mt-3 text-sm"
                   />
                 </div>
               </div>
