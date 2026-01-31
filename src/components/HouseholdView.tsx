@@ -107,6 +107,7 @@ export const HouseholdView = () => {
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const sharedKeyRef = useRef<CryptoKey | null>(null);
+  const isSearchingRef = useRef(false);
   const identityRef = useRef(identity);
   const outgoingPairRef = useRef(outgoingPair);
   const incomingPairRef = useRef(incomingPair);
@@ -164,7 +165,7 @@ export const HouseholdView = () => {
   }, []);
 
   const refreshSyncState = useCallback(async () => {
-    const currentIdentity = identity ?? await getDeviceIdentity();
+    const currentIdentity = await getDeviceIdentity();
     if (!currentIdentity) return;
 
     const pairingsList = await getPairings();
@@ -188,7 +189,7 @@ export const HouseholdView = () => {
       setSyncStatus(`Synced ${relative}`);
     }
     setConflictIds(state?.conflicts ?? []);
-  }, [identity]);
+  }, []);
 
   const connectSignaling = useCallback(async () => {
     if (clientRef.current) {
@@ -202,12 +203,16 @@ export const HouseholdView = () => {
   }, []);
 
   const refreshNearby = useCallback(async () => {
-    if (isSearching) {
-
+    if (isSearchingRef.current) {
+      console.log("[HouseholdView] refreshNearby: blocked (already searching)", {
+        at: new Date().toISOString(),
+      });
       return;
     }
 
+    isSearchingRef.current = true;
     setIsSearching(true);
+    console.log("[HouseholdView] refreshNearby: start", { at: new Date().toISOString() });
     setErrorMessage(null);
     try {
       // Fetch identity directly to avoid stale state
@@ -215,6 +220,7 @@ export const HouseholdView = () => {
       if (!device) {
 
         setIsSearching(false);
+        console.log("[HouseholdView] refreshNearby: no identity", { at: new Date().toISOString() });
         return;
       }
 
@@ -233,10 +239,11 @@ export const HouseholdView = () => {
 
       setErrorMessage("Unable to discover nearby devices");
     } finally {
+      isSearchingRef.current = false;
       setIsSearching(false);
-
+      console.log("[HouseholdView] refreshNearby: done", { at: new Date().toISOString() });
     }
-  }, [connectSignaling, isSearching]);
+  }, [connectSignaling]);
 
   const preparePairing = async (deviceId: string, displayName: string) => {
     if (!identity) return;
@@ -864,7 +871,10 @@ export const HouseholdView = () => {
                   </button>
                 ) : (
                   <button
-                    onClick={refreshNearby}
+                    onClick={() => {
+                      console.log("[HouseholdView] Refresh Devices click", { at: new Date().toISOString() });
+                      refreshNearby();
+                    }}
                     className="w-full kk-btn-primary"
                     disabled={isSearching}
                   >

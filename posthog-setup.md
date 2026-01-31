@@ -15,7 +15,7 @@ The wizard has completed a deep integration of PostHog analytics into KharchaKit
 |------------|-------------|-----------|
 | `recording_started` | User started voice recording to add an expense | `app/page.tsx` |
 | `recording_stopped` | User stopped voice recording after speaking their expense | `app/page.tsx` |
-| `transaction_added` | A new expense transaction was successfully added (via voice, receipt, or manual entry) | `app/page.tsx` |
+| `transaction_added` | A new expense transaction was successfully added | `app/page.tsx` |
 | `transaction_edited` | User edited an existing expense transaction | `app/page.tsx` |
 | `transaction_deleted` | User deleted an expense transaction | `app/page.tsx` |
 | `receipt_upload_started` | User initiated receipt image upload for expense extraction | `app/page.tsx` |
@@ -38,7 +38,6 @@ We've built some insights and a dashboard for you to keep an eye on user behavio
 
 ### Insights
 - [Transactions Added Over Time](https://us.posthog.com/project/301391/insights/3XhgQHXU) - Daily trend of new expense transactions
-- [Transaction Sources Breakdown](https://us.posthog.com/project/301391/insights/XJTXPKSt) - Breakdown by input source (voice, receipt, manual)
 - [Voice Recording Funnel](https://us.posthog.com/project/301391/insights/5hdMRpis) - Conversion funnel from recording to transaction
 - [Errors by Type](https://us.posthog.com/project/301391/insights/0dtIJru3) - Application errors breakdown for debugging
 - [User Engagement Actions](https://us.posthog.com/project/301391/insights/syD7gsu5) - Key engagement events tracking

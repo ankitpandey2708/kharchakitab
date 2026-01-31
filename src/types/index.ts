@@ -11,7 +11,6 @@ export interface Transaction {
   created_at?: number;
   updated_at?: number;
   is_private?: boolean;
-  source?: "voice" | "manual" | "receipt" | "unknown";
   version?: number;
   version_group_id?: string;
   deleted_at?: number | null;

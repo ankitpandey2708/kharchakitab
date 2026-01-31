@@ -114,18 +114,18 @@ const getDb = () =>
         let cursor = await store.openCursor();
         while (cursor) {
           const value = cursor.value as Transaction;
+          const base = stripLegacyTxFields(value);
           const timestamp = value.timestamp ?? Date.now();
           const next: Transaction = {
-            ...value,
-            owner_device_id: value.owner_device_id ?? "legacy",
-            created_at: value.created_at ?? timestamp,
-            updated_at: value.updated_at ?? timestamp,
-            is_private: value.is_private ?? false,
-            source: value.source ?? "unknown",
-            version: value.version ?? 1,
-            version_group_id: value.version_group_id ?? value.id,
-            deleted_at: value.deleted_at ?? null,
-            conflict: value.conflict ?? false,
+            ...base,
+            owner_device_id: base.owner_device_id ?? "legacy",
+            created_at: base.created_at ?? timestamp,
+            updated_at: base.updated_at ?? timestamp,
+            is_private: base.is_private ?? false,
+            version: base.version ?? 1,
+            version_group_id: base.version_group_id ?? base.id,
+            deleted_at: base.deleted_at ?? null,
+            conflict: base.conflict ?? false,
           };
           await cursor.update(next);
           cursor = await cursor.continue();
@@ -175,22 +175,31 @@ const clearCache = () => {
 
 const isDeleted = (tx: Transaction) => Boolean(tx.deleted_at);
 
+// Historical data included a `source` field on transactions. We no longer store it,
+// but old records may still have it. Strip it on every write so it disappears over time.
+function stripLegacyTxFields(tx: Transaction): Transaction {
+  const record = tx as unknown as Record<string, unknown>;
+  if (!("source" in record)) return tx;
+  const { source: _ignored, ...rest } = record;
+  return rest as unknown as Transaction;
+}
+
 const ensureDefaults = (
   tx: Transaction,
   overrides?: Partial<Transaction>
 ): Transaction => {
   const now = Date.now();
+  const base = stripLegacyTxFields(tx);
   return {
-    ...tx,
-    amount: normalizeAmount(tx.amount),
-    created_at: tx.created_at ?? now,
-    updated_at: tx.updated_at ?? now,
-    is_private: tx.is_private ?? false,
-    source: tx.source ?? "unknown",
-    version: tx.version ?? 1,
-    version_group_id: tx.version_group_id ?? tx.id,
-    deleted_at: tx.deleted_at ?? null,
-    conflict: tx.conflict ?? false,
+    ...base,
+    amount: normalizeAmount(base.amount),
+    created_at: base.created_at ?? now,
+    updated_at: base.updated_at ?? now,
+    is_private: base.is_private ?? false,
+    version: base.version ?? 1,
+    version_group_id: base.version_group_id ?? base.id,
+    deleted_at: base.deleted_at ?? null,
+    conflict: base.conflict ?? false,
     ...overrides,
   };
 };
@@ -454,7 +463,6 @@ export const updateTransaction = async (
   updates: Partial<Transaction>,
   options?: {
     skipVersion?: boolean;
-    source?: Transaction["source"];
     updatedAt?: number;
     editorDeviceId?: string;
     overrideVersion?: number;
@@ -477,7 +485,6 @@ export const updateTransaction = async (
         ? normalizeAmount(updates.amount)
         : existing.amount,
     updated_at: now,
-    source: options?.source ?? existing.source,
     version: nextVersion,
   });
   await db.put("transactions", next);

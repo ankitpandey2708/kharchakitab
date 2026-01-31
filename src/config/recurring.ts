@@ -42,14 +42,14 @@ export const FREQUENCY_OPTIONS: {
   shortLabel: string;
   days: number;
 }[] = [
-  { key: "daily", label: "Daily", shortLabel: "Daily", days: 1 },
-  { key: "weekly", label: "Weekly", shortLabel: "Weekly", days: 7 },
-  { key: "biweekly", label: "Bi-weekly", shortLabel: "Bi-weekly", days: 14 },
-  { key: "monthly", label: "Monthly", shortLabel: "Monthly", days: 30 },
-  { key: "quarterly", label: "Quarterly", shortLabel: "Quarterly", days: 91 },
-  { key: "halfyearly", label: "Half-yearly", shortLabel: "6 Months", days: 182 },
-  { key: "yearly", label: "Yearly", shortLabel: "Yearly", days: 365 },
-];
+    { key: "daily", label: "Daily", shortLabel: "Daily", days: 1 },
+    { key: "weekly", label: "Weekly", shortLabel: "Weekly", days: 7 },
+    { key: "biweekly", label: "Bi-weekly", shortLabel: "Bi-weekly", days: 14 },
+    { key: "monthly", label: "Monthly", shortLabel: "Monthly", days: 30 },
+    { key: "quarterly", label: "Quarterly", shortLabel: "Quarterly", days: 91 },
+    { key: "halfyearly", label: "Half-yearly", shortLabel: "6 Months", days: 182 },
+    { key: "yearly", label: "Yearly", shortLabel: "Yearly", days: 365 },
+  ];
 
 export const FREQUENCY_LABEL_MAP: Record<Frequency, string> = {
   daily: "Daily",
@@ -75,14 +75,13 @@ export const TEMPLATE_GROUPS: {
   label: string;
   description: string;
 }[] = [
-  { key: "insurance", label: "Insurance", description: "Health, life, vehicle coverage" },
-  { key: "subscriptions", label: "Subscriptions", description: "Streaming, gym, apps" },
-  { key: "home_services", label: "Home Services", description: "Cook, maid, driver" },
-  { key: "utilities", label: "Utilities", description: "Rent, bills, recharges" },
-  { key: "financial", label: "Financial", description: "EMI, SIP, loans" },
-  { key: "education", label: "Education", description: "School, tuition, courses" },
-  { key: "other", label: "Other", description: "Miscellaneous recurring" },
-];
+    { key: "subscriptions", label: "Subscriptions", description: "Streaming, gym, apps" },
+    { key: "insurance", label: "Insurance", description: "Health, life, vehicle coverage" },
+    { key: "home_services", label: "Home Services", description: "Cook, maid, driver" },
+    { key: "utilities", label: "Utilities", description: "Rent, bills, recharges" },
+    { key: "financial", label: "Financial", description: "EMI, SIP, loans" },
+    { key: "education", label: "Education", description: "School, tuition, courses" }
+  ];
 
 export interface RecurringTemplate {
   id: string;

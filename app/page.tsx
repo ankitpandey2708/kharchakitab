@@ -48,7 +48,6 @@ const buildTransaction = (
   category: data.category,
   paymentMethod: data.paymentMethod,
   timestamp: data.timestamp,
-  source: data.source ?? "unknown",
   is_private: data.is_private ?? false,
 });
 
@@ -311,7 +310,7 @@ const AppShell = () => {
   const handleSaveRecurring = useCallback(
     async (data: Transaction) => {
       if (recurringModalMode === "edit" && selectedRecurringTx) {
-        await updateTransaction(selectedRecurringTx.id, data, { source: "manual" });
+        await updateTransaction(selectedRecurringTx.id, data);
         setEditedTx({ ...selectedRecurringTx, ...data, id: selectedRecurringTx.id });
       } else {
         const id = await addTransaction(data);
@@ -355,7 +354,6 @@ const AppShell = () => {
       category: "Other",
       paymentMethod: "unknown",
       timestamp: Date.now(),
-      source: "unknown",
     });
     refreshTransactions();
     return tempId;
@@ -438,9 +436,7 @@ const AppShell = () => {
           category: expense.category,
           paymentMethod: expense.paymentMethod ?? "cash",
           timestamp: toTimestamp(expense.date, now),
-          source: "voice",
-        },
-        { source: "voice" }
+        }
       );
       setEditedTx(updatedTx);
       refreshTransactions();
@@ -448,7 +444,6 @@ const AppShell = () => {
         amount: expense.amount,
         category: expense.category,
         payment_method: expense.paymentMethod ?? "cash",
-        source: "voice",
       });
     } catch (error) {
       await removePendingTransaction(tempId);
@@ -499,9 +494,7 @@ const AppShell = () => {
           category: expense.category,
           paymentMethod: expense.paymentMethod ?? "cash",
           timestamp: toTimestamp(expense.date, now),
-          source: "receipt",
-        },
-        { source: "receipt" }
+        }
       );
       setEditedTx(updatedTx);
       refreshTransactions();
@@ -514,7 +507,6 @@ const AppShell = () => {
         amount: expense.amount,
         category: expense.category,
         payment_method: expense.paymentMethod ?? "cash",
-        source: "receipt",
       });
     } catch (error) {
       await removePendingTransaction(tempId);
@@ -649,12 +641,11 @@ const AppShell = () => {
         const updated = buildTransaction(
           {
             ...data,
-            source: "manual",
             is_private: data.isPrivate ?? false,
           },
           editState.id
         );
-        await updateTransaction(editState.id, updated, { source: "manual" });
+        await updateTransaction(editState.id, updated);
         setEditedTx(updated);
         posthog.capture("transaction_edited", {
           amount: data.amount,
@@ -664,7 +655,6 @@ const AppShell = () => {
       } else {
         const transaction = buildTransaction({
           ...data,
-          source: "manual",
           is_private: data.isPrivate ?? false,
         });
         const id = await addTransaction(transaction);
@@ -673,7 +663,6 @@ const AppShell = () => {
           amount: data.amount,
           category: data.category,
           payment_method: data.paymentMethod,
-          source: "manual",
         });
       }
       setRefreshKey((prev) => prev + 1);

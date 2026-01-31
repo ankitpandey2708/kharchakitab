@@ -124,7 +124,6 @@ export const RecurringEditModal = ({
       category,
       paymentMethod,
       timestamp: nextDue,
-      source: existing?.source ?? "manual",
       recurring: true,
       recurring_frequency: frequency,
       recurring_start_date: startTs,
@@ -230,27 +229,17 @@ export const RecurringEditModal = ({
 
               <div className="mt-4">
                 <div className="kk-label">Category</div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {CATEGORY_OPTIONS.map((option) => {
-                    const Icon = option.icon;
-                    const isActive = category === option.key;
-                    return (
-                      <button
-                        key={option.key}
-                        type="button"
-                        onClick={() => setCategory(option.key)}
-                        className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                          isActive
-                            ? "border-[var(--kk-ember)] bg-[var(--kk-ember)] text-white"
-                            : "border-[var(--kk-smoke-heavy)] text-[var(--kk-ink)] hover:border-[var(--kk-ember)]"
-                        }`}
-                      >
-                        <Icon className="h-3 w-3" />
-                        {option.key}
-                      </button>
-                    );
-                  })}
-                </div>
+                <select
+                  value={category}
+                  onChange={(event) => setCategory(event.target.value)}
+                  className="kk-input kk-select mt-2 text-sm"
+                >
+                  {CATEGORY_OPTIONS.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="mt-4 grid gap-4 sm:grid-cols-2">

@@ -167,26 +167,17 @@ export const EditModal = ({
               {/* Category Pills */}
               <div className="mt-4">
                 <div className="kk-label">Category</div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {CATEGORY_OPTIONS.map((option) => {
-                    const Icon = option.icon;
-                    const isActive = categoryValue === option.key;
-                    return (
-                      <button
-                        key={option.key}
-                        type="button"
-                        onClick={() => setCategoryValue(option.key)}
-                        className={`flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-medium transition ${isActive
-                          ? "border-[var(--kk-ember)] bg-[var(--kk-ember)] text-white shadow-[var(--kk-shadow-sm)]"
-                          : "border-[var(--kk-smoke-heavy)] text-[var(--kk-ink)] hover:border-[var(--kk-ember)] hover:bg-[var(--kk-ember)]/5"
-                          }`}
-                      >
-                        <Icon className="h-3.5 w-3.5" />
-                        {option.key}
-                      </button>
-                    );
-                  })}
-                </div>
+                <select
+                  value={categoryValue}
+                  onChange={(event) => setCategoryValue(event.target.value)}
+                  className="kk-input kk-select mt-2 text-sm"
+                >
+                  {CATEGORY_OPTIONS.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Payment & Date Row */}
@@ -228,10 +219,10 @@ export const EditModal = ({
               <div className={`mt-4 flex items-center justify-between gap-3 kk-radius-md border border-[var(--kk-smoke)] px-4 py-3 ${isShared ? 'bg-[var(--kk-smoke)] opacity-70' : 'bg-[var(--kk-cream)]'}`}>
                 <div>
                   <div className="text-sm font-medium text-[var(--kk-ink)]">
-                    Private transaction
+                    Make it Private
                   </div>
                   <div className="kk-meta">
-                    {isShared ? "This transaction has already been shared." : "Excluded from household sync"}
+                    {isShared ? "This transaction has already been shared." : "This transaction will be excluded from sync"}
                   </div>
                 </div>
                 {!isShared && (

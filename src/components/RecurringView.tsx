@@ -73,7 +73,7 @@ export const RecurringView = ({
 }: RecurringViewProps) => {
   const [recurringItems, setRecurringItems] = useState<Transaction[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<Set<TemplateGroup>>(
-    new Set(["utilities", "subscriptions"])
+    new Set(["subscriptions"])
   );
   const [showTemplates, setShowTemplates] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
