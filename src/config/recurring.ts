@@ -28,9 +28,6 @@ import {
 import type { CategoryKey } from "@/src/config/categories";
 
 export type Frequency =
-  | "daily"
-  | "weekly"
-  | "biweekly"
   | "monthly"
   | "quarterly"
   | "halfyearly"
@@ -42,9 +39,6 @@ export const FREQUENCY_OPTIONS: {
   shortLabel: string;
   days: number;
 }[] = [
-    { key: "daily", label: "Daily", shortLabel: "Daily", days: 1 },
-    { key: "weekly", label: "Weekly", shortLabel: "Weekly", days: 7 },
-    { key: "biweekly", label: "Bi-weekly", shortLabel: "Bi-weekly", days: 14 },
     { key: "monthly", label: "Monthly", shortLabel: "Monthly", days: 30 },
     { key: "quarterly", label: "Quarterly", shortLabel: "Quarterly", days: 91 },
     { key: "halfyearly", label: "Half-yearly", shortLabel: "6 Months", days: 182 },
@@ -52,9 +46,6 @@ export const FREQUENCY_OPTIONS: {
   ];
 
 export const FREQUENCY_LABEL_MAP: Record<Frequency, string> = {
-  daily: "Daily",
-  weekly: "Weekly",
-  biweekly: "Bi-weekly",
   monthly: "Monthly",
   quarterly: "Quarterly",
   halfyearly: "Half-yearly",
@@ -400,15 +391,6 @@ export const calculateNextDueDate = (
   const date = new Date(fromDate);
 
   switch (frequency) {
-    case "daily":
-      date.setDate(date.getDate() + 1);
-      break;
-    case "weekly":
-      date.setDate(date.getDate() + 7);
-      break;
-    case "biweekly":
-      date.setDate(date.getDate() + 14);
-      break;
     case "monthly":
       date.setMonth(date.getMonth() + 1);
       break;

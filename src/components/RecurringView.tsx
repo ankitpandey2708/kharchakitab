@@ -319,25 +319,6 @@ export const RecurringView = ({
 
   return (
     <div className="space-y-6">
-      <div className="kk-card p-4 sm:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="kk-label">Recurring</div>
-            <div className="text-sm text-[var(--kk-ash)]">
-              Create and manage scheduled expenses
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => onAddRecurring()}
-            className="kk-btn-primary kk-btn-compact"
-          >
-            <Plus className="h-4 w-4" />
-            Add recurring
-          </button>
-        </div>
-      </div>
-
       {recurringItems.length === 0 && (
         <EmptyState
           icon={<AlertCircle className="h-8 w-8 text-[var(--kk-ash)]" />}
