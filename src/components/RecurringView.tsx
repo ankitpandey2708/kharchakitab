@@ -72,7 +72,7 @@ const isActiveRecurring = (tx: Transaction) =>
   Date.now() <= (tx.recurring_end_date ?? 0);
 
 const getDueTimestamp = (tx: Transaction) =>
-  tx.recurring_next_due_at ?? tx.timestamp;
+  tx.recurring_next_due_at ?? null;
 
 export const RecurringView = ({
   refreshKey,
@@ -96,6 +96,7 @@ export const RecurringView = ({
       const normalized = active.map((tx) => {
         if (!tx.recurring_frequency) return tx;
         const dueAt = getDueTimestamp(tx);
+        if (!dueAt) return tx;
         if (dueAt >= now) return tx;
         const nextDue = getNextUpcomingDueDate(
           dueAt,
@@ -128,15 +129,17 @@ export const RecurringView = ({
     for (const tx of recurringItems) {
       const dueAt = getDueTimestamp(tx);
       const reminder = tx.recurring_reminder_days ?? 5;
-      const daysUntilDue = (dueAt - now) / (1000 * 60 * 60 * 24);
+      const daysUntilDue = dueAt
+        ? (dueAt - now) / (1000 * 60 * 60 * 24)
+        : null;
       console.log({
         id: tx.id,
         item: tx.item,
-        due: new Date(dueAt).toString(),
+        due: dueAt ? new Date(dueAt).toString() : "Missing due date",
         dueMs: dueAt,
         reminderDays: reminder,
         daysUntilDue,
-        dueSoon: isDueSoon(dueAt, reminder),
+        dueSoon: dueAt ? isDueSoon(dueAt, reminder) : false,
       });
     }
     console.groupEnd();
@@ -147,7 +150,7 @@ export const RecurringView = ({
       recurringItems.filter((tx) => {
         const dueAt = getDueTimestamp(tx);
         const reminder = tx.recurring_reminder_days ?? 5;
-        return isDueSoon(dueAt, reminder);
+        return dueAt ? isDueSoon(dueAt, reminder) : false;
       }),
     [recurringItems]
   );
@@ -175,6 +178,7 @@ export const RecurringView = ({
   const handleMarkAsPaid = async (tx: Transaction) => {
     if (!tx.recurring_frequency) return;
     const dueAt = getDueTimestamp(tx);
+    if (!dueAt) return;
     if (dueAt <= Date.now()) return;
     const nextDue = calculateNextDueDate(dueAt, tx.recurring_frequency);
     await updateTransaction(tx.id, {
@@ -192,8 +196,9 @@ export const RecurringView = ({
   const renderCard = (tx: Transaction, showDueStatus = false) => {
     const CategoryIcon = CATEGORY_ICON_MAP[tx.category as CategoryKey] ?? CATEGORY_ICON_MAP.Other;
     const dueAt = getDueTimestamp(tx);
-    const dueSoon = isDueSoon(dueAt, tx.recurring_reminder_days ?? 5);
-    const canMarkPaid = dueAt > Date.now();
+    const dueSoon = dueAt ? isDueSoon(dueAt, tx.recurring_reminder_days ?? 5) : false;
+    const canMarkPaid = dueAt ? dueAt > Date.now() : false;
+    const dueLabel = dueAt ? formatDueDate(dueAt) : "—";
 
     return (
       <motion.div
@@ -239,7 +244,7 @@ export const RecurringView = ({
                   }`}
                 >
                   <Calendar className="h-3 w-3" />
-                  {formatDueDate(dueAt)}
+                  {dueLabel}
                 </span>
               )}
             </div>

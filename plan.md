@@ -95,36 +95,29 @@ User story:
 - As a user, I can create and manage recurring transactions from templates so I can track bills and subscriptions without manual duplication.
 
 
-Eligibility (appears in Recurring view at all)
+  Eligibility (appears in Recurring view at all)
 
-  - recurring (required) → must be true
-  - recurring_frequency (required) → must be set
-  - recurring_start_date (required) → must be set
-  - recurring_end_date (required) → must be set
-  - recurring_end_date must be >= now (active)
-  - deleted_at → if set, it’s filtered out (via DB layer)
+  - recurring → must be true
+  - recurring_frequency → must be set
+  - recurring_start_date → must be set
+  - recurring_end_date → must be set
+  - recurring_end_date >= now → active
+  - deleted_at → filtered out by DB layer
 
   Bucket: “Due Soon” vs “All recurring”
 
-  - timestamp (next due date)
-  - recurring_reminder_days (window size; default 5)
+  - recurring_next_due_at (fallback to timestamp if missing)
+  - recurring_reminder_days (default 5)
   - recurring_end_date (must still be active)
 
   Auto‑roll (current behavior)
 
-  - timestamp (rolled forward)
+  - recurring_next_due_at (rolled forward; fallback to timestamp if missing)
   - recurring_frequency (how far to roll)
   - recurring_end_date (clamp if rolling past end)
 
   “Mark as Paid” button
 
-  - timestamp (shown only if timestamp > now)
+  - recurring_next_due_at (shown only if due > now; fallback to timestamp)
   - recurring_frequency (next due calculation)
   - recurring_last_paid_at (set when paid)
-
-  Other fields that affect recurring UX indirectly
-
-  - recurring_template_id → used to build/edit from templates (not logic, but flow)
-  - category → controls icon/label in recurring cards
-  - paymentMethod → shown on card
-  - amount, item → shown on card

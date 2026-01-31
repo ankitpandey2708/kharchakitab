@@ -36,6 +36,12 @@ const toTimestamp = (value: string) => {
   return Number.isNaN(date.getTime()) ? null : date.getTime();
 };
 
+const addOneYear = (timestamp: number) => {
+  const date = new Date(timestamp);
+  date.setFullYear(date.getFullYear() + 1);
+  return date.getTime();
+};
+
 export const RecurringEditModal = ({
   isOpen,
   mode,
@@ -76,8 +82,9 @@ export const RecurringEditModal = ({
       setCategory(template.category);
       setPaymentMethod("upi");
       setFrequency(template.suggestedFrequency);
-      setStartDate(toDateInputValue(Date.now()));
-      setEndDate(toDateInputValue(Date.now()));
+      const now = Date.now();
+      setStartDate(toDateInputValue(now));
+      setEndDate(toDateInputValue(addOneYear(now)));
       setReminderDays(3);
       return;
     }
@@ -86,8 +93,9 @@ export const RecurringEditModal = ({
     setCategory("Bills");
     setPaymentMethod("upi");
     setFrequency("monthly");
-    setStartDate(toDateInputValue(Date.now()));
-    setEndDate(toDateInputValue(Date.now()));
+    const now = Date.now();
+    setStartDate(toDateInputValue(now));
+    setEndDate(toDateInputValue(addOneYear(now)));
     setReminderDays(3);
   }, [isOpen, mode, template, transaction]);
 
@@ -112,7 +120,7 @@ export const RecurringEditModal = ({
 
     const existing = transaction;
     const existingTimestamp = existing?.timestamp ?? startTs;
-    let nextDue = existing?.recurring_next_due_at ?? existingTimestamp;
+    let nextDue = existing?.recurring_next_due_at ?? startTs;
     if (nextDue < startTs || nextDue > endTs) {
       nextDue = startTs;
     }
