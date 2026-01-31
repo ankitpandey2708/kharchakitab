@@ -167,56 +167,83 @@ export const RecurringEditModal = ({
               damping: 30,
               stiffness: 300,
             }}
-            className="w-full max-w-md overflow-hidden kk-radius-top-xl bg-white kk-shadow-lg max-h-[90vh] overflow-y-auto"
+            className="w-full max-w-md overflow-hidden kk-radius-top-xl border border-[var(--kk-smoke)] bg-[var(--kk-cream)] kk-shadow-lg max-h-[90vh] overflow-y-auto"
           >
-            <div className="flex justify-center pt-3 pb-2 sticky top-0 bg-white">
+            <div className="flex justify-center pt-3 pb-2 sticky top-0 bg-[var(--kk-cream)]">
               <div className="h-1 w-10 rounded-full bg-[var(--kk-smoke-heavy)]" />
             </div>
 
             <div className="px-5 pb-6">
-              <div className="flex items-center justify-between">
+              <div className="flex items-start justify-between gap-4">
                 <div>
-                  <div className="mt-1 text-xl font-semibold font-[family:var(--font-display)]">
-                    {mode === "new" ? "Add Recurring Expense" : "Edit Recurring"}
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--kk-ash)]">
+                    Recurring
+                  </div>
+                  <div className="mt-1 text-2xl font-semibold font-[family:var(--font-display)] text-[var(--kk-ink)]">
+                    {mode === "new" ? "Add recurring" : "Edit recurring"}
+                  </div>
+                  <div className="mt-1 text-xs text-[var(--kk-ash)]">
+                    Set the cadence once, we’ll keep it on track.
                   </div>
                 </div>
-                <button type="button" onClick={onClose} className="kk-icon-btn">
+                <button type="button" onClick={onClose} className="kk-icon-btn mt-1">
                   <X className="h-4 w-4" />
                 </button>
               </div>
 
-              <div className="mt-5">
-                <div className="kk-label">Name</div>
-                <input
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="e.g., Netflix, Rent, Gym"
-                  className="kk-input mt-2"
-                />
-              </div>
-
-              <div className="mt-4 kk-radius-md border border-[var(--kk-smoke)] bg-[var(--kk-cream)] p-4">
-                <div className="kk-label">Amount</div>
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-3xl font-bold text-[var(--kk-ember)]">₹</span>
+              <div className="mt-5 kk-radius-xl border border-[var(--kk-smoke)] bg-white p-4">
+                <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--kk-ash)]">
+                  <span>Amount</span>
+                  <span>Required</span>
+                </div>
+                <div className="mt-3 flex items-end gap-3">
+                  <span className="rounded-full border border-[var(--kk-smoke-heavy)] bg-[var(--kk-cream)] px-2 py-1 text-2xl font-semibold text-[var(--kk-ember)]">
+                    ₹
+                  </span>
                   <input
                     type="number"
                     inputMode="decimal"
                     step="0.01"
                     value={amountValue}
                     onChange={(event) => setAmountValue(sanitizeAmountInput(event.target.value))}
-                    className="w-full bg-transparent text-3xl font-bold tracking-tight outline-none font-[family:var(--font-mono)] placeholder:text-[var(--kk-ash)]"
+                    className="w-full bg-transparent text-4xl font-bold tracking-tight outline-none font-[family:var(--font-mono)] placeholder:text-[var(--kk-ash)]"
                     placeholder="0"
                   />
                 </div>
               </div>
 
-              <div className="mt-4">
-                <div className="kk-label flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5" />
-                  Frequency
+              <div className="mt-4 kk-radius-xl border border-[var(--kk-smoke)] bg-white p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--kk-ash)]">
+                  Details
                 </div>
-                <div className="mt-2 flex flex-wrap gap-2">
+                <input
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="e.g., Netflix, Rent, Gym"
+                  className="kk-input mt-3"
+                />
+                <div className="mt-3">
+                  <div className="kk-label">Category</div>
+                  <select
+                    value={category}
+                    onChange={(event) => setCategory(event.target.value)}
+                    className="kk-input kk-select mt-2 text-sm"
+                  >
+                    {CATEGORY_OPTIONS.map((option) => (
+                      <option key={option.key} value={option.key}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="mt-4 kk-radius-xl border border-[var(--kk-smoke)] bg-white p-4">
+                <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--kk-ash)]">
+                  <span>Frequency</span>
+                  <Clock className="h-3.5 w-3.5" />
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
                   {FREQUENCY_OPTIONS.map((option) => {
                     const isActive = frequency === option.key;
                     return (
@@ -237,25 +264,12 @@ export const RecurringEditModal = ({
                 </div>
               </div>
 
-              <div className="mt-4">
-                <div className="kk-label">Category</div>
-                <select
-                  value={category}
-                  onChange={(event) => setCategory(event.target.value)}
-                  className="kk-input kk-select mt-2 text-sm"
-                >
-                  {CATEGORY_OPTIONS.map((option) => (
-                    <option key={option.key} value={option.key}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <div>
-                  <div className="kk-label">Payment Method</div>
-                  <div className="mt-2 flex flex-wrap gap-2">
+                <div className="kk-radius-xl border border-[var(--kk-smoke)] bg-white p-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--kk-ash)]">
+                    Payment
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
                     {PAYMENT_OPTIONS.map((option) => {
                       const Icon = option.icon;
                       const isActive = paymentMethod === option.key;
@@ -277,8 +291,13 @@ export const RecurringEditModal = ({
                     })}
                   </div>
                 </div>
-                <div>
-                  <div className="kk-label">Reminder (days)</div>
+                <div className="kk-radius-xl border border-[var(--kk-smoke)] bg-white p-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--kk-ash)]">
+                    Reminder
+                  </div>
+                  <div className="mt-3 flex items-center gap-2 text-xs text-[var(--kk-ash)]">
+                    Days before due
+                  </div>
                   <input
                     type="number"
                     min="0"
@@ -290,29 +309,29 @@ export const RecurringEditModal = ({
               </div>
 
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <div>
-                  <div className="kk-label flex items-center gap-1.5">
+                <div className="kk-radius-xl border border-[var(--kk-smoke)] bg-white p-4">
+                  <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--kk-ash)]">
+                    <span>Start date</span>
                     <Calendar className="h-3.5 w-3.5" />
-                    Start Date
                   </div>
                   <input
                     type="date"
                     value={startDate}
                     onChange={(event) => setStartDate(event.target.value)}
-                    className="kk-input mt-2 h-9"
+                    className="kk-input mt-3 h-9"
                   />
                 </div>
-                <div>
-                  <div className="kk-label flex items-center gap-1.5">
+                <div className="kk-radius-xl border border-[var(--kk-smoke)] bg-white p-4">
+                  <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--kk-ash)]">
+                    <span>End date</span>
                     <Calendar className="h-3.5 w-3.5" />
-                    End Date
                   </div>
                   <input
                     type="date"
                     min={startDate || undefined}
                     value={endDate}
                     onChange={(event) => setEndDate(event.target.value)}
-                    className="kk-input mt-2 h-9"
+                    className="kk-input mt-3 h-9"
                   />
                 </div>
               </div>
