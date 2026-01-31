@@ -29,9 +29,9 @@ Pricing
 1. cap on voice based entry, family mode
 2. if MAU=1000 , then show Ads to free user.
 3. custom alerts.
-********
-let req = indexedDB.open('QuickLogDB'); req.onsuccess = () => { const s = req.result.transaction('transactions', 'readwrite').objectStore('transactions'); s.getAll().onsuccess = e => { const rows = e.target.result; if (!rows.length) return; const latest = rows.reduce((a, b) => (a.timestamp > b.timestamp ? a : b)); const now = new Date(); const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(); for (let i = 0; i < 4; i++) { const randomMs = Math.floor(Math.random() * 24 * 60 * 60 * 1000); s.add({ ...latest, id: crypto.randomUUID(), timestamp: startOfDay + randomMs, }); } }; };
+*******
 
+await new Promise((res, rej) => { const r = indexedDB.open("QuickLogDB"); r.onerror = () => rej(r.error); r.onsuccess = () => { const g = r.result.transaction("transactions").objectStore("transactions").getAll(); g.onerror = () => rej(g.error); g.onsuccess = () => res(g.result); }; });
 ———
   Create iOS Shortcut for KharchaKitab share
 

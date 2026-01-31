@@ -2,7 +2,7 @@
 
 import React from "react";
 import { motion } from "framer-motion";
-import { MoreHorizontal } from "lucide-react";
+import { EyeOff, MoreHorizontal } from "lucide-react";
 import type { Transaction } from "@/src/types";
 import { PAYMENT_ICON_MAP, type PaymentKey } from "@/src/config/payments";
 import { CategoryIcon } from "@/src/components/CategoryIcon";
@@ -82,12 +82,19 @@ export const TransactionRow = React.memo(
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96 }}
         transition={{ duration: 0.28, delay: index * 0.035 }}
-        className={`group relative flex items-center justify-between gap-3 overflow-hidden kk-radius-md border border-[var(--kk-smoke)] bg-white p-4 pl-5 pr-4 transition-all hover:border-[var(--kk-smoke-heavy)] hover:shadow-[var(--kk-shadow-sm)] ${isClickable ? "cursor-pointer active:scale-[0.995]" : ""
-          }`}
+        className={`group relative flex items-center justify-between gap-3 overflow-hidden kk-radius-md border border-[var(--kk-smoke)] p-4 pl-5 pr-4 transition-all hover:border-[var(--kk-smoke-heavy)] hover:shadow-[var(--kk-shadow-sm)] ${
+          tx.is_private && !isProcessing ? "bg-[var(--kk-cream)]" : "bg-white"
+        } ${isClickable ? "cursor-pointer active:scale-[0.995]" : ""}`}
         role={isClickable ? "button" : "listitem"}
         tabIndex={isClickable ? 0 : -1}
       >
-        <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-sm bg-gradient-to-b from-[var(--kk-ember)] to-[var(--kk-saffron)] opacity-0 transition-opacity group-hover:opacity-100" />
+        <div
+          className={`absolute left-0 top-3 bottom-3 w-[3px] rounded-r-sm transition-opacity ${
+            tx.is_private && !isProcessing
+              ? "bg-gradient-to-b from-[var(--kk-ash)] to-[var(--kk-smoke-heavy)] opacity-100"
+              : "bg-gradient-to-b from-[var(--kk-ember)] to-[var(--kk-saffron)] opacity-0 group-hover:opacity-100"
+          }`}
+        />
 
         <div className="flex flex-1 min-w-0 items-center gap-3">
           <div className="kk-category-icon h-9 w-9 flex-none shrink-0">
@@ -113,7 +120,16 @@ export const TransactionRow = React.memo(
                   {ownerLabel && (
                     <span className="kk-pill kk-pill-muted">{ownerLabel}</span>
                   )}
-                  <span className="kk-pill">
+                  {tx.is_private && (
+                    <span
+                      className="inline-flex items-center rounded-full border border-[var(--kk-smoke-heavy)] bg-white px-2 py-1 text-[0.6875rem] font-semibold uppercase tracking-[var(--kk-tracking-chip)] text-[var(--kk-ash)]"
+                      aria-label="Private transaction"
+                      title="Private transaction"
+                    >
+                      <EyeOff className="h-3.5 w-3.5" />
+                    </span>
+                  )}
+                  <span className={tx.is_private ? "kk-pill kk-pill-muted" : "kk-pill"}>
                     <PaymentIcon
                       aria-label={paymentLabel}
                       title={paymentLabel}

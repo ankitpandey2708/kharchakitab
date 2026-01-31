@@ -93,6 +93,28 @@ export const RecurringView = ({
     void loadRecurring();
   }, [loadRecurring, refreshKey]);
 
+  useEffect(() => {
+    if (recurringItems.length === 0) return;
+    const now = Date.now();
+    console.group("Recurring debug");
+    console.log("now", new Date(now).toString(), now);
+    for (const tx of recurringItems) {
+      const reminder = tx.recurring_reminder_days ?? 5;
+      const daysUntilDue = (tx.timestamp - now) / (1000 * 60 * 60 * 24);
+      console.log({
+        id: tx.id,
+        item: tx.item,
+        due: new Date(tx.timestamp).toString(),
+        dueMs: tx.timestamp,
+        reminderDays: reminder,
+        daysUntilDue,
+        dueSoon: isDueSoon(tx.timestamp, reminder),
+        overdue: isOverdue(tx.timestamp),
+      });
+    }
+    console.groupEnd();
+  }, [recurringItems]);
+
   const dueSoonItems = useMemo(
     () =>
       recurringItems.filter((tx) => {

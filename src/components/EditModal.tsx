@@ -219,10 +219,14 @@ export const EditModal = ({
               <div className={`mt-4 flex items-center justify-between gap-3 kk-radius-md border border-[var(--kk-smoke)] px-4 py-3 ${isShared ? 'bg-[var(--kk-smoke)] opacity-70' : 'bg-[var(--kk-cream)]'}`}>
                 <div>
                   <div className="text-sm font-medium text-[var(--kk-ink)]">
-                    Make it Private
+                    Private transaction
                   </div>
                   <div className="kk-meta">
-                    {isShared ? "This transaction has already been shared." : "This transaction will be excluded from sync"}
+                    {isShared
+                      ? "This transaction has already been shared."
+                      : isPrivateValue
+                      ? "This transaction won't be synced"
+                      : "This transaction will be synced"}
                   </div>
                 </div>
                 {!isShared && (
