@@ -131,18 +131,6 @@ export const TransactionActionSheet = ({
                 )}
               </button>
             </div>
-            {onTogglePrivate && !isShared && (
-              <button
-                type="button"
-                className="kk-btn-secondary mt-3 flex items-center justify-center gap-2"
-                onClick={() => {
-                  onTogglePrivate(tx.id, !tx.is_private);
-                  onClose();
-                }}
-              >
-                {tx.is_private ? "Make shared" : "Make private"}
-              </button>
-            )}
             {isShared && (
               <div className="mt-3 bg-[var(--kk-smoke)] p-2 rounded-lg text-center text-[10px] text-[var(--kk-ash)] uppercase tracking-wider font-bold">
                 Already shared with partner
