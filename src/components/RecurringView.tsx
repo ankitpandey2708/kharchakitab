@@ -460,11 +460,7 @@ export const RecurringView = ({
     <div className="space-y-8">
       {/* Summary Header - Only show if there are active templates */}
       {templates.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="relative overflow-hidden rounded-2xl border border-[var(--kk-smoke)] bg-gradient-to-br from-white via-white to-[var(--kk-cream)]/50 p-6"
-        >
+        <div className="relative overflow-hidden rounded-2xl border border-[var(--kk-smoke)] bg-gradient-to-br from-white via-white to-[var(--kk-cream)]/50 p-6">
           {/* Decorative elements */}
           <div className="absolute -right-8 -top-8 opacity-[0.04]">
             <TrendingUp className="h-40 w-40 text-[var(--kk-ink)]" />
@@ -501,7 +497,7 @@ export const RecurringView = ({
               )}
             </div>
           </div>
-        </motion.div>
+        </div>
       )}
 
       {/* Due Soon Section */}

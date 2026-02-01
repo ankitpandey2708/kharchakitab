@@ -351,6 +351,8 @@ export const HistoryView = ({
   const [isMetricsLoading, setIsMetricsLoading] = useState(false);
   const [metricsVersion, setMetricsVersion] = useState(0);
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [debouncedCustomStart, setDebouncedCustomStart] = useState("");
+  const [debouncedCustomEnd, setDebouncedCustomEnd] = useState("");
   const [renderLimit, setRenderLimit] = useState(200);
   const {
     isOpen: isMobileSheetOpen,
@@ -455,9 +457,10 @@ export const HistoryView = ({
     node.focus();
   };
 
+  // Use debounced values for range calculation to prevent heavy operations on every keystroke
   const range = useMemo(
-    () => getRangeForFilter(filter, { customStart, customEnd }),
-    [filter, customStart, customEnd]
+    () => getRangeForFilter(filter, { customStart: debouncedCustomStart, customEnd: debouncedCustomEnd }),
+    [filter, debouncedCustomStart, debouncedCustomEnd]
   );
 
   const changeRange = useMemo(() => {
@@ -476,8 +479,13 @@ export const HistoryView = ({
       nextStartInput: toDateInputValue(nextRange.start),
       nextEndInput: toDateInputValue(nextRange.end),
     });
-    setCustomStart(toDateInputValue(nextRange.start));
-    setCustomEnd(toDateInputValue(nextRange.end));
+    const startVal = toDateInputValue(nextRange.start);
+    const endVal = toDateInputValue(nextRange.end);
+    setCustomStart(startVal);
+    setCustomEnd(endVal);
+    // Also set debounced values immediately for presets (no delay needed)
+    setDebouncedCustomStart(startVal);
+    setDebouncedCustomEnd(endVal);
   }, [filter]);
 
   const fetchPage = useCallback(
@@ -564,6 +572,23 @@ export const HistoryView = ({
     }, 200);
     return () => window.clearTimeout(handle);
   }, [query]);
+
+  // Debounce custom date inputs to prevent heavy operations on every keystroke
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      console.info("[history:date] debounce-start", { customStart, debouncedCustomStart });
+      setDebouncedCustomStart(customStart);
+    }, 400);
+    return () => window.clearTimeout(handle);
+  }, [customStart]);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      console.info("[history:date] debounce-end", { customEnd, debouncedCustomEnd });
+      setDebouncedCustomEnd(customEnd);
+    }, 400);
+    return () => window.clearTimeout(handle);
+  }, [customEnd]);
 
 
   const formatCurrency = useCallback(
@@ -1295,8 +1320,13 @@ export const HistoryView = ({
                                 nextStartInput: toDateInputValue(nextRange.start),
                                 nextEndInput: toDateInputValue(nextRange.end),
                               });
-                              setCustomStart(toDateInputValue(nextRange.start));
-                              setCustomEnd(toDateInputValue(nextRange.end));
+                              const startVal = toDateInputValue(nextRange.start);
+                              const endVal = toDateInputValue(nextRange.end);
+                              setCustomStart(startVal);
+                              setCustomEnd(endVal);
+                              // Also set debounced values immediately for presets
+                              setDebouncedCustomStart(startVal);
+                              setDebouncedCustomEnd(endVal);
                             }
                           }
                         }}
@@ -1314,23 +1344,39 @@ export const HistoryView = ({
                           <span className="opacity-70 sm:opacity-100">From</span>
                           <span className="flex items-center gap-0.5">
                             <input
-                              key={`start-${filter}-${customStart}`}
+                              key={`start-${filter}`}
                               type="date"
                               value={customStart}
                               ref={customStartRef}
+                              onFocus={() => {
+                                console.info("[history:date] start-focus", { filter, customStart });
+                              }}
+                              onBlur={() => {
+                                console.info("[history:date] start-blur", { filter, customStart });
+                              }}
+                              onKeyDown={(event) => {
+                                console.info("[history:date] start-keydown", {
+                                  key: event.key,
+                                  value: (event.target as HTMLInputElement).value,
+                                  filter,
+                                  customStart
+                                });
+                              }}
                               onClick={() => {
+                                console.info("[history:date] start-click", { filter, customStart });
                                 if (filter !== "custom") {
                                   setFilter("custom");
                                 }
                                 focusDateInput(customStartRef);
                               }}
                               onChange={(event) => {
-                                if (filter !== "custom") setFilter("custom");
                                 console.info("[history:date] start-change", {
                                   nextValue: event.target.value,
                                   prevValue: customStart,
                                   filter,
+                                  valueLength: event.target.value.length,
                                 });
+                                if (filter !== "custom") setFilter("custom");
                                 setCustomStart(event.target.value);
                               }}
                               className="kk-input kk-input-compact kk-date-input w-[6.25rem] bg-transparent normal-case text-[var(--kk-ink)] outline-none disabled:pointer-events-none disabled:cursor-default disabled:text-[var(--kk-ash)] sm:w-[7rem]"
@@ -1355,24 +1401,40 @@ export const HistoryView = ({
                           <span className="opacity-70 sm:opacity-100">To</span>
                           <span className="flex items-center gap-0.5">
                             <input
-                              key={`end-${filter}-${customEnd}`}
+                              key={`end-${filter}`}
                               type="date"
                               value={customEnd}
                               min={customStart || undefined}
                               ref={customEndRef}
+                              onFocus={() => {
+                                console.info("[history:date] end-focus", { filter, customEnd });
+                              }}
+                              onBlur={() => {
+                                console.info("[history:date] end-blur", { filter, customEnd });
+                              }}
+                              onKeyDown={(event) => {
+                                console.info("[history:date] end-keydown", {
+                                  key: event.key,
+                                  value: (event.target as HTMLInputElement).value,
+                                  filter,
+                                  customEnd
+                                });
+                              }}
                               onClick={() => {
+                                console.info("[history:date] end-click", { filter, customEnd });
                                 if (filter !== "custom") {
                                   setFilter("custom");
                                 }
                                 focusDateInput(customEndRef);
                               }}
                               onChange={(event) => {
-                                if (filter !== "custom") setFilter("custom");
                                 console.info("[history:date] end-change", {
                                   nextValue: event.target.value,
                                   prevValue: customEnd,
                                   filter,
+                                  valueLength: event.target.value.length,
                                 });
+                                if (filter !== "custom") setFilter("custom");
                                 setCustomEnd(event.target.value);
                               }}
                               className="kk-input kk-input-compact kk-date-input w-[6.25rem] bg-transparent normal-case text-[var(--kk-ink)] outline-none disabled:pointer-events-none disabled:cursor-default disabled:text-[var(--kk-ash)] sm:w-[7rem]"
@@ -1629,7 +1691,7 @@ export const HistoryView = ({
                 )}
               </div>
             </div>
-          </div>
+          </div >
 
           <TransactionActionSheet
             isOpen={isMobileSheetOpen}
@@ -1644,8 +1706,8 @@ export const HistoryView = ({
             isShared={isMobileSheetShared}
             formatCurrency={formatCurrency}
           />
-        </motion.div>
+        </motion.div >
       )}
-    </AnimatePresence>
+    </AnimatePresence >
   );
 };
