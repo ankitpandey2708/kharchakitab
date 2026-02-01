@@ -14,6 +14,7 @@ interface TransactionRowProps {
   tx: Transaction;
   index: number;
   metaVariant: MetaVariant;
+  metaLabelOverride?: string;
   hasEdit: boolean;
   onEdit?: (id: string) => void;
   onDelete: (id: string) => void;
@@ -52,6 +53,7 @@ export const TransactionRow = React.memo(
     tx,
     index,
     metaVariant,
+    metaLabelOverride,
     hasEdit,
     onEdit,
     onDelete,
@@ -73,7 +75,8 @@ export const TransactionRow = React.memo(
       : "unknown";
     const PaymentIcon = PAYMENT_ICON_MAP[paymentKey];
     const paymentLabel = getPaymentLabel(tx.paymentMethod);
-    const metaLabel = getMetaLabel(tx.timestamp, metaVariant);
+    const metaLabel =
+      metaLabelOverride ?? getMetaLabel(tx.timestamp, metaVariant);
 
     return (
       <motion.div

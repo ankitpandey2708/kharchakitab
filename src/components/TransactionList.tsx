@@ -830,12 +830,21 @@ export const TransactionList = ({
             {recentTransactions.map((tx, index) => {
               const processing = isProcessingRow(tx);
               const rowKey = tx.id || `recent-${index}`;
+              const date = new Date(tx.timestamp);
+              const label = date
+                .toLocaleDateString("en-IN", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "2-digit",
+                })
+                .replace(/[-,]/g, " ");
               return (
                 <TransactionRow
                   key={rowKey}
                   tx={tx}
                   index={index}
                   metaVariant="date"
+                  metaLabelOverride={label}
                   hasEdit={hasEdit}
                   onEdit={hasEdit ? handleEdit : undefined}
                   onDelete={handleDelete}
