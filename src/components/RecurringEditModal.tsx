@@ -130,6 +130,16 @@ export const RecurringEditModal = ({
 
     try {
       if (mode === "new") {
+        console.info("[recurring:create] submit", {
+          item: name.trim(),
+          amount,
+          category,
+          paymentMethod,
+          frequency,
+          startDate: startTs,
+          endDate: endTs,
+          reminderDays,
+        });
         // Create new template (also generates transactions)
         await createRecurringTemplate({
           item: name.trim(),

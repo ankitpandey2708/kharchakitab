@@ -310,15 +310,6 @@ export const RecurringView = ({
 
   return (
     <div className="space-y-6">
-      {templates.length === 0 && (
-        <EmptyState
-          icon={<AlertCircle className="h-8 w-8 text-[var(--kk-ash)]" />}
-          title="No recurring expenses yet"
-          subtitle="Start with a template or add one manually."
-          className="kk-card py-10"
-        />
-      )}
-
       {/* Due Soon Section */}
       {dueSoonTemplates.length > 0 && (
         <div className="space-y-3">

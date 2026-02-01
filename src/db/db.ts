@@ -676,6 +676,13 @@ export const createRecurringTemplate = async (templateData: Omit<Recurring_templ
             templateData.recurring_end_date
         );
     }
+    console.info("[recurring:create] next-due", {
+        startDate,
+        now,
+        frequency: templateData.recurring_frequency,
+        endDate: templateData.recurring_end_date,
+        nextDueAt,
+    });
 
     const template: Recurring_template = {
         ...templateData,
@@ -690,6 +697,12 @@ export const createRecurringTemplate = async (templateData: Omit<Recurring_templ
 
     // Generate future transactions
     const transactions = await generateRecurringTransactions(template);
+    console.info("[recurring:create] generated", {
+        templateId: template._id,
+        count: transactions.length,
+        firstTs: transactions[0]?.timestamp ?? null,
+        lastTs: transactions[transactions.length - 1]?.timestamp ?? null,
+    });
     for (const tx of transactions) {
         await db.put("transactions", tx);
     }
@@ -737,6 +750,14 @@ export const updateRecurringTemplate = async (
             now,
             newEndDate
         );
+        console.info("[recurring:update] next-due", {
+            id,
+            newStartDate,
+            newFrequency,
+            newEndDate,
+            now,
+            nextDueAt: nextUpdates.recurring_next_due_at,
+        });
     }
 
     const updated: Recurring_template = {
@@ -749,6 +770,12 @@ export const updateRecurringTemplate = async (
     // Delete and regenerate transactions
     await deleteGeneratedTransactions(id);
     const transactions = await generateRecurringTransactions(updated);
+    console.info("[recurring:update] regenerated", {
+        templateId: id,
+        count: transactions.length,
+        firstTs: transactions[0]?.timestamp ?? null,
+        lastTs: transactions[transactions.length - 1]?.timestamp ?? null,
+    });
     for (const tx of transactions) {
         await db.put("transactions", tx);
     }
@@ -785,6 +812,14 @@ export const generateRecurringTransactions = async (template: Recurring_template
     }
 
     const endDate = template.recurring_end_date;
+    console.info("[recurring:generate] start", {
+        templateId: template._id,
+        startDate: template.recurring_start_date,
+        now,
+        firstDate: currentDate,
+        endDate,
+        frequency: template.recurring_frequency,
+    });
 
     while (currentDate <= endDate) {
         transactions.push({

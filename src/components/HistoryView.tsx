@@ -449,17 +449,10 @@ export const HistoryView = ({
     rangeCount: 0,
   });
 
-  const triggerPicker = (ref: React.RefObject<HTMLInputElement | null>) => {
+  const focusDateInput = (ref: React.RefObject<HTMLInputElement | null>) => {
     const node = ref.current;
     if (!node) return;
-    const picker = (node as HTMLInputElement & { showPicker?: () => void })
-      .showPicker;
-    if (typeof picker === "function") {
-      picker.call(node);
-    } else {
-      node.focus();
-      node.click();
-    }
+    node.focus();
   };
 
   const range = useMemo(
@@ -1325,26 +1318,11 @@ export const HistoryView = ({
                               type="date"
                               value={customStart}
                               ref={customStartRef}
-                              inputMode="none"
-                              aria-readonly="true"
-                              onMouseDown={(event) => {
-                                event.preventDefault();
-                              }}
                               onClick={() => {
                                 if (filter !== "custom") {
                                   setFilter("custom");
-                                  return;
                                 }
-                                triggerPicker(customStartRef);
-                              }}
-                              onKeyDown={(event) => {
-                                event.preventDefault();
-                              }}
-                              onBeforeInput={(event) => {
-                                event.preventDefault();
-                              }}
-                              onPaste={(event) => {
-                                event.preventDefault();
+                                focusDateInput(customStartRef);
                               }}
                               onChange={(event) => {
                                 if (filter !== "custom") setFilter("custom");
@@ -1363,10 +1341,8 @@ export const HistoryView = ({
                               onClick={() => {
                                 if (filter !== "custom") {
                                   setFilter("custom");
-                                  return;
-                                } else {
-                                  triggerPicker(customStartRef);
                                 }
+                                focusDateInput(customStartRef);
                               }}
                               className="kk-icon-btn kk-icon-btn-ghost kk-icon-btn-sm -ml-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--kk-ember)]/40 disabled:pointer-events-none"
                             >
@@ -1384,26 +1360,11 @@ export const HistoryView = ({
                               value={customEnd}
                               min={customStart || undefined}
                               ref={customEndRef}
-                              inputMode="none"
-                              aria-readonly="true"
-                              onMouseDown={(event) => {
-                                event.preventDefault();
-                              }}
                               onClick={() => {
                                 if (filter !== "custom") {
                                   setFilter("custom");
-                                  return;
                                 }
-                                triggerPicker(customEndRef);
-                              }}
-                              onKeyDown={(event) => {
-                                event.preventDefault();
-                              }}
-                              onBeforeInput={(event) => {
-                                event.preventDefault();
-                              }}
-                              onPaste={(event) => {
-                                event.preventDefault();
+                                focusDateInput(customEndRef);
                               }}
                               onChange={(event) => {
                                 if (filter !== "custom") setFilter("custom");
@@ -1422,10 +1383,8 @@ export const HistoryView = ({
                               onClick={() => {
                                 if (filter !== "custom") {
                                   setFilter("custom");
-                                  return;
-                                } else {
-                                  triggerPicker(customEndRef);
                                 }
+                                focusDateInput(customEndRef);
                               }}
                               className="kk-icon-btn kk-icon-btn-ghost kk-icon-btn-sm -ml-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--kk-ember)]/40 disabled:pointer-events-none"
                             >
