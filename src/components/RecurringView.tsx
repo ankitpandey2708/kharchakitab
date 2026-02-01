@@ -75,14 +75,14 @@ export const RecurringView = ({
   const [showTemplates, setShowTemplates] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
 
-  const usedTemplateItems = useMemo(() => {
-    const items = new Set<string>();
+  const usedTemplateIds = useMemo(() => {
+    const ids = new Set<string>();
     for (const template of templates) {
-      if (template.item) {
-        items.add(template.item.trim().toLowerCase());
+      if (template.recurring_template_id) {
+        ids.add(template.recurring_template_id);
       }
     }
-    return items;
+    return ids;
   }, [templates]);
 
   const loadRecurring = useCallback(async () => {
@@ -286,7 +286,7 @@ export const RecurringView = ({
   };
 
   const renderTemplateCard = (template: RecurringTemplate) => {
-    if (usedTemplateItems.has(template.name.trim().toLowerCase())) {
+    if (usedTemplateIds.has(template.id)) {
       return null;
     }
     const Icon = template.icon;

@@ -25,6 +25,7 @@ export interface Recurring_template {
   category: string;
   amount: number;
   paymentMethod: "cash" | "upi" | "card" | "unknown";
+  recurring_template_id?: string | null;
   recurring_frequency: Frequency;
   recurring_start_date: number;
   recurring_end_date: number;

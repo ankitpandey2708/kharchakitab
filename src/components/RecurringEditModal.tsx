@@ -150,6 +150,7 @@ export const RecurringEditModal = ({
           recurring_start_date: startTs,
           recurring_end_date: endTs,
           recurring_reminder_days: reminderDays,
+          recurring_template_id: template?.id ?? null,
         });
 
         console.info("[recurring:create] template-created", {
