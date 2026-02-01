@@ -75,6 +75,16 @@ export const RecurringView = ({
   const [showTemplates, setShowTemplates] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
 
+  const usedTemplateItems = useMemo(() => {
+    const items = new Set<string>();
+    for (const template of templates) {
+      if (template.item) {
+        items.add(template.item.trim().toLowerCase());
+      }
+    }
+    return items;
+  }, [templates]);
+
   const loadRecurring = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -276,6 +286,9 @@ export const RecurringView = ({
   };
 
   const renderTemplateCard = (template: RecurringTemplate) => {
+    if (usedTemplateItems.has(template.name.trim().toLowerCase())) {
+      return null;
+    }
     const Icon = template.icon;
     return (
       <button
@@ -384,9 +397,9 @@ export const RecurringView = ({
                   </button>
                   {isOpen && (
                     <div className="grid gap-3 sm:grid-cols-2">
-                      {groupTemplates.map((template) =>
-                        renderTemplateCard(template)
-                      )}
+                      {groupTemplates
+                        .map((template) => renderTemplateCard(template))
+                        .filter(Boolean)}
                     </div>
                   )}
                 </div>
