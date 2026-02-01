@@ -500,5 +500,4 @@ export const MetricsDashboard = ({
     );
 };
 
-export { TrendChart };
-export type { ChartMeta, TrendMetrics, AllocationMetrics, DonutSegment };
+export type { ChartMeta, DonutSegment };

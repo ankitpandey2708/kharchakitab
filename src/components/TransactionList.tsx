@@ -332,9 +332,7 @@ export const TransactionList = ({
     }, [summaryView, todayTransactions, periodTransactions]);
 
   const recentTransactions = useMemo(
-    () => [...pendingTransactions, ...transactions]
-      .filter(tx => !tx.recurring_template_id) // Exclude auto-generated recurring
-      .slice(0, 5),
+    () => [...pendingTransactions, ...transactions].slice(0, 5),
     [pendingTransactions, transactions]
   );
   const monthToDateTotal = summaryView === "month" ? viewTotal : monthTotal;
@@ -728,7 +726,7 @@ export const TransactionList = ({
     );
   }
 
-  if (transactions.length === 0) {
+  if (transactions.length === 0 && pendingTransactions.length === 0) {
     return (
       <motion.div
         initial={{ opacity: 0, y: 16 }}

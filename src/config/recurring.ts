@@ -376,14 +376,6 @@ export const RECURRING_TEMPLATES: RecurringTemplate[] = [
   },
 ];
 
-export const getTemplatesByGroup = (group: TemplateGroup): RecurringTemplate[] =>
-  RECURRING_TEMPLATES.filter((t) => t.group === group);
-
-export const getFrequencyDays = (frequency: Frequency): number => {
-  const option = FREQUENCY_OPTIONS.find((f) => f.key === frequency);
-  return option?.days ?? 30;
-};
-
 export const calculateNextDueDate = (
   fromDate: number,
   frequency: Frequency
