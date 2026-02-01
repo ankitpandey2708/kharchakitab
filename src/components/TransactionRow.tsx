@@ -15,6 +15,7 @@ interface TransactionRowProps {
   index: number;
   metaVariant: MetaVariant;
   metaLabelOverride?: string;
+  metaLabelClassName?: string;
   hasEdit: boolean;
   onEdit?: (id: string) => void;
   onDelete: (id: string) => void;
@@ -54,6 +55,7 @@ export const TransactionRow = React.memo(
     index,
     metaVariant,
     metaLabelOverride,
+    metaLabelClassName,
     hasEdit,
     onEdit,
     onDelete,
@@ -113,7 +115,7 @@ export const TransactionRow = React.memo(
                   {tx.item}
                 </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-2 kk-meta">
-                  <span>{metaLabel}</span>
+                  <span className={metaLabelClassName}>{metaLabel}</span>
                   {ownerLabel && (
                     <span className="kk-pill kk-pill-muted">{ownerLabel}</span>
                   )}

@@ -831,13 +831,12 @@ export const TransactionList = ({
               const processing = isProcessingRow(tx);
               const rowKey = tx.id || `recent-${index}`;
               const date = new Date(tx.timestamp);
-              const label = date
-                .toLocaleDateString("en-IN", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "2-digit",
-                })
-                .replace(/[-,]/g, " ");
+              const day = String(date.getDate());
+              const month = date
+                .toLocaleDateString("en-IN", { month: "short" })
+                .toUpperCase();
+              const year = String(date.getFullYear());
+              const label = `${day} ${month} ${year}`;
               return (
                 <TransactionRow
                   key={rowKey}
@@ -845,6 +844,7 @@ export const TransactionList = ({
                   index={index}
                   metaVariant="date"
                   metaLabelOverride={label}
+                  metaLabelClassName="kk-label text-[var(--kk-ember)]"
                   hasEdit={hasEdit}
                   onEdit={hasEdit ? handleEdit : undefined}
                   onDelete={handleDelete}
