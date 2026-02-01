@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Search, ChevronLeft } from "lucide-react";
 import {
   deleteTransaction,
-  getPersonalTransactionsInRange,
+  fetchTransactions,
   updateTransaction,
   isTransactionShared,
   getDeviceIdentity,
@@ -201,7 +201,6 @@ export const HistoryView = ({
     rangeCount: 0,
   });
 
-  // Use debounced values for range calculation to prevent heavy operations on every keystroke
   const range = useMemo(
     () => getRangeForFilter(filter, { customStart: debouncedCustomStart, customEnd: debouncedCustomEnd }),
     [filter, debouncedCustomStart, debouncedCustomEnd]
@@ -227,7 +226,6 @@ export const HistoryView = ({
     const endVal = toDateInputValue(nextRange.end);
     setCustomStart(startVal);
     setCustomEnd(endVal);
-    // Also set debounced values immediately for presets (no delay needed)
     setDebouncedCustomStart(startVal);
     setDebouncedCustomEnd(endVal);
   }, [filter]);
@@ -235,13 +233,12 @@ export const HistoryView = ({
   const fetchPage = useCallback(
     (cursorValue?: number) =>
       range && currentDeviceId
-        ? getPersonalTransactionsInRange(
-          range.start,
-          range.end,
-          HISTORY_PAGE_SIZE,
-          cursorValue,
-          currentDeviceId
-        )
+        ? fetchTransactions({
+          range: { start: range.start, end: range.end },
+          limit: HISTORY_PAGE_SIZE,
+          before: cursorValue,
+          ownerId: currentDeviceId,
+        })
         : Promise.resolve([] as Transaction[]),
     [range, currentDeviceId]
   );
@@ -317,7 +314,6 @@ export const HistoryView = ({
     return () => window.clearTimeout(handle);
   }, [query]);
 
-  // Debounce custom date inputs to prevent heavy operations on every keystroke
   useEffect(() => {
     const handle = window.setTimeout(() => {
       console.info("[history:date] debounce-start", { customStart, debouncedCustomStart });
@@ -333,7 +329,6 @@ export const HistoryView = ({
     }, 400);
     return () => window.clearTimeout(handle);
   }, [customEnd]);
-
 
   const formatCurrency = useCallback(
     (value: number, options: Intl.NumberFormatOptions = {}) =>
@@ -429,10 +424,10 @@ export const HistoryView = ({
             : null;
 
         const baseTransactionsPromise = base && currentDeviceId
-          ? getPersonalTransactionsInRange(base.start, base.end, undefined, undefined, currentDeviceId)
+          ? fetchTransactions({ range: { start: base.start, end: base.end }, ownerId: currentDeviceId })
           : Promise.resolve([] as Transaction[]);
         const prevTransactionsPromise = prevRange && currentDeviceId
-          ? getPersonalTransactionsInRange(prevRange.start, prevRange.end, undefined, undefined, currentDeviceId)
+          ? fetchTransactions({ range: { start: prevRange.start, end: prevRange.end }, ownerId: currentDeviceId })
           : Promise.resolve([] as Transaction[]);
         const rangeMatchesBase =
           !!base &&
@@ -441,7 +436,7 @@ export const HistoryView = ({
           base.end === range.end;
         const rangeTransactionsPromise =
           range && !rangeMatchesBase && currentDeviceId
-            ? getPersonalTransactionsInRange(range.start, range.end, undefined, undefined, currentDeviceId)
+            ? fetchTransactions({ range: { start: range.start, end: range.end }, ownerId: currentDeviceId })
             : Promise.resolve([] as Transaction[]);
 
         const [baseTransactions, prevTransactions, rangeTransactions] =
@@ -716,13 +711,10 @@ export const HistoryView = ({
     if (!range || !currentDeviceId) return;
     setIsExporting(true);
     try {
-      const transactions = await getPersonalTransactionsInRange(
-        range.start,
-        range.end,
-        undefined,
-        undefined,
-        currentDeviceId
-      );
+      const transactions = await fetchTransactions({
+        range: { start: range.start, end: range.end },
+        ownerId: currentDeviceId
+      });
       const headers = [
         "Date",
         "Amount",

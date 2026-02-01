@@ -5,8 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Info, Wallet } from "lucide-react";
 import {
   deleteTransaction,
-  getPersonalRecentTransactions,
-  getPersonalTransactionsInRange,
+  fetchTransactions,
   updateTransaction,
   isTransactionShared,
   getDeviceIdentity,
@@ -133,7 +132,7 @@ export const TransactionList = ({
     if (!identity) return;
     const shouldUpdate = () => (isActive ? isActive() : true);
     setIsLoading(true);
-    const recentPromise = getPersonalRecentTransactions(5, identity.device_id)
+    const recentPromise = fetchTransactions({ limit: 5, ownerId: identity.device_id, excludeRecurring: true })
       .then((items) => {
         if (shouldUpdate()) setTransactions(sortTransactions(items));
       })
@@ -143,7 +142,7 @@ export const TransactionList = ({
 
     const range = getRangeForFilter(summaryView === "today" ? "today" : "month");
     const rangePromise = range
-      ? getPersonalTransactionsInRange(range.start, range.end, undefined, undefined, identity.device_id)
+      ? fetchTransactions({ range: { start: range.start, end: range.end }, ownerId: identity.device_id })
         .then((items) => {
           if (!shouldUpdate()) return;
           const sorted = sortTransactions(items);
@@ -167,7 +166,7 @@ export const TransactionList = ({
         ? (() => {
           const monthRange = getRangeForFilter("month");
           if (!monthRange) return Promise.resolve([]);
-          return getPersonalTransactionsInRange(monthRange.start, monthRange.end, undefined, undefined, identity.device_id);
+          return fetchTransactions({ range: { start: monthRange.start, end: monthRange.end }, ownerId: identity.device_id });
         })()
           .then((items) => {
             if (!shouldUpdate()) return;

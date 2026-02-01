@@ -9,7 +9,7 @@ import {
   getSyncState,
   getTransactionById,
   getTransactionVersions,
-  getTransactionsInRange,
+  fetchTransactions,
   savePairing,
   removePairing,
   setDeviceDisplayName,
@@ -157,7 +157,7 @@ export const HouseholdView = () => {
   const fetchHouseholdTransactions = useCallback(async () => {
     const range = getRangeForFilter("month");
     if (!range) return;
-    const items = await getTransactionsInRange(range.start, range.end);
+    const items = await fetchTransactions({ range: { start: range.start, end: range.end } });
     const filtered = items
       .filter((tx) => !tx.is_private && !tx.deleted_at && !isProcessingRow(tx))
       .sort((a, b) => b.timestamp - a.timestamp);

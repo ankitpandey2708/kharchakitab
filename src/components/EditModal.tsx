@@ -19,6 +19,7 @@ interface EditModalProps {
   timestamp?: number;
   isPrivate?: boolean;
   isShared?: boolean;
+  showHousehold?: boolean;
   onClose: () => void;
   onSave: (data: {
     amount: number;
@@ -63,6 +64,7 @@ export const EditModal = ({
   timestamp = Date.now(),
   isPrivate = false,
   isShared = false,
+  showHousehold = false,
   onClose,
   onSave,
 }: EditModalProps) => {
@@ -231,78 +233,80 @@ export const EditModal = ({
                 </div>
               </div>
 
-              <div className={`mt-4 kk-radius-lg border px-4 py-3 ${isShared
-                ? "border-[var(--kk-smoke-heavy)] bg-[var(--kk-smoke)]/70"
-                : isPrivateValue
-                  ? "border-[var(--kk-ember)]/35 bg-white"
-                  : "border-[var(--kk-smoke)] bg-[var(--kk-cream)]"
-                }`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <div className={`mt-0.5 flex h-9 w-9 items-center justify-center kk-radius-full border ${isShared
-                      ? "border-[var(--kk-smoke-heavy)] bg-white/80 text-[var(--kk-ash)]"
-                      : isPrivateValue
-                        ? "border-[var(--kk-ember)]/40 bg-[var(--kk-ember)]/10 text-[var(--kk-ember)]"
-                        : "border-[var(--kk-smoke-heavy)] bg-white text-[var(--kk-ink)]"
-                      }`}
-                    >
-                      {isPrivateValue ? <Lock className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <div className="text-sm font-semibold text-[var(--kk-ink)]">
-                          Privacy
+              {showHousehold && (
+                <div className={`mt-4 kk-radius-lg border px-4 py-3 ${isShared
+                  ? "border-[var(--kk-smoke-heavy)] bg-[var(--kk-smoke)]/70"
+                  : isPrivateValue
+                    ? "border-[var(--kk-ember)]/35 bg-white"
+                    : "border-[var(--kk-smoke)] bg-[var(--kk-cream)]"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className={`mt-0.5 flex h-9 w-9 items-center justify-center kk-radius-full border ${isShared
+                        ? "border-[var(--kk-smoke-heavy)] bg-white/80 text-[var(--kk-ash)]"
+                        : isPrivateValue
+                          ? "border-[var(--kk-ember)]/40 bg-[var(--kk-ember)]/10 text-[var(--kk-ember)]"
+                          : "border-[var(--kk-smoke-heavy)] bg-white text-[var(--kk-ink)]"
+                        }`}
+                      >
+                        {isPrivateValue ? <Lock className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-sm font-semibold text-[var(--kk-ink)]">
+                            Privacy
+                          </div>
+                          {isShared && (
+                            <span className="rounded-full border border-[var(--kk-smoke-heavy)] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--kk-ash)]">
+                              Shared
+                            </span>
+                          )}
                         </div>
-                        {isShared && (
-                          <span className="rounded-full border border-[var(--kk-smoke-heavy)] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--kk-ash)]">
-                            Shared
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-0.5 text-xs text-[var(--kk-ash)]">
-                        {isShared
-                          ? "Already shared. Can’t be hidden later."
-                          : isPrivateValue
-                            ? "Only on this device."
-                            : "Visible to household on next sync."}
+                        <div className="mt-0.5 text-xs text-[var(--kk-ash)]">
+                          {isShared
+                            ? "Already shared. Can’t be hidden later."
+                            : isPrivateValue
+                              ? "Only on this device."
+                              : "Visible to household on next sync."}
+                        </div>
                       </div>
                     </div>
+                    {!isShared && (
+                      <div
+                        role="group"
+                        aria-label="Privacy setting"
+                        className="inline-flex items-center rounded-full border border-[var(--kk-smoke-heavy)] bg-white p-0.5 text-[11px] font-semibold"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setIsPrivateValue(false)}
+                          aria-pressed={!isPrivateValue}
+                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 transition ${!isPrivateValue
+                            ? "bg-[var(--kk-ink)] text-white shadow-sm"
+                            : "text-[var(--kk-ink)]"
+                            }`}
+                        >
+                          <ShieldCheck className="h-3 w-3" />
+                          Shared
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsPrivateValue(true)}
+                          aria-pressed={isPrivateValue}
+                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 transition ${isPrivateValue
+                            ? "bg-[var(--kk-ember)] text-white shadow-[0_6px_14px_rgba(234,84,85,0.25)]"
+                            : "text-[var(--kk-ink)]"
+                            }`}
+                        >
+                          <Lock className="h-3 w-3" />
+                          Private
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  {!isShared && (
-                    <div
-                      role="group"
-                      aria-label="Privacy setting"
-                      className="inline-flex items-center rounded-full border border-[var(--kk-smoke-heavy)] bg-white p-0.5 text-[11px] font-semibold"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setIsPrivateValue(false)}
-                        aria-pressed={!isPrivateValue}
-                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 transition ${!isPrivateValue
-                          ? "bg-[var(--kk-ink)] text-white shadow-sm"
-                          : "text-[var(--kk-ink)]"
-                          }`}
-                      >
-                        <ShieldCheck className="h-3 w-3" />
-                        Shared
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setIsPrivateValue(true)}
-                        aria-pressed={isPrivateValue}
-                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 transition ${isPrivateValue
-                          ? "bg-[var(--kk-ember)] text-white shadow-[0_6px_14px_rgba(234,84,85,0.25)]"
-                          : "text-[var(--kk-ink)]"
-                          }`}
-                      >
-                        <Lock className="h-3 w-3" />
-                        Private
-                      </button>
-                    </div>
-                  )}
                 </div>
-              </div>
+              )}
 
               {/* Save Button */}
               <button

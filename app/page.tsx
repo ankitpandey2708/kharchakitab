@@ -890,6 +890,7 @@ const AppShell = () => {
         timestamp={editState?.timestamp ?? Date.now()}
         isPrivate={editState?.isPrivate ?? false}
         isShared={editState?.isShared ?? false}
+        showHousehold={showHousehold}
         onClose={handleCloseEdit}
         onSave={handleSaveEdit}
       />

@@ -390,64 +390,69 @@ export const addTransaction = async (tx: Transaction): Promise<string> => {
   return transaction.id;
 };
 
-export const getPersonalRecentTransactions = async (
-  limit: number,
-  deviceId?: string
-): Promise<Transaction[]> => {
-  const targetDeviceId = deviceId ?? (await getDeviceIdentity()).device_id;
-  const cacheKey = cacheKeyFor(["personal-recent", limit, targetDeviceId]);
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
+export interface FetchTransactionsOptions {
+  range?: {
+    start: number;
+    end: number;
+  };
+  limit?: number;
+  before?: number;
+  ownerId?: string;
+  excludeRecurring?: boolean;
+  includeDeleted?: boolean;
+}
 
-  const db = await getDb();
-  const index = db.transaction("transactions").store.index("by-date");
-  const filtered = await collectTransactions(
-    index,
-    null,
+export const fetchTransactions = async (
+  options: FetchTransactionsOptions = {}
+): Promise<Transaction[]> => {
+  const {
+    range,
     limit,
-    (tx) =>
-      !isDeleted(tx) &&
-      tx.owner_device_id === targetDeviceId &&
-      !tx.recurring_template_id
-  );
-  return setCached(cacheKey, filtered);
-};
+    before,
+    ownerId,
+    excludeRecurring = false,
+    includeDeleted = false,
+  } = options;
 
-export const getTransactionsInRange = async (
-  start: number,
-  end: number,
-  limit?: number,
-  before?: number
-): Promise<Transaction[]> => {
-  const cacheKey = cacheKeyFor(["range", start, end, limit, before]);
+  const cacheKey = cacheKeyFor([
+    "fetch",
+    range?.start,
+    range?.end,
+    limit,
+    before,
+    ownerId,
+    excludeRecurring,
+    includeDeleted,
+  ]);
   const cached = getCached(cacheKey);
   if (cached) return cached;
+
   const db = await getDb();
   const index = db.transaction("transactions").store.index("by-date");
-  const upperBound =
-    typeof before === "number" ? Math.min(end, before - 1) : end;
-  if (upperBound < start) return [];
-  const range = IDBKeyRange.bound(start, upperBound);
-  const results = await collectTransactions(index, range, limit);
-  const filtered = results.filter((tx) => !isDeleted(tx));
-  return setCached(cacheKey, filtered);
-};
 
-export const getPersonalTransactionsInRange = async (
-  start: number,
-  end: number,
-  limit?: number,
-  before?: number,
-  deviceId?: string
-): Promise<Transaction[]> => {
-  const targetDeviceId = deviceId ?? (await getDeviceIdentity()).device_id;
-  const cacheKey = cacheKeyFor(["personal", start, end, limit, before, targetDeviceId]);
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
+  let keyRange: IDBKeyRange | null = null;
+  if (range) {
+    const upperBound =
+      typeof before === "number" ? Math.min(range.end, before - 1) : range.end;
+    if (upperBound < range.start) return [];
+    keyRange = IDBKeyRange.bound(range.start, upperBound);
+  } else if (typeof before === "number") {
+    keyRange = IDBKeyRange.upperBound(before - 1);
+  }
 
-  const allTx = await getTransactionsInRange(start, end, limit, before);
-  const filtered = allTx.filter((tx) => tx.owner_device_id === targetDeviceId);
-  return setCached(cacheKey, filtered);
+  const results = await collectTransactions(
+    index,
+    keyRange,
+    limit,
+    (tx) => {
+      if (!includeDeleted && isDeleted(tx)) return false;
+      if (ownerId && tx.owner_device_id !== ownerId) return false;
+      if (excludeRecurring && tx.recurring_template_id) return false;
+      return true;
+    }
+  );
+
+  return setCached(cacheKey, results);
 };
 
 export const getTransactionsUpdatedSince = async (
