@@ -8,7 +8,6 @@ import {
   ChevronRight,
   Calendar,
   AlertCircle,
-  Check,
   Pencil,
   Trash2,
   Clock,
@@ -17,22 +16,25 @@ import {
   RECURRING_TEMPLATES,
   TEMPLATE_GROUPS,
   FREQUENCY_LABEL_MAP,
-  calculateNextDueDate,
   getNextUpcomingDueDate,
   isDueSoon,
   type TemplateGroup,
   type RecurringTemplate,
 } from "@/src/config/recurring";
 import { CATEGORY_ICON_MAP, type CategoryKey } from "@/src/config/categories";
-import { deleteTransaction, getPersonalTransactions, updateTransaction } from "@/src/db/db";
-import type { Transaction } from "@/src/types";
+import {
+  getRecurringTemplates,
+  deleteRecurringTemplate,
+  updateRecurringTemplate,
+} from "@/src/db/db";
+import type { Recurring_template } from "@/src/types";
 import { formatCurrency } from "@/src/utils/money";
 import { EmptyState } from "@/src/components/EmptyState";
 
 interface RecurringViewProps {
   refreshKey: number;
   onAddRecurring: (template?: RecurringTemplate) => void;
-  onEditRecurring: (tx: Transaction) => void;
+  onEditRecurring: (template: Recurring_template) => void;
 }
 
 const formatDueDate = (timestamp: number): string => {
@@ -61,27 +63,12 @@ const formatDueDate = (timestamp: number): string => {
   });
 };
 
-const isRecurringTransaction = (tx: Transaction) =>
-  Boolean(
-    tx.recurring &&
-    tx.recurring_frequency &&
-    tx.recurring_start_date &&
-    tx.recurring_end_date
-  );
-
-const isActiveRecurring = (tx: Transaction) =>
-  isRecurringTransaction(tx) &&
-  Date.now() <= (tx.recurring_end_date ?? 0);
-
-const getDueTimestamp = (tx: Transaction) =>
-  tx.recurring_next_due_at ?? null;
-
 export const RecurringView = ({
   refreshKey,
   onAddRecurring,
   onEditRecurring,
 }: RecurringViewProps) => {
-  const [recurringItems, setRecurringItems] = useState<Transaction[]>([]);
+  const [templates, setTemplates] = useState<Recurring_template[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<Set<TemplateGroup>>(
     new Set(["subscriptions"])
   );
@@ -91,38 +78,55 @@ export const RecurringView = ({
   const loadRecurring = useCallback(async () => {
     setIsLoading(true);
     try {
-      const all = await getPersonalTransactions();
-      const active = all.filter(isActiveRecurring);
+      const allTemplates = await getRecurringTemplates();
       const now = Date.now();
       const updates: Promise<unknown>[] = [];
-      const normalized = active.map((tx) => {
-        if (!tx.recurring_frequency) return tx;
-        const dueAt = getDueTimestamp(tx);
-        if (!dueAt) return tx;
-        if (dueAt >= now) return tx;
-        const nextDue = getNextUpcomingDueDate(
-          dueAt,
-          tx.recurring_frequency,
-          now,
-          tx.recurring_end_date
-        );
-        if (nextDue === dueAt) return tx;
-        console.info("[recurring:normalize] next-due-updated", {
-          id: tx.id,
-          item: tx.item,
-          previousDue: dueAt,
-          nextDue,
-          frequency: tx.recurring_frequency,
-          now,
-          endAt: tx.recurring_end_date ?? null,
-        });
-        updates.push(updateTransaction(tx.id, { recurring_next_due_at: nextDue }));
-        return { ...tx, recurring_next_due_at: nextDue };
+
+      // Normalize stale next_due_at values
+      const normalized = allTemplates.map((template) => {
+        const dueAt = template.recurring_next_due_at;
+
+        // If next_due_at is in the past, recalculate
+        if (dueAt < now && now <= template.recurring_end_date) {
+          const nextDue = getNextUpcomingDueDate(
+            dueAt,
+            template.recurring_frequency,
+            now,
+            template.recurring_end_date
+          );
+
+          if (nextDue !== dueAt) {
+            console.info("[recurring:normalize] next-due-updated", {
+              id: template._id,
+              item: template.item,
+              previousDue: dueAt,
+              nextDue,
+              frequency: template.recurring_frequency,
+            });
+
+            // Update in database
+            updates.push(
+              updateRecurringTemplate(template._id, {
+                recurring_next_due_at: nextDue,
+              })
+            );
+
+            // Return normalized template for immediate UI display
+            return { ...template, recurring_next_due_at: nextDue };
+          }
+        }
+
+        return template;
       });
+
+      // Persist updates to database
       if (updates.length > 0) {
         await Promise.allSettled(updates);
       }
-      setRecurringItems(normalized);
+
+      // Filter out expired templates
+      const active = normalized.filter((t) => now <= t.recurring_end_date);
+      setTemplates(active);
     } finally {
       setIsLoading(false);
     }
@@ -132,37 +136,24 @@ export const RecurringView = ({
     void loadRecurring();
   }, [loadRecurring, refreshKey]);
 
-  useEffect(() => {
-    if (recurringItems.length === 0) return;
-    const now = Date.now();
-    const nowDate = new Date(now);
-    for (const tx of recurringItems) {
-      const dueAt = getDueTimestamp(tx);
-      const reminder = tx.recurring_reminder_days ?? 5;
-      const daysUntilDue = dueAt
-        ? (dueAt - now) / (1000 * 60 * 60 * 24)
-        : null;
-      const dueDate = dueAt ? new Date(dueAt) : null;
-      const dueLabel = dueAt ? formatDueDate(dueAt) : "—";
-    }
-  }, [recurringItems]);
-
-  const dueSoonItems = useMemo(
+  // Due Soon: Templates where next payment is within reminder window
+  const dueSoonTemplates = useMemo(
     () =>
-      recurringItems.filter((tx) => {
-        const dueAt = getDueTimestamp(tx);
-        const reminder = tx.recurring_reminder_days ?? 5;
-        return dueAt ? isDueSoon(dueAt, reminder) : false;
+      templates.filter((template) => {
+        const dueAt = template.recurring_next_due_at;
+        const reminderDays = template.recurring_reminder_days ?? 5;
+        return isDueSoon(dueAt, reminderDays);
       }),
-    [recurringItems]
+    [templates]
   );
 
-  const upcomingItems = useMemo(
+  // Upcoming: All other active templates
+  const upcomingTemplates = useMemo(
     () =>
-      recurringItems.filter(
-        (tx) => !dueSoonItems.some((due) => due.id === tx.id)
+      templates.filter(
+        (template) => !dueSoonTemplates.some((due) => due._id === template._id)
       ),
-    [dueSoonItems, recurringItems]
+    [dueSoonTemplates, templates]
   );
 
   const toggleGroup = (group: TemplateGroup) => {
@@ -177,35 +168,33 @@ export const RecurringView = ({
     });
   };
 
-  const handleMarkAsPaid = async (tx: Transaction) => {
-    if (!tx.recurring_frequency) return;
-    const dueAt = getDueTimestamp(tx);
-    if (!dueAt) return;
-    if (dueAt <= Date.now()) return;
-    const nextDue = calculateNextDueDate(dueAt, tx.recurring_frequency);
-    await updateTransaction(tx.id, {
-      recurring_next_due_at: nextDue,
-      recurring_last_paid_at: Date.now(),
-    });
+  // COMMENTED OUT: Mark as Paid functionality (will be added later)
+  // const handleMarkAsPaid = async (template: Recurring_template) => {
+  //   // Future implementation
+  // };
+
+  const handleDelete = async (template: Recurring_template) => {
+    if (!confirm(`Delete "${template.item}" recurring template?`)) return;
+
+    await deleteRecurringTemplate(template._id);
     await loadRecurring();
   };
 
-  const handleDelete = async (tx: Transaction) => {
-    await deleteTransaction(tx.id);
-    await loadRecurring();
-  };
-
-  const renderCard = (tx: Transaction, showDueStatus = false, showMarkPaid = false) => {
-    const CategoryIcon = CATEGORY_ICON_MAP[tx.category as CategoryKey] ?? CATEGORY_ICON_MAP.Other;
-    const dueAt = getDueTimestamp(tx);
-    const dueSoon = dueAt ? isDueSoon(dueAt, tx.recurring_reminder_days ?? 5) : false;
-    const canMarkPaid = dueAt ? dueAt > Date.now() : false;
-    const dueLabel = dueAt ? formatDueDate(dueAt) : "—";
-    const dueCopy = dueAt ? `Due ${dueLabel}` : "No due date";
+  const renderCard = (
+    template: Recurring_template,
+    showDueBadge = false
+  ) => {
+    const CategoryIcon =
+      CATEGORY_ICON_MAP[template.category as CategoryKey] ??
+      CATEGORY_ICON_MAP.Other;
+    const dueAt = template.recurring_next_due_at;
+    const dueSoon = isDueSoon(dueAt, template.recurring_reminder_days ?? 5);
+    const dueLabel = formatDueDate(dueAt);
+    const dueCopy = `Due ${dueLabel}`;
 
     return (
       <motion.div
-        key={tx.id}
+        key={template._id}
         layout
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -215,8 +204,8 @@ export const RecurringView = ({
         <div className="flex items-start gap-3">
           <div
             className={`flex h-10 w-10 items-center justify-center rounded-full ${dueSoon
-              ? "bg-[var(--kk-saffron)]/10 text-[var(--kk-saffron)]"
-              : "bg-[var(--kk-cream)] text-[var(--kk-ash)]"
+                ? "bg-[var(--kk-saffron)]/10 text-[var(--kk-saffron)]"
+                : "bg-[var(--kk-cream)] text-[var(--kk-ash)]"
               }`}
           >
             <CategoryIcon className="h-5 w-5" />
@@ -225,23 +214,23 @@ export const RecurringView = ({
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
               <div className="font-medium text-[var(--kk-ink)] truncate">
-                {tx.item}
+                {template.item}
               </div>
               <div className="font-semibold text-[var(--kk-ink)] font-[family:var(--font-mono)]">
-                ₹{formatCurrency(tx.amount)}
+                ₹{formatCurrency(template.amount)}
               </div>
             </div>
 
             <div className="mt-1 flex items-center gap-3 text-xs text-[var(--kk-ash)]">
               <span className="flex min-w-[4rem] items-center gap-1">
                 <Clock className="h-3 w-3" />
-                {FREQUENCY_LABEL_MAP[tx.recurring_frequency ?? "monthly"]}
+                {FREQUENCY_LABEL_MAP[template.recurring_frequency]}
               </span>
-              {showDueStatus && (
+              {showDueBadge && (
                 <span
                   className={`flex min-w-[4rem] items-center gap-1 ${dueSoon
-                    ? "text-[var(--kk-saffron)] font-medium"
-                    : ""
+                      ? "text-[var(--kk-saffron)] font-medium"
+                      : ""
                     }`}
                 >
                   <Calendar className="h-3 w-3" />
@@ -255,7 +244,7 @@ export const RecurringView = ({
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => onEditRecurring(tx)}
+            onClick={() => onEditRecurring(template)}
             className="kk-btn-secondary kk-btn-compact"
           >
             <Pencil className="h-3.5 w-3.5" />
@@ -263,22 +252,24 @@ export const RecurringView = ({
           </button>
           <button
             type="button"
-            onClick={() => handleDelete(tx)}
+            onClick={() => handleDelete(template)}
             className="kk-btn-secondary kk-btn-compact"
           >
             <Trash2 className="h-3.5 w-3.5" />
             Delete
           </button>
-          {showMarkPaid && canMarkPaid && (
+          {/* COMMENTED OUT: Mark as Paid button (will be added later)
+          {showMarkPaid && (
             <button
               type="button"
-              onClick={() => handleMarkAsPaid(tx)}
+              onClick={() => handleMarkAsPaid(template)}
               className="kk-btn-primary kk-btn-compact"
             >
               <Check className="h-3.5 w-3.5" />
               Mark as Paid
             </button>
           )}
+          */}
         </div>
       </motion.div>
     );
@@ -319,7 +310,7 @@ export const RecurringView = ({
 
   return (
     <div className="space-y-6">
-      {recurringItems.length === 0 && (
+      {templates.length === 0 && (
         <EmptyState
           icon={<AlertCircle className="h-8 w-8 text-[var(--kk-ash)]" />}
           title="No recurring expenses yet"
@@ -328,30 +319,33 @@ export const RecurringView = ({
         />
       )}
 
-      {dueSoonItems.length > 0 && (
+      {/* Due Soon Section */}
+      {dueSoonTemplates.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <div className="kk-label text-[var(--kk-saffron)]">Due Soon</div>
             <div className="flex-1 border-t border-[var(--kk-smoke)]" />
           </div>
           <AnimatePresence>
-            {dueSoonItems.map((tx) => renderCard(tx, true, true))}
+            {dueSoonTemplates.map((template) => renderCard(template, true))}
           </AnimatePresence>
         </div>
       )}
 
-      {upcomingItems.length > 0 && (
+      {/* All Recurring Section */}
+      {upcomingTemplates.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <div className="kk-label">All recurring</div>
+            <div className="kk-label">All Recurring</div>
             <div className="flex-1 border-t border-[var(--kk-smoke)]" />
           </div>
           <AnimatePresence>
-            {upcomingItems.map((tx) => renderCard(tx, true, false))}
+            {upcomingTemplates.map((template) => renderCard(template, true))}
           </AnimatePresence>
         </div>
       )}
 
+      {/* Templates Section */}
       <div className="kk-card p-4 sm:p-5">
         <div className="flex items-center justify-between gap-2">
           <div>
@@ -372,7 +366,9 @@ export const RecurringView = ({
         {showTemplates && (
           <div className="mt-4 space-y-4">
             {TEMPLATE_GROUPS.map((group) => {
-              const templates = RECURRING_TEMPLATES.filter((t) => t.group === group.key);
+              const groupTemplates = RECURRING_TEMPLATES.filter(
+                (t) => t.group === group.key
+              );
               const isOpen = expandedGroups.has(group.key);
               return (
                 <div key={group.key} className="space-y-3">
@@ -397,7 +393,9 @@ export const RecurringView = ({
                   </button>
                   {isOpen && (
                     <div className="grid gap-3 sm:grid-cols-2">
-                      {templates.map((template) => renderTemplateCard(template))}
+                      {groupTemplates.map((template) =>
+                        renderTemplateCard(template)
+                      )}
                     </div>
                   )}
                 </div>

@@ -24,7 +24,7 @@ import {
 } from "@/src/db/db";
 import type { RecurringTemplate } from "@/src/config/recurring";
 import type { Expense } from "@/src/utils/schemas";
-import type { Transaction } from "@/src/types";
+import type { Transaction, Recurring_template } from "@/src/types";
 import { AlertCircle, PenLine, ImageUp } from "lucide-react";
 import { prepareReceiptImage } from "@/src/utils/imageProcessing";
 import {
@@ -120,7 +120,7 @@ const AppShell = () => {
   const [isRecurringModalOpen, setIsRecurringModalOpen] = useState(false);
   const [recurringModalMode, setRecurringModalMode] = useState<"new" | "edit">("new");
   const [selectedTemplate, setSelectedTemplate] = useState<RecurringTemplate | null>(null);
-  const [selectedRecurringTx, setSelectedRecurringTx] = useState<Transaction | null>(null);
+  const [selectedRecurringTemplate, setSelectedRecurringTemplate] = useState<Recurring_template | null>(null);
   // Show by default on localhost, or if PostHog is not enabled
   const [showHousehold, setShowHousehold] = useState(false);
 
@@ -289,13 +289,13 @@ const AppShell = () => {
 
   const handleAddRecurring = useCallback((template?: RecurringTemplate) => {
     setSelectedTemplate(template ?? null);
-    setSelectedRecurringTx(null);
+    setSelectedRecurringTemplate(null);
     setRecurringModalMode("new");
     setIsRecurringModalOpen(true);
   }, []);
 
-  const handleEditRecurring = useCallback((tx: Transaction) => {
-    setSelectedRecurringTx(tx);
+  const handleEditRecurring = useCallback((template: Recurring_template) => {
+    setSelectedRecurringTemplate(template);
     setSelectedTemplate(null);
     setRecurringModalMode("edit");
     setIsRecurringModalOpen(true);
@@ -304,24 +304,12 @@ const AppShell = () => {
   const handleCloseRecurringModal = useCallback(() => {
     setIsRecurringModalOpen(false);
     setSelectedTemplate(null);
-    setSelectedRecurringTx(null);
+    setSelectedRecurringTemplate(null);
   }, []);
 
-  const handleSaveRecurring = useCallback(
-    async (data: Transaction) => {
-      if (recurringModalMode === "edit" && selectedRecurringTx) {
-        await updateTransaction(selectedRecurringTx.id, data);
-        setEditedTx({ ...selectedRecurringTx, ...data, id: selectedRecurringTx.id });
-      } else {
-        const id = await addTransaction(data);
-        setAddedTx({ ...data, id });
-      }
-      setRefreshKey((prev) => prev + 1);
-      handleCloseRecurringModal();
-    },
-    [recurringModalMode, selectedRecurringTx, handleCloseRecurringModal]
-  );
-
+  const handleSaveRecurring = useCallback(() => {
+    refreshTransactions();
+  }, [refreshTransactions]);
   const startProcessing = () => {
     if (processingRef.current) return false;
     processingRef.current = true;
@@ -911,7 +899,7 @@ const AppShell = () => {
         isOpen={isRecurringModalOpen}
         mode={recurringModalMode}
         template={selectedTemplate}
-        transaction={selectedRecurringTx}
+        recurringTemplate={selectedRecurringTemplate}
         onClose={handleCloseRecurringModal}
         onSave={handleSaveRecurring}
       />
@@ -938,3 +926,4 @@ export default function Home() {
     </AppProvider>
   );
 }
+

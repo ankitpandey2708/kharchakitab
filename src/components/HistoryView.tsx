@@ -292,6 +292,15 @@ const TrendChart = React.memo(
   }
 );
 
+const getInitialFilter = (): FilterKey => {
+  if (typeof window === "undefined") return "month";
+  const stored = window.localStorage.getItem("kk_summary_view");
+  if (stored === "today" || stored === "week" || stored === "month") {
+    return stored;
+  }
+  return "month";
+};
+
 export const HistoryView = ({
   isOpen,
   onClose,
@@ -300,7 +309,7 @@ export const HistoryView = ({
   editedTx,
   refreshKey,
 }: HistoryViewProps) => {
-  const [filter, setFilter] = useState<FilterKey>("month");
+  const [filter, setFilter] = useState<FilterKey>(getInitialFilter);
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -314,6 +323,21 @@ export const HistoryView = ({
   const listRef = useRef<HTMLDivElement | null>(null);
   const listRequestRef = useRef(0);
   const skipSummarySyncRef = useRef(false);
+  const filterRef = useRef<FilterKey>(filter);
+  useEffect(() => {
+    filterRef.current = filter;
+  }, [filter]);
+  const handleSummaryReceive = useCallback((value: SummaryView) => {
+    console.info("[history:date] sync-receive", {
+      value,
+      prevFilter: filterRef.current,
+    });
+    setFilter((prev) => {
+      if (prev === value) return prev;
+      skipSummarySyncRef.current = true;
+      return value;
+    });
+  }, []);
   const { syncSummaryView } = useSummaryViewSync<SummaryView>({
     enabled: isOpen,
     listen: false,
@@ -321,13 +345,7 @@ export const HistoryView = ({
       value === "today" || value === "week" || value === "month"
         ? value
         : null,
-    onReceive: (value) => {
-      setFilter((prev) => {
-        if (prev === value) return prev;
-        skipSummarySyncRef.current = true;
-        return value;
-      });
-    },
+    onReceive: handleSummaryReceive,
   });
   const [isExporting, setIsExporting] = useState(false);
   const [isMetricsLoading, setIsMetricsLoading] = useState(false);
@@ -458,6 +476,13 @@ export const HistoryView = ({
     if (filter === "custom") return;
     const nextRange = getRangeForFilter(filter);
     if (!nextRange) return;
+    console.info("[history:date] preset-applied", {
+      filter,
+      nextStart: nextRange.start,
+      nextEnd: nextRange.end,
+      nextStartInput: toDateInputValue(nextRange.start),
+      nextEndInput: toDateInputValue(nextRange.end),
+    });
     setCustomStart(toDateInputValue(nextRange.start));
     setCustomEnd(toDateInputValue(nextRange.end));
   }, [filter]);
@@ -1258,8 +1283,29 @@ export const HistoryView = ({
                         key={option.key}
                         type="button"
                         onClick={() => {
+                          console.info("[history:date] preset-click", {
+                            preset: option.key,
+                            prevFilter: filter,
+                            prevStart: customStart,
+                            prevEnd: customEnd,
+                          });
                           const next = option.key as FilterKey;
                           setFilter(next);
+                          // Immediately update date inputs for preset filters
+                          if (next !== "custom") {
+                            const nextRange = getRangeForFilter(next);
+                            if (nextRange) {
+                              console.info("[history:date] preset-range", {
+                                preset: next,
+                                nextStart: nextRange.start,
+                                nextEnd: nextRange.end,
+                                nextStartInput: toDateInputValue(nextRange.start),
+                                nextEndInput: toDateInputValue(nextRange.end),
+                              });
+                              setCustomStart(toDateInputValue(nextRange.start));
+                              setCustomEnd(toDateInputValue(nextRange.end));
+                            }
+                          }
                         }}
                         className={`kk-chip kk-chip-filter whitespace-nowrap transition ${filter === option.key ? "kk-chip-active" : "kk-chip-muted"
                           }`}
@@ -1275,6 +1321,7 @@ export const HistoryView = ({
                           <span className="opacity-70 sm:opacity-100">From</span>
                           <span className="flex items-center gap-0.5">
                             <input
+                              key={`start-${filter}-${customStart}`}
                               type="date"
                               value={customStart}
                               ref={customStartRef}
@@ -1284,10 +1331,11 @@ export const HistoryView = ({
                                 event.preventDefault();
                               }}
                               onClick={() => {
-                                if (filter !== "custom") setFilter("custom");
-                                window.setTimeout(() => {
-                                  triggerPicker(customStartRef);
-                                }, 0);
+                                if (filter !== "custom") {
+                                  setFilter("custom");
+                                  return;
+                                }
+                                triggerPicker(customStartRef);
                               }}
                               onKeyDown={(event) => {
                                 event.preventDefault();
@@ -1300,6 +1348,11 @@ export const HistoryView = ({
                               }}
                               onChange={(event) => {
                                 if (filter !== "custom") setFilter("custom");
+                                console.info("[history:date] start-change", {
+                                  nextValue: event.target.value,
+                                  prevValue: customStart,
+                                  filter,
+                                });
                                 setCustomStart(event.target.value);
                               }}
                               className="kk-input kk-input-compact kk-date-input w-[6.25rem] bg-transparent normal-case text-[var(--kk-ink)] outline-none disabled:pointer-events-none disabled:cursor-default disabled:text-[var(--kk-ash)] sm:w-[7rem]"
@@ -1310,9 +1363,7 @@ export const HistoryView = ({
                               onClick={() => {
                                 if (filter !== "custom") {
                                   setFilter("custom");
-                                  window.setTimeout(() => {
-                                    triggerPicker(customStartRef);
-                                  }, 0);
+                                  return;
                                 } else {
                                   triggerPicker(customStartRef);
                                 }
@@ -1328,6 +1379,7 @@ export const HistoryView = ({
                           <span className="opacity-70 sm:opacity-100">To</span>
                           <span className="flex items-center gap-0.5">
                             <input
+                              key={`end-${filter}-${customEnd}`}
                               type="date"
                               value={customEnd}
                               min={customStart || undefined}
@@ -1338,10 +1390,11 @@ export const HistoryView = ({
                                 event.preventDefault();
                               }}
                               onClick={() => {
-                                if (filter !== "custom") setFilter("custom");
-                                window.setTimeout(() => {
-                                  triggerPicker(customEndRef);
-                                }, 0);
+                                if (filter !== "custom") {
+                                  setFilter("custom");
+                                  return;
+                                }
+                                triggerPicker(customEndRef);
                               }}
                               onKeyDown={(event) => {
                                 event.preventDefault();
@@ -1354,6 +1407,11 @@ export const HistoryView = ({
                               }}
                               onChange={(event) => {
                                 if (filter !== "custom") setFilter("custom");
+                                console.info("[history:date] end-change", {
+                                  nextValue: event.target.value,
+                                  prevValue: customEnd,
+                                  filter,
+                                });
                                 setCustomEnd(event.target.value);
                               }}
                               className="kk-input kk-input-compact kk-date-input w-[6.25rem] bg-transparent normal-case text-[var(--kk-ink)] outline-none disabled:pointer-events-none disabled:cursor-default disabled:text-[var(--kk-ash)] sm:w-[7rem]"
@@ -1364,9 +1422,7 @@ export const HistoryView = ({
                               onClick={() => {
                                 if (filter !== "custom") {
                                   setFilter("custom");
-                                  window.setTimeout(() => {
-                                    triggerPicker(customEndRef);
-                                  }, 0);
+                                  return;
                                 } else {
                                   triggerPicker(customEndRef);
                                 }

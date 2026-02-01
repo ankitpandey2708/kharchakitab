@@ -2,6 +2,7 @@ import { openDB, type DBSchema, type IDBPIndex } from "idb";
 import type {
   DeviceIdentity,
   PairingRecord,
+  Recurring_template,
   SyncState,
   Transaction,
   TransactionVersion,
@@ -50,10 +51,18 @@ interface QuickLogDB {
       "by-last-sync": number;
     };
   };
+  recurring_templates: {
+    key: string;
+    value: Recurring_template;
+    indexes: {
+      "by-next-due": number;
+      "by-owner": string;
+    };
+  };
 }
 
 const DB_NAME = "QuickLogDB";
-const DB_VERSION = 3;
+const DB_VERSION = 4; // Incremented for recurring_templates store
 const queryCache = new Map<string, Transaction[]>();
 
 const getDb = () =>
@@ -108,6 +117,14 @@ const getDb = () =>
           keyPath: "partner_device_id",
         });
         syncState.createIndex("by-last-sync", "last_sync_at");
+      }
+
+      if (!db.objectStoreNames.contains("recurring_templates")) {
+        const templates = db.createObjectStore("recurring_templates", {
+          keyPath: "_id",
+        });
+        templates.createIndex("by-next-due", "recurring_next_due_at");
+        templates.createIndex("by-owner", "owner_device_id");
       }
 
       if (oldVersion < 2) {
@@ -634,4 +651,174 @@ export const isTransactionShared = async (id: string): Promise<boolean> => {
 
 export const clearCacheForSync = () => {
   clearCache();
+};
+// At the end of the db.ts file - add these functions
+
+// ===== RECURRING TEMPLATES CRUD =====
+
+export const createRecurringTemplate = async (templateData: Omit<Recurring_template, "_id" | "created_at" | "updated_at" | "recurring_next_due_at" | "recurring_last_paid_at" | "owner_device_id" | "version">): Promise<string> => {
+    const { calculateNextDueDate, getNextUpcomingDueDate } = await import("@/src/config/recurring");
+
+    const db = await getDb();
+    const identity = await getDeviceIdentity();
+    const now = Date.now();
+    const startDate = templateData.recurring_start_date;
+
+    // Calculate first upcoming due date
+    let nextDueAt = startDate;
+
+    // If start_date is in the past, find next occurrence
+    if (startDate < now) {
+        nextDueAt = getNextUpcomingDueDate(
+            startDate,
+            templateData.recurring_frequency,
+            now,
+            templateData.recurring_end_date
+        );
+    }
+
+    const template: Recurring_template = {
+        ...templateData,
+        _id: generateId(),
+        recurring_next_due_at: nextDueAt,
+        owner_device_id: identity.device_id,
+        created_at: now,
+        updated_at: now,
+    };
+
+    await db.put("recurring_templates", template);
+
+    // Generate future transactions
+    const transactions = await generateRecurringTransactions(template);
+    for (const tx of transactions) {
+        await db.put("transactions", tx);
+    }
+
+    clearCache();
+    return template._id;
+};
+
+export const getRecurringTemplates = async (): Promise<Recurring_template[]> => {
+    const db = await getDb();
+    return db.getAll("recurring_templates");
+};
+
+export const getRecurringTemplateById = async (id: string): Promise<Recurring_template | undefined> => {
+    const db = await getDb();
+    return db.get("recurring_templates", id);
+};
+
+export const updateRecurringTemplate = async (
+    id: string,
+    updates: Partial<Recurring_template>
+): Promise<void> => {
+    const { getNextUpcomingDueDate } = await import("@/src/config/recurring");
+
+    const db = await getDb();
+    const existing = await db.get("recurring_templates", id);
+    if (!existing) return;
+
+    const now = Date.now();
+    let nextUpdates = { ...updates, updated_at: now };
+
+    // Recalculate next_due_at if frequency or dates changed
+    if (
+        updates.recurring_frequency ||
+        updates.recurring_start_date !== undefined ||
+        updates.recurring_end_date !== undefined
+    ) {
+        const newStartDate = updates.recurring_start_date ?? existing.recurring_start_date;
+        const newFrequency = updates.recurring_frequency ?? existing.recurring_frequency;
+        const newEndDate = updates.recurring_end_date ?? existing.recurring_end_date;
+
+        nextUpdates.recurring_next_due_at = getNextUpcomingDueDate(
+            newStartDate,
+            newFrequency,
+            now,
+            newEndDate
+        );
+    }
+
+    const updated: Recurring_template = {
+        ...existing,
+        ...nextUpdates,
+    };
+
+    await db.put("recurring_templates", updated);
+
+    // Delete and regenerate transactions
+    await deleteGeneratedTransactions(id);
+    const transactions = await generateRecurringTransactions(updated);
+    for (const tx of transactions) {
+        await db.put("transactions", tx);
+    }
+
+    clearCache();
+};
+
+export const deleteRecurringTemplate = async (id: string): Promise<void> => {
+    const db = await getDb();
+    await db.delete("recurring_templates", id);
+    await deleteGeneratedTransactions(id);
+    clearCache();
+};
+
+// ===== TRANSACTION GENERATION =====
+
+export const generateRecurringTransactions = async (template: Recurring_template): Promise<Transaction[]> => {
+    const { calculateNextDueDate, getNextUpcomingDueDate } = await import("@/src/config/recurring");
+
+    const transactions: Transaction[] = [];
+    const now = Date.now();
+
+    // Start from max(start_date, today) - ONLY FUTURE
+    let currentDate = Math.max(template.recurring_start_date, now);
+
+    // Align to next occurrence if currentDate is in the past
+    if (currentDate === template.recurring_start_date && currentDate < now) {
+        currentDate = getNextUpcomingDueDate(
+            currentDate,
+            template.recurring_frequency,
+            now,
+            template.recurring_end_date
+        );
+    }
+
+    const endDate = template.recurring_end_date;
+
+    while (currentDate <= endDate) {
+        transactions.push({
+            id: generateId(),
+            amount: template.amount,
+            item: template.item,
+            category: template.category,
+            paymentMethod: template.paymentMethod,
+            timestamp: currentDate,
+            recurring: true,
+            recurring_template_id: template._id,
+            owner_device_id: template.owner_device_id,
+            created_at: Date.now(),
+            updated_at: Date.now(),
+        });
+
+        currentDate = calculateNextDueDate(currentDate, template.recurring_frequency);
+    }
+
+    return transactions;
+};
+
+export const deleteGeneratedTransactions = async (templateId: string): Promise<void> => {
+    const db = await getDb();
+    const tx = db.transaction("transactions", "readwrite");
+    const store = tx.store;
+
+    let cursor = await store.openCursor();
+    while (cursor) {
+        const value = cursor.value as Transaction;
+        if (value.recurring && value.recurring_template_id === templateId) {
+            await cursor.delete();
+        }
+        cursor = await cursor.continue();
+    }
+    await tx.done;
 };

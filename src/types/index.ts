@@ -16,13 +16,27 @@ export interface Transaction {
   deleted_at?: number | null;
   conflict?: boolean;
   recurring?: boolean;
-  recurring_frequency?: Frequency;
-  recurring_start_date?: number;
-  recurring_end_date?: number;
-  recurring_next_due_at?: number;
-  recurring_last_paid_at?: number;
   recurring_template_id?: string;
-  recurring_reminder_days?: number;
+}
+
+export interface Recurring_template {
+  _id: string;
+  item: string;
+  category: string;
+  amount: number;
+  paymentMethod: "cash" | "upi" | "card" | "unknown";
+  recurring_frequency: Frequency;
+  recurring_start_date: number;
+  recurring_end_date: number;
+  recurring_next_due_at: number;
+  recurring_last_paid_at?: number;
+  recurring_reminder_days: number;
+
+  // Standard fields
+  owner_device_id?: string;
+  created_at: number;
+  updated_at: number;
+  version?: number;
 }
 
 export interface AppState {

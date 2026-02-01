@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 const SUMMARY_VIEW_KEY = "kk_summary_view";
 const SUMMARY_VIEW_EVENT = "kk-summary-view-change";
 
@@ -15,30 +15,60 @@ export const useSummaryViewSync = <T extends string>({
   parse,
   onReceive,
 }: SummaryViewSyncOptions<T>) => {
+  const parseRef = useRef(parse);
+  const onReceiveRef = useRef(onReceive);
+  useEffect(() => {
+    parseRef.current = parse;
+    onReceiveRef.current = onReceive;
+  }, [onReceive, parse]);
+
   const syncSummaryView = useCallback((value: T) => {
     if (typeof window === "undefined") return;
     const stored = window.localStorage.getItem(SUMMARY_VIEW_KEY);
+    console.info("[summary-sync] write-attempt", {
+      key: SUMMARY_VIEW_KEY,
+      value,
+      stored,
+    });
     if (stored === value) return;
     window.localStorage.setItem(SUMMARY_VIEW_KEY, value);
+    console.info("[summary-sync] write-commit", {
+      key: SUMMARY_VIEW_KEY,
+      value,
+    });
     window.dispatchEvent(new CustomEvent(SUMMARY_VIEW_EVENT, { detail: value }));
+    console.info("[summary-sync] dispatch", {
+      event: SUMMARY_VIEW_EVENT,
+      detail: value,
+    });
   }, []);
 
   useEffect(() => {
     if (!enabled || typeof window === "undefined") return;
     const stored = window.localStorage.getItem(SUMMARY_VIEW_KEY);
-    const parsed = parse(stored);
+    console.info("[summary-sync] init-read", {
+      key: SUMMARY_VIEW_KEY,
+      stored,
+      enabled,
+      listen,
+    });
+    const parsed = parseRef.current(stored);
     if (parsed !== null) {
-      onReceive?.(parsed);
+      onReceiveRef.current?.(parsed);
     }
-  }, [enabled, onReceive, parse]);
+  }, [enabled]);
 
   useEffect(() => {
     if (!enabled || !listen || typeof window === "undefined") return;
     const handleSummaryChange = (event: Event) => {
       const detail = (event as CustomEvent<string>).detail ?? null;
-      const parsed = parse(detail);
+      console.info("[summary-sync] event-receive", {
+        event: SUMMARY_VIEW_EVENT,
+        detail,
+      });
+      const parsed = parseRef.current(detail);
       if (parsed !== null) {
-        onReceive?.(parsed);
+        onReceiveRef.current?.(parsed);
       }
     };
     window.addEventListener(
@@ -51,7 +81,7 @@ export const useSummaryViewSync = <T extends string>({
         handleSummaryChange as EventListener
       );
     };
-  }, [enabled, listen, onReceive, parse]);
+  }, [enabled, listen]);
 
   return { syncSummaryView };
 };

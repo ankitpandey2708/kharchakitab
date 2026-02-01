@@ -13,15 +13,19 @@ import {
 import { useEscapeKey } from "@/src/hooks/useEscapeKey";
 import { toDateInputValue } from "@/src/utils/dates";
 import { normalizeAmount } from "@/src/utils/money";
-import type { Transaction } from "@/src/types";
+import type { Recurring_template } from "@/src/types";
+import {
+  createRecurringTemplate,
+  updateRecurringTemplate,
+} from "@/src/db/db";
 
 interface RecurringEditModalProps {
   isOpen: boolean;
   mode: "new" | "edit";
-  template?: RecurringTemplate | null;
-  transaction?: Transaction | null;
+  template?: RecurringTemplate | null; // UI template (for quick add)
+  recurringTemplate?: Recurring_template | null; //  DB template (for editing)
   onClose: () => void;
-  onSave: (data: Transaction) => void;
+  onSave: () => void; // Just refresh, no data needed
 }
 
 const sanitizeAmountInput = (value: string) => {
@@ -46,7 +50,7 @@ export const RecurringEditModal = ({
   isOpen,
   mode,
   template,
-  transaction,
+  recurringTemplate,
   onClose,
   onSave,
 }: RecurringEditModalProps) => {
@@ -57,25 +61,26 @@ export const RecurringEditModal = ({
   const [frequency, setFrequency] = useState<Frequency>("monthly");
   const [startDate, setStartDate] = useState(toDateInputValue(Date.now()));
   const [endDate, setEndDate] = useState(toDateInputValue(Date.now()));
-  const [reminderDays, setReminderDays] = useState(3);
+  const [reminderDays, setReminderDays] = useState(5);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
-    if (mode === "edit" && transaction) {
-      setName(transaction.item);
-      setAmountValue(transaction.amount.toString());
-      setCategory(transaction.category);
-      setPaymentMethod(transaction.paymentMethod);
-      setFrequency(transaction.recurring_frequency ?? "monthly");
-      setStartDate(
-        toDateInputValue(transaction.recurring_start_date ?? Date.now())
-      );
-      setEndDate(
-        toDateInputValue(transaction.recurring_end_date ?? Date.now())
-      );
-      setReminderDays(transaction.recurring_reminder_days ?? 3);
+
+    // Edit mode: load from DB template
+    if (mode === "edit" && recurringTemplate) {
+      setName(recurringTemplate.item);
+      setAmountValue(recurringTemplate.amount.toString());
+      setCategory(recurringTemplate.category);
+      setPaymentMethod(recurringTemplate.paymentMethod);
+      setFrequency(recurringTemplate.recurring_frequency);
+      setStartDate(toDateInputValue(recurringTemplate.recurring_start_date));
+      setEndDate(toDateInputValue(recurringTemplate.recurring_end_date));
+      setReminderDays(recurringTemplate.recurring_reminder_days);
       return;
     }
+
+    // New mode with UI template (quick add)
     if (template) {
       setName(template.name);
       setAmountValue(template.suggestedAmount?.toString() ?? "");
@@ -85,9 +90,11 @@ export const RecurringEditModal = ({
       const now = Date.now();
       setStartDate(toDateInputValue(now));
       setEndDate(toDateInputValue(addOneYear(now)));
-      setReminderDays(3);
+      setReminderDays(5);
       return;
     }
+
+    // New mode blank
     setName("");
     setAmountValue("");
     setCategory("Bills");
@@ -96,8 +103,8 @@ export const RecurringEditModal = ({
     const now = Date.now();
     setStartDate(toDateInputValue(now));
     setEndDate(toDateInputValue(addOneYear(now)));
-    setReminderDays(3);
-  }, [isOpen, mode, template, transaction]);
+    setReminderDays(5);
+  }, [isOpen, mode, template, recurringTemplate]);
 
   useEscapeKey(isOpen, onClose);
 
@@ -111,63 +118,63 @@ export const RecurringEditModal = ({
     return { ok: true, error: "" };
   }, [amountValue, endDate, name, startDate]);
 
-  const handleSave = () => {
-    if (!validation.ok) return;
+  const handleSave = async () => {
+    if (!validation.ok || isSaving) return;
+
     const amount = normalizeAmount(Number(amountValue || 0));
     const startTs = toTimestamp(startDate);
     const endTs = toTimestamp(endDate);
     if (!startTs || !endTs) return;
 
-    const existing = transaction;
-    const existingTimestamp = existing?.timestamp ?? startTs;
-    let nextDue = existing?.recurring_next_due_at ?? startTs;
-    if (nextDue < startTs || nextDue > endTs) {
-      nextDue = startTs;
+    setIsSaving(true);
+
+    try {
+      if (mode === "new") {
+        // Create new template (also generates transactions)
+        await createRecurringTemplate({
+          item: name.trim(),
+          category,
+          amount,
+          paymentMethod,
+          recurring_frequency: frequency,
+          recurring_start_date: startTs,
+          recurring_end_date: endTs,
+          recurring_reminder_days: reminderDays,
+        });
+
+        console.info("[recurring:create] template-created", {
+          item: name.trim(),
+          startDate: startTs,
+          endDate: endTs,
+          frequency,
+        });
+      } else if (recurringTemplate) {
+        // Update existing template (deletes old txns, generates new ones)
+        await updateRecurringTemplate(recurringTemplate._id, {
+          item: name.trim(),
+          category,
+          amount,
+          paymentMethod,
+          recurring_frequency: frequency,
+          recurring_start_date: startTs,
+          recurring_end_date: endTs,
+          recurring_reminder_days: reminderDays,
+        });
+
+        console.info("[recurring:update] template-updated", {
+          id: recurringTemplate._id,
+          item: name.trim(),
+        });
+      }
+
+      onSave(); // Trigger parent to reload
+      onClose();
+    } catch (error) {
+      console.error("[recurring:save] error", error);
+      alert("Failed to save recurring template. Please try again.");
+    } finally {
+      setIsSaving(false);
     }
-
-    if (mode === "new") {
-      console.info("[recurring:add] due-date-calculation", {
-        now: Date.now(),
-        startDate,
-        endDate,
-        startTs,
-        endTs,
-        nextDue,
-        frequency,
-        reminderDays,
-      });
-    } else {
-      console.info("[recurring:edit] due-date-calculation", {
-        now: Date.now(),
-        startDate,
-        endDate,
-        startTs,
-        endTs,
-        nextDue,
-        frequency,
-        reminderDays,
-        existingNextDue: existing?.recurring_next_due_at ?? null,
-      });
-    }
-
-    const next: Transaction = {
-      ...(existing ?? {}),
-      id: existing?.id ?? "",
-      amount,
-      item: name.trim(),
-      category,
-      paymentMethod,
-      timestamp: existingTimestamp,
-      recurring: true,
-      recurring_frequency: frequency,
-      recurring_start_date: startTs,
-      recurring_end_date: endTs,
-      recurring_next_due_at: nextDue,
-      recurring_template_id: template?.id ?? existing?.recurring_template_id,
-      recurring_reminder_days: reminderDays,
-    };
-
-    onSave(next);
   };
 
   return (
@@ -208,7 +215,7 @@ export const RecurringEditModal = ({
                     {mode === "new" ? "Add recurring" : "Edit recurring"}
                   </div>
                   <div className="mt-1 text-xs text-[var(--kk-ash)]">
-                    Set the cadence once, we’ll keep it on track.
+                    Set the cadence once, we'll keep it on track.
                   </div>
                 </div>
                 <button type="button" onClick={onClose} className="kk-icon-btn mt-1">
@@ -276,11 +283,10 @@ export const RecurringEditModal = ({
                         key={option.key}
                         type="button"
                         onClick={() => setFrequency(option.key)}
-                        className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                          isActive
+                        className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${isActive
                             ? "border-[var(--kk-ember)] bg-[var(--kk-ember)] text-white"
                             : "border-[var(--kk-smoke-heavy)] text-[var(--kk-ink)] hover:border-[var(--kk-ember)]"
-                        }`}
+                          }`}
                       >
                         {option.shortLabel}
                       </button>
@@ -303,11 +309,10 @@ export const RecurringEditModal = ({
                           key={option.key}
                           type="button"
                           onClick={() => setPaymentMethod(option.key)}
-                          className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                            isActive
+                          className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition ${isActive
                               ? "border-[var(--kk-ember)] bg-[var(--kk-ember)] text-white"
                               : "border-[var(--kk-smoke-heavy)] text-[var(--kk-ink)] hover:border-[var(--kk-ember)]"
-                          }`}
+                            }`}
                         >
                           <Icon className="h-3 w-3" />
                           {option.label}
@@ -370,10 +375,13 @@ export const RecurringEditModal = ({
               <button
                 type="button"
                 onClick={handleSave}
-                disabled={!validation.ok}
+                disabled={!validation.ok || isSaving}
                 className="kk-btn-primary mt-6 w-full"
               >
-                {mode === "new" ? "Save recurring" : "Update recurring"}
+                {isSaving
+                  ? "Saving..."
+                  : mode === "new" ? "Save recurring" : "Update recurring"
+                }
               </button>
             </div>
           </motion.div>
