@@ -232,7 +232,7 @@ const TrendChart = React.memo(
                         }}
                     >
                         <div className="kk-micro font-semibold text-[var(--kk-ink)]">
-                            ₹{formatCurrency(chartMeta.points[hoverIndex].value)}
+                            <span className="kk-rupee">₹</span>{formatCurrency(chartMeta.points[hoverIndex].value)}
                         </div>
                         <div>
                             {bucket === "hour"

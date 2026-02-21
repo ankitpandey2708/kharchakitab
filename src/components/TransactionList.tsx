@@ -838,7 +838,7 @@ export const TransactionList = React.memo(({
           <div className="text-center sm:text-left">
             <div className="kk-label">Total</div>
             <div className="mt-1 flex items-baseline justify-center gap-1 sm:justify-start">
-              <span className="kk-rupee">₹</span>
+              <span className="kk-rupee text-[clamp(1rem,4vw,1.4rem)] font-bold font-[family:var(--font-mono)]">₹</span>
               <span className="text-[clamp(1.9rem,8.5vw,2.7rem)] font-bold leading-none tracking-tight font-[family:var(--font-mono)] sm:text-4xl">
                 {formatCurrency(viewTotal)}
               </span>
@@ -847,7 +847,7 @@ export const TransactionList = React.memo(({
           {totalCount > 0 && (
             <div className="flex flex-wrap items-center gap-2">
               <span className="kk-pill kk-pill-muted">
-                {totalCount} {totalCount === 1 ? "transaction" : "transactions"}
+                {totalCount} {totalCount === 1 ? "txn" : "txns"}
               </span>
               <span className="kk-pill kk-pill-muted">
                 Avg:{" "}
