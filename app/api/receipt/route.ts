@@ -5,7 +5,7 @@ import { getPostHogClient } from "@/src/lib/posthog-server";
 
 export const runtime = "nodejs";
 
-const GEMINI_MODEL = "models/gemini-3-flash-preview";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "models/gemini-3-flash-preview";
 
 export async function POST(request: NextRequest) {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
       ],
       generationConfig: {
         temperature: 0,
+        maxOutputTokens: 256,
         responseMimeType: "application/json",
         thinkingConfig: {
           thinking_level: "MINIMAL",

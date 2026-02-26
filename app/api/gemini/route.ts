@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
       ],
       generationConfig: {
         temperature: 0,
+        maxOutputTokens: 256,
         responseMimeType: "application/json",
         thinkingConfig: {
           thinking_level: "MINIMAL",
