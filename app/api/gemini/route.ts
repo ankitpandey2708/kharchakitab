@@ -27,6 +27,13 @@ export async function POST(request: NextRequest) {
           parts: [{ text }],
         },
       ],
+      generationConfig: {
+        temperature: 0,
+        responseMimeType: "application/json",
+        thinkingConfig: {
+          thinking_level: "MINIMAL",
+        },
+      },
     }),
   });
 
