@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { rateLimitByIp } from "@/src/lib/ratelimit";
 import { getPostHogClient } from "@/src/lib/posthog-server";
 
-const SARVAM_ENDPOINT = "https://api.sarvam.ai/speech-to-text-translate";
+const SARVAM_ENDPOINT = "https://api.sarvam.ai/speech-to-text";
 
 export async function POST(request: NextRequest) {
   const limit = await rateLimitByIp(request, {
@@ -42,7 +42,9 @@ export async function POST(request: NextRequest) {
 
   const formData = new FormData();
   formData.append("file", normalizedFile, "audio.webm");
-  formData.append("model", "saaras:v2.5");
+  const sarvamModel = process.env.SARVAM_MODEL || "saaras:v3";
+  formData.append("model", sarvamModel);
+  formData.append("mode", "translate");
 
   const response = await fetch(SARVAM_ENDPOINT, {
     method: "POST",
@@ -64,8 +66,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const data = (await response.json()) as { text?: string; transcript?: string };
-  const transcriptText = data.text || data.transcript || "";
+  const data = (await response.json()) as { transcript?: string; language_code?: string | null };
+  const transcriptText = data.transcript || "";
 
   // Track successful transcription server-side
   const distinctId = request.headers.get("x-posthog-distinct-id") || "anonymous";
