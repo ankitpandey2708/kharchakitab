@@ -119,7 +119,7 @@ export const EditModal = React.memo(({
               damping: 30,
               stiffness: 300,
             }}
-            className="w-full max-w-md overflow-hidden kk-radius-top-xl border border-[var(--kk-smoke)] bg-[var(--kk-cream)] kk-shadow-lg max-h-[90vh] overflow-y-auto"
+            className="w-full max-w-md overflow-hidden kk-radius-xl border border-[var(--kk-smoke)] bg-[var(--kk-cream)] kk-shadow-lg max-h-[90vh] overflow-y-auto"
           >
             {/* Handle bar */}
             <div className="flex justify-center pt-3 pb-2">

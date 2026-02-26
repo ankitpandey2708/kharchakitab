@@ -758,7 +758,7 @@ export const TransactionList = React.memo(({
             className="mt-4 kk-btn-secondary kk-btn-compact"
           >
             <Upload className="h-3.5 w-3.5" />
-            Import from CSV
+            Import
           </button>
         </EmptyState>
         {isImportOpen && (
