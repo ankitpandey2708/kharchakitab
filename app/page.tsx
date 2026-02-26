@@ -626,7 +626,7 @@ const AppShell = () => {
   useEffect(() => {
     const label = new Date().toLocaleDateString("en-IN", {
       weekday: "short",
-      day: "numeric",
+      day: "2-digit",
       month: "short",
     });
     setTodayLabel(label);

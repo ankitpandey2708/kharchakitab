@@ -45,7 +45,7 @@ const getMetaLabel = (timestamp: number, variant: MetaVariant) => {
   }
   return date.toLocaleDateString("en-IN", {
     month: "short",
-    day: "numeric",
+    day: "2-digit",
   });
 };
 

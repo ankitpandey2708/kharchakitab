@@ -242,7 +242,7 @@ const TrendChart = React.memo(
                                 )
                                 : new Date(chartMeta.points[hoverIndex].ts).toLocaleDateString(
                                     "en-IN",
-                                    { day: "numeric", month: "short" }
+                                    { day: "2-digit", month: "short" }
                                 )}
                         </div>
                     </div>

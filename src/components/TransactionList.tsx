@@ -420,7 +420,7 @@ export const TransactionList = React.memo(({
     nextMonth.setMonth(nextMonth.getMonth() + 1, 1);
     return `Resets on ${nextMonth.toLocaleDateString("en-IN", {
       month: "short",
-      day: "numeric",
+      day: "2-digit",
     })}`;
   }, []);
   const handleBudgetSave = () => {
@@ -929,7 +929,7 @@ export const TransactionList = React.memo(({
                 const processing = isProcessingRow(tx);
                 const rowKey = tx.id || `recent-${index}`;
                 const date = new Date(tx.timestamp);
-                const day = String(date.getDate());
+                const day = String(date.getDate()).padStart(2, "0");
                 const month = date
                   .toLocaleDateString("en-IN", { month: "short" })
                   .toUpperCase();

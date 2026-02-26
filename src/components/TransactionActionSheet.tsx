@@ -25,7 +25,7 @@ interface TransactionActionSheetProps {
 const formatSheetMeta = (timestamp: number) =>
   new Date(timestamp).toLocaleString("en-IN", {
     month: "short",
-    day: "numeric",
+    day: "2-digit",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",

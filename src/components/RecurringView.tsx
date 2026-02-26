@@ -106,14 +106,14 @@ const formatDueDate = (timestamp: number): string => {
   const diffDays = Math.ceil((timestamp - Date.now()) / (1000 * 60 * 60 * 24));
   if (diffDays < 0) {
     return `Due ${date.toLocaleDateString("en-IN", {
-      day: "numeric",
+      day: "2-digit",
       month: "short",
     })}`;
   }
   if (diffDays <= 7) return `Due in ${diffDays} days`;
 
   return `Next: ${date.toLocaleDateString("en-IN", {
-    day: "numeric",
+    day: "2-digit",
     month: "short",
   })}`;
 };
@@ -550,7 +550,7 @@ export const RecurringView = React.memo(({
                   <Calendar className="h-3 w-3" />
                   Ended:{" "}
                   {new Date(template.recurring_end_date).toLocaleDateString("en-IN", {
-                    day: "numeric",
+                    day: "2-digit",
                     month: "short",
                   })}
                 </span>

@@ -330,8 +330,8 @@ export const HistoryView = React.memo(({
       date.toLocaleDateString(
         "en-IN",
         showYear
-          ? { month: "short", day: "numeric", year: "numeric" }
-          : { month: "short", day: "numeric" }
+          ? { month: "short", day: "2-digit", year: "numeric" }
+          : { month: "short", day: "2-digit" }
       );
     if (sameDay) return format(startDate);
     return `${format(startDate)} - ${format(endDate)}`;
@@ -769,7 +769,7 @@ export const HistoryView = React.memo(({
       ).getTime();
       const label = dateObj.toLocaleDateString("en-IN", {
         month: "short",
-        day: "numeric",
+        day: "2-digit",
         year: "numeric",
       });
       const group = groups.get(dayKey) ?? { label, items: [], total: 0 };
@@ -818,7 +818,7 @@ export const HistoryView = React.memo(({
       const date = new Date(point.x);
       return trendMetrics.bucket === "hour"
         ? date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
-        : date.toLocaleDateString("en-IN", { month: "short", day: "numeric" });
+        : date.toLocaleDateString("en-IN", { month: "short", day: "2-digit" });
     });
   }, [trendMetrics.bucket, trendMetrics.series]);
   const weekStats = useMemo(() => {
