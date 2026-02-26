@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
         maxOutputTokens: 256,
         responseMimeType: "application/json",
         thinkingConfig: {
-          thinking_level: "MINIMAL",
+          thinkingLevel: "MINIMAL",
         },
       },
     }),
