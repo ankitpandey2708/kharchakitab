@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPostHogClient } from "@/src/lib/posthog-server";
 
-const GEMINI_MODEL = "models/gemini-3-flash-preview";
-
 export async function POST(request: NextRequest) {
+  const GEMINI_MODEL = process.env.GEMINI_MODEL || "models/gemini-3-flash-preview";
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ error: "Missing GEMINI_API_KEY." }, { status: 500 });

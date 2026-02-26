@@ -5,7 +5,7 @@ import { getPostHogClient } from "@/src/lib/posthog-server";
 
 export const runtime = "nodejs";
 
-const GEMINI_MODEL = "models/gemini-2.5-flash";
+const GEMINI_MODEL = "models/gemini-3-flash-preview";
 
 export async function POST(request: NextRequest) {
   const apiKey = process.env.GEMINI_API_KEY;
