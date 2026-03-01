@@ -20,9 +20,9 @@ P2
 - hi-IN, bn-IN, kn-IN, ml-IN, mr-IN, od-IN, pa-IN, ta-IN, te-IN, gu-IN, en-IN
 
 # Pricing
-1. cap on voice based entry, family mode
+1. cap on voice based entry
 2. if MAU=1000 , then show Ads to free user.
-3. custom alerts.
+3. RAG chat on insights and household.
 *******
 await new Promise(r => indexedDB.open("QuickLogDB").onsuccess = e => e.target.result.transaction("transactions").objectStore("transactions").getAll().onsuccess = ev => r(ev.target.result.sort((a, b) => a.timestamp - b.timestamp).map(tx => ({...tx, timestamp: new Date(tx.timestamp).toLocaleDateString("en-IN", {day: "2-digit", month: "short", year: "numeric"})}))));
 *******
