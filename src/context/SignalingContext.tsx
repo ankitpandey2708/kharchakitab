@@ -97,10 +97,15 @@ export const SignalingProvider = ({ children }: { children: React.ReactNode }) =
     );
 };
 
-export const useSignaling = () => {
+const NOOP_VALUE: SignalingContextValue = {
+    client: null,
+    isConnected: false,
+    error: null,
+    reconnect: async () => { },
+    disconnect: () => { },
+};
+
+export const useSignaling = (): SignalingContextValue => {
     const ctx = useContext(SignalingContext);
-    if (!ctx) {
-        throw new Error("useSignaling must be used within a SignalingProvider");
-    }
-    return ctx;
+    return ctx ?? NOOP_VALUE;
 };

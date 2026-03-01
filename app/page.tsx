@@ -105,7 +105,7 @@ const headerAnimate = { opacity: 1, y: 0 };
 const headerTransition = { duration: 0.4 };
 const headerTransitionDelay = { duration: 0.4, delay: 0.1 };
 
-const AppShell = () => {
+const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
   const { isRecording, setIsRecording, activeTab, setActiveTab, setIncomingPair } = useAppContext();
   // Initialize presence at app level for discoverability
   const { isConnected, error } = useSignaling();
@@ -141,8 +141,7 @@ const AppShell = () => {
     reactivatePreset: boolean;
   } | null>(null);
   const isRecurringModalOpen = recurringModalState !== null;
-  // Show by default on localhost, or if PostHog is not enabled
-  const [showHousehold, setShowHousehold] = useState(false);
+
   // Stable fallback timestamp for EditModal — only updates when editState changes
   const editTimestampFallback = useMemo(() => Date.now(), [editState]);
 
@@ -224,22 +223,7 @@ const AppShell = () => {
     };
   }, [client, setActiveTab, setIncomingPair, showHousehold]);
 
-  useEffect(() => {
-    const host = window.location.hostname;
-    const isLocal = host === "localhost" || host === "127.0.0.1" || host === "::1";
-    if (isLocal) {
-      // Ignore the feature flag locally so household view is always visible.
-      setShowHousehold(true);
-      return;
-    }
 
-    // Always check for feature flags if PostHog initialized
-    posthog.onFeatureFlags(() => {
-      // Use !! to force undefined/null to false
-      const isEnabled = !!posthog.isFeatureEnabled("household-view");
-      setShowHousehold(isEnabled);
-    });
-  }, []);
 
   useEffect(() => {
     // Force back to personal if currently on household and disabled
@@ -994,12 +978,33 @@ const AppShell = () => {
   );
 };
 
+function useHouseholdFlag() {
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => {
+    const host = window.location.hostname;
+    const isLocal = host === "localhost" || host === "127.0.0.1" || host === "::1";
+    if (isLocal) {
+      setEnabled(true);
+      return;
+    }
+    posthog.onFeatureFlags(() => {
+      setEnabled(!!posthog.isFeatureEnabled("household-view"));
+    });
+  }, []);
+  return enabled;
+}
+
 export default function Home() {
+  const showHousehold = useHouseholdFlag();
   return (
     <AppProvider>
-      <SignalingProvider>
-        <AppShell />
-      </SignalingProvider>
+      {showHousehold ? (
+        <SignalingProvider>
+          <AppShell showHousehold={showHousehold} />
+        </SignalingProvider>
+      ) : (
+        <AppShell showHousehold={false} />
+      )}
     </AppProvider>
   );
 }
