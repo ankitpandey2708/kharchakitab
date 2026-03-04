@@ -165,7 +165,6 @@ export const TransactionList = React.memo(({
   const { syncSummaryView } = useSummaryViewSync({
     parse: (value) => {
       if (value === "today" || value === "month") return value;
-      if (value === "week") return "month";
       return null;
     },
     onReceive: (value) => {

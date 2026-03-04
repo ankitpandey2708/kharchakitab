@@ -8,8 +8,10 @@ import { FilterKey, getRangeForFilter, toDateInputValue } from "@/src/utils/date
 
 const FILTER_OPTIONS = [
     { key: "today", label: "Today" },
-    { key: "week", label: "This week" },
+    { key: "last7", label: "Last 7d" },
+    { key: "last30", label: "Last 30d" },
     { key: "month", label: "This Month" },
+    { key: "lastMonth", label: "Last Month" },
     { key: "custom", label: "Custom" },
 ] as const;
 
@@ -102,9 +104,9 @@ export const HistoryFilters = memo(({
 
     return (
         <div className="kk-radius-md kk-shadow-sm mt-4 border border-[var(--kk-smoke)] bg-[var(--kk-cream)]/70 p-3">
-            {/* Search and Export Row */}
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="relative flex-1">
+            {/* Search and Action Row */}
+            <div className="flex items-center gap-2">
+                <div className="relative min-w-0 flex-1">
                     <input
                         value={query}
                         onChange={handleQueryChange}
@@ -112,29 +114,29 @@ export const HistoryFilters = memo(({
                         className="kk-input pl-4 text-sm shadow-[var(--kk-shadow-md)] sm:pl-10"
                     />
                 </div>
-                <div className="order-3 flex w-full gap-2 lg:order-none lg:w-auto">
+                <div className="flex shrink-0 gap-1.5">
                     <button
                         type="button"
                         onClick={onImport}
-                        className="kk-btn-secondary kk-btn-compact flex-1 lg:flex-none"
+                        className="kk-btn-secondary kk-btn-compact"
                     >
                         <Upload className="h-3.5 w-3.5" />
-                        Import
+                        <span className="hidden sm:inline">Import</span>
                     </button>
                     <button
                         type="button"
                         onClick={onExport}
                         disabled={isExporting || isExportDisabled}
-                        className="kk-btn-secondary kk-btn-compact flex-1 lg:flex-none"
+                        className="kk-btn-secondary kk-btn-compact"
                     >
                         <Download className="h-3.5 w-3.5" />
-                        Export
+                        <span className="hidden sm:inline">Export</span>
                     </button>
                 </div>
             </div>
 
             {/* Filter Chips */}
-            <div className="mt-3 flex w-full items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+            <div className="mt-2.5 flex w-full items-center gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                 {FILTER_OPTIONS.map((option) => (
                     <button
                         key={option.key}
@@ -149,11 +151,11 @@ export const HistoryFilters = memo(({
             </div>
 
             {/* Date Range Picker */}
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-left text-[var(--kk-ash)] opacity-80 transition">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-[var(--kk-smoke)] bg-white/60 px-4 py-2.5 transition-all focus-within:border-[var(--kk-smoke-heavy)] sm:rounded-full sm:px-3 sm:py-1">
+            <div className="mt-2 text-left text-[var(--kk-ash)] opacity-80 transition">
+                <div className="flex w-full items-center gap-2 rounded-2xl border border-[var(--kk-smoke)] bg-white/60 px-3 py-2 transition-all focus-within:border-[var(--kk-smoke-heavy)] sm:inline-flex sm:w-auto sm:rounded-full sm:py-1">
                     {/* From Date */}
-                    <label className="kk-label flex items-center gap-2">
-                        <span className="w-10 shrink-0 opacity-70 sm:opacity-100">From</span>
+                    <label className="kk-label flex min-w-0 flex-1 items-center gap-1.5 sm:flex-none">
+                        <span className="shrink-0 text-[10px] opacity-70">From</span>
                         <span className="flex items-center gap-0.5">
                             <input
                                 key={`start-${filter}`}
@@ -175,11 +177,11 @@ export const HistoryFilters = memo(({
                         </span>
                     </label>
 
-                    <ArrowRight className="hidden h-3 w-3 text-[var(--kk-ash)] sm:block" />
+                    <ArrowRight className="hidden h-3 w-3 shrink-0 text-[var(--kk-ash)] sm:block" />
 
                     {/* To Date */}
-                    <label className="kk-label flex items-center gap-2">
-                        <span className="w-10 shrink-0 opacity-70 sm:opacity-100">To</span>
+                    <label className="kk-label flex min-w-0 flex-1 items-center gap-1.5 sm:flex-none">
+                        <span className="shrink-0 text-[10px] opacity-70">To</span>
                         <span className="flex items-center gap-0.5">
                             <input
                                 key={`end-${filter}`}

@@ -1,5 +1,5 @@
 type DateRange = { start: number; end: number };
-export type FilterKey = "today" | "week" | "month" | "custom";
+export type FilterKey = "today" | "last7" | "last30" | "month" | "lastMonth" | "custom";
 
 const getTodayRange = (now = new Date()) => {
   const start = new Date(now);
@@ -24,22 +24,6 @@ export const isToday = (timestamp: number, now = new Date()) => {
   return timestamp >= start && timestamp <= end;
 };
 
-const getWeekStart = (date: Date) => {
-  const start = new Date(date);
-  const day = start.getDay();
-  const diff = (day + 6) % 7;
-  start.setDate(start.getDate() - diff);
-  start.setHours(0, 0, 0, 0);
-  return start;
-};
-
-const getWeekEnd = (date: Date) => {
-  const start = getWeekStart(date);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 6);
-  end.setHours(23, 59, 59, 999);
-  return end;
-};
 
 export const getRangeForFilter = (
   filter: FilterKey,
@@ -52,14 +36,23 @@ export const getRangeForFilter = (
     const today = getTodayRange(now);
     start.setTime(today.start);
     end.setTime(today.end);
-  } else if (filter === "week") {
-    const weekStart = getWeekStart(now);
-    start.setTime(weekStart.getTime());
-    end.setTime(getWeekEnd(now).getTime());
+  } else if (filter === "last7") {
+    start.setDate(start.getDate() - 6);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+  } else if (filter === "last30") {
+    start.setDate(start.getDate() - 29);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
   } else if (filter === "month") {
     start.setDate(1);
     start.setHours(0, 0, 0, 0);
     end.setMonth(end.getMonth() + 1, 0);
+    end.setHours(23, 59, 59, 999);
+  } else if (filter === "lastMonth") {
+    start.setMonth(start.getMonth() - 1, 1);
+    start.setHours(0, 0, 0, 0);
+    end.setDate(0); // last day of previous month
     end.setHours(23, 59, 59, 999);
   } else if (filter === "custom") {
     const { customStart, customEnd } = options;
@@ -76,7 +69,7 @@ export const getRangeForFilter = (
     end.setTime(endDate.getTime());
     start.setHours(0, 0, 0, 0);
   }
-  if (filter !== "week" && filter !== "month") {
+  if (filter !== "month" && filter !== "lastMonth") {
     end.setHours(23, 59, 59, 999);
   }
   return { start: start.getTime(), end: end.getTime() };

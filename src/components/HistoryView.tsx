@@ -34,7 +34,7 @@ import posthog from "posthog-js";
 
 const HISTORY_PAGE_SIZE = 30;
 
-type SummaryView = "today" | "week" | "month";
+type SummaryView = "today" | "month";
 
 interface HistoryViewProps {
   isOpen: boolean;
@@ -46,13 +46,13 @@ interface HistoryViewProps {
 }
 
 const mapFilterToSummaryView = (value: FilterKey): SummaryView =>
-  value === "custom" ? "month" : value;
+  value === "today" ? "today" : "month";
 
 
 const getInitialFilter = (): FilterKey => {
   if (typeof window === "undefined") return "month";
   const stored = window.localStorage.getItem("kk_summary_view");
-  if (stored === "today" || stored === "week" || stored === "month") {
+  if (stored === "today" || stored === "last7" || stored === "last30" || stored === "month" || stored === "lastMonth") {
     return stored;
   }
   return "month";
@@ -96,7 +96,7 @@ export const HistoryView = React.memo(({
     enabled: isOpen,
     listen: false,
     parse: (value) =>
-      value === "today" || value === "week" || value === "month"
+      value === "today" || value === "month"
         ? value
         : null,
     onReceive: handleSummaryReceive,
@@ -281,7 +281,7 @@ export const HistoryView = React.memo(({
       skipSummarySyncRef.current = false;
       return;
     }
-    if (filter === "week") return;
+    if (filter !== "today" && filter !== "month") return;
     syncSummaryView(mapFilterToSummaryView(filter));
   }, [filter, isOpen, syncSummaryView]);
 
@@ -692,8 +692,10 @@ export const HistoryView = React.memo(({
       return `${customStart}_to_${customEnd}`;
     }
     if (filter === "today") return "today";
-    if (filter === "week") return "this_week";
+    if (filter === "last7") return "last_7_days";
+    if (filter === "last30") return "last_30_days";
     if (filter === "month") return "this_month";
+    if (filter === "lastMonth") return "last_month";
     return "custom";
   };
 
