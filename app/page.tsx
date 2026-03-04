@@ -40,7 +40,7 @@ import {
 import { RECURRING_TEMPLATES, type Frequency, type RecurringTemplate } from "@/src/config/recurring";
 import type { Expense } from "@/src/utils/schemas";
 import type { Transaction, Recurring_template } from "@/src/types";
-import { AlertCircle, User, Users } from "lucide-react";
+import { AlertCircle, X, User, Users } from "lucide-react";
 import { prepareReceiptImage } from "@/src/utils/imageProcessing";
 import {
   DISMISS_TRANSCRIPTS,
@@ -286,6 +286,13 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
       setLastError(audioRecorder.error);
     }
   }, [audioRecorder.error]);
+
+  // Auto-dismiss error after 5s
+  useEffect(() => {
+    if (!lastError) return;
+    const t = setTimeout(() => setLastError(null), 5000);
+    return () => clearTimeout(t);
+  }, [lastError]);
 
   useEffect(() => {
     const shouldLock = isHistoryOpen || isEditing;
@@ -957,28 +964,6 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
           <>
             {/* Summary section — always mounted, hidden when not active */}
             <div style={{ display: activeSection === "summary" ? undefined : "none" }}>
-              {/* Error Banner */}
-              <AnimatePresence>
-                {lastError && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -12 }}
-                    transition={{ duration: 0.24 }}
-                    className="mb-5 overflow-hidden rounded-[var(--kk-radius-lg)] border border-[rgba(229,72,77,0.24)] bg-[rgba(229,72,77,0.06)] px-4 py-3 shadow-[var(--kk-shadow-sm)]"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-[rgba(229,72,77,0.25)] bg-white text-[var(--kk-danger-ink)]">
-                        <AlertCircle className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1 min-w-0 text-sm font-semibold text-[var(--kk-danger-ink)]">
-                        {lastError}
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
               {/* Recording/Processing Status */}
               <RecordingStatus
                 isRecording={false}
@@ -1084,6 +1069,41 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
           onEdit={openEdit}
         />
       )}
+
+      {/* Error Toast — fixed at top, visible on all tabs and scroll positions */}
+      <AnimatePresence>
+        {lastError && (
+          <motion.div
+            initial={{ opacity: 0, y: -48 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -48 }}
+            transition={{ type: "spring", damping: 24, stiffness: 300 }}
+            className="fixed left-4 right-4 top-4 z-[200] mx-auto max-w-md overflow-hidden rounded-[var(--kk-radius-lg)] border border-[rgba(229,72,77,0.24)] bg-white/90 px-4 py-3 shadow-[0_8px_32px_rgba(229,72,77,0.18)] backdrop-blur-xl"
+          >
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-[rgba(229,72,77,0.1)] text-[var(--kk-danger)]">
+                <AlertCircle className="h-4 w-4" />
+              </div>
+              <div className="flex-1 min-w-0 pt-0.5 text-[13px] font-semibold leading-snug text-[var(--kk-danger-ink)]">
+                {lastError}
+              </div>
+              <button
+                onClick={() => setLastError(null)}
+                className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[var(--kk-danger-ink)]/50 transition-colors hover:bg-[rgba(229,72,77,0.1)] hover:text-[var(--kk-danger-ink)]"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            {/* Auto-dismiss progress bar */}
+            <motion.div
+              initial={{ scaleX: 1 }}
+              animate={{ scaleX: 0 }}
+              transition={{ duration: 5, ease: "linear" }}
+              className="absolute bottom-0 left-0 right-0 h-[2px] origin-left bg-[var(--kk-danger)]/30"
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Loading overlay for pending transitions */}
       {isPending && (
