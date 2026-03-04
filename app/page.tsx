@@ -31,6 +31,7 @@ import { parseReceiptWithGemini } from "@/src/services/receipt";
 import { transcribeAudio } from "@/src/services/sarvam";
 import {
   addTransaction,
+  deleteTransaction,
   getDeviceIdentity,
   updateTransaction,
   isTransactionShared,
@@ -122,7 +123,7 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
   const { isRecording, setIsRecording } = useRecording();
   const { activeTab, setActiveTab } = useNavigation();
   const { setIncomingPair } = usePairing();
-  const { code: currency } = useCurrency();
+  const { code: currency, symbol: currencySymbol } = useCurrency();
 
   // Initialize presence at app level for discoverability
   const { isConnected, error } = useSignaling();
@@ -247,6 +248,11 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
       setActiveSection("summary");
     }
   }, [activeTab]);
+
+  const [transcriptFeedback, setTranscriptFeedback] = useState<{
+    txId: string; item: string; amount: number; category: string; paymentMethod: string;
+  } | null>(null);
+  const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const processedBlobRef = useRef<Blob | null>(null);
   const processingRef = useRef(false);
@@ -465,6 +471,10 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
       setAddedTx({ ...transaction, id });
       playMoneySound(transaction.amount, currency);
       refreshTransactions();
+      // Show undo feedback pill for 4s (same as voice path)
+      if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+      setTranscriptFeedback({ txId: id, item: expense.item, amount: expense.amount, category: expense.category, paymentMethod: expense.paymentMethod ?? "cash" });
+      undoTimeoutRef.current = setTimeout(() => setTranscriptFeedback(null), 4000);
       posthog.capture("transaction_added", {
         amount: expense.amount,
         category: expense.category,
@@ -482,6 +492,9 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
 
   const handleStartRecording = useCallback(async () => {
     setLastError(null); // Clear any previous errors
+    // Clear stale feedback so old pill doesn't flash when new recording stops
+    if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    setTranscriptFeedback(null);
     posthog.capture("recording_started");
     await audioRecorder.startRecording();
   }, [audioRecorder]);
@@ -528,6 +541,10 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
       setAddedTx({ ...transaction, id });
       playMoneySound(transaction.amount, currency);
       refreshTransactions();
+      // Show undo feedback pill for 4s
+      if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+      setTranscriptFeedback({ txId: id, item: expense.item, amount: expense.amount, category: expense.category, paymentMethod: expense.paymentMethod ?? "cash" });
+      undoTimeoutRef.current = setTimeout(() => setTranscriptFeedback(null), 4000);
       posthog.capture("transaction_added", {
         amount: expense.amount,
         category: expense.category,
@@ -544,6 +561,19 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
       stopProcessing();
     }
   }, [addPendingTransaction, currency, parseTranscript, refreshTransactions, removePendingTransaction, startProcessing, stopProcessing]);
+
+  const handleUndoTranscript = useCallback(async () => {
+    if (!transcriptFeedback) return;
+    if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    const { txId, amount, item, category, paymentMethod } = transcriptFeedback;
+    setTranscriptFeedback(null);
+    await deleteTransaction(txId);
+    setDeletedTx({ id: txId, amount, item, category, paymentMethod: paymentMethod as Transaction["paymentMethod"], timestamp: Date.now() });
+    refreshTransactions();
+  }, [transcriptFeedback, refreshTransactions]);
+
+  // Cleanup undo timeout on unmount
+  useEffect(() => () => { if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current); }, []);
 
   const processReceiptDataUrl = useCallback(async (dataUrl: string) => {
     if (!startReceiptProcessing()) return;
@@ -871,8 +901,8 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
 
               {/* Recording/Processing Status */}
               <RecordingStatus
-                isRecording={isRecording}
-                isProcessing={isProcessing}
+                isRecording={false}
+                isProcessing={false}
                 isReceiptProcessing={isReceiptProcessing}
                 isTextProcessing={isTextProcessing}
               />
@@ -917,8 +947,11 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
           activeTab={activeSection}
           onTabChange={setActiveSection}
           isRecording={isRecording}
+          isProcessing={isProcessing}
           onMicPress={onMicPress}
           onTextSubmit={processTextInput}
+          transcriptFeedback={transcriptFeedback ? { ...transcriptFeedback, currencySymbol } : null}
+          onUndoTranscript={handleUndoTranscript}
         />
       )}
       <input
