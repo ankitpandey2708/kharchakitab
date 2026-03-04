@@ -583,18 +583,18 @@ export const TransactionList = React.memo(({
                 <>
                   <button
                     type="button"
+                    onClick={() => setIsEditingBudget(false)}
+                    className="kk-btn-secondary kk-btn-compact"
+                  >
+                    {hasBudget ? "Cancel" : "Close"}
+                  </button>
+                  <button
+                    type="button"
                     onClick={handleBudgetSave}
                     className={`${isSavePrimary ? "kk-btn-primary" : "kk-btn-secondary"
                       } kk-btn-compact`}
                   >
                     Save
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingBudget(false)}
-                    className="kk-btn-secondary kk-btn-compact"
-                  >
-                    {hasBudget ? "Cancel" : "Close"}
                   </button>
                 </>
               );
