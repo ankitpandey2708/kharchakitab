@@ -3,7 +3,7 @@
 import React, { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Listbox, Transition } from "@headlessui/react";
-import { ImageUp, Info, Wallet, ChevronDown, Check } from "lucide-react";
+import { ImageUp, Info, Wallet, ChevronDown, Check, BarChart3 } from "lucide-react";
 import {
   deleteTransaction,
   fetchTransactions,
@@ -898,6 +898,7 @@ export const TransactionList = React.memo(({
                 onClick={onViewAll}
                 className="kk-btn-secondary kk-btn-compact"
               >
+                <BarChart3 className="h-3.5 w-3.5" />
                 View all
               </button>
             )}
