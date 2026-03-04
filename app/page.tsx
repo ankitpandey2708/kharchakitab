@@ -37,7 +37,7 @@ import {
   isTransactionShared,
   getRecurringTemplates,
 } from "@/src/db/db";
-import type { RecurringTemplate } from "@/src/config/recurring";
+import { RECURRING_TEMPLATES, type Frequency, type RecurringTemplate } from "@/src/config/recurring";
 import type { Expense } from "@/src/utils/schemas";
 import type { Transaction, Recurring_template } from "@/src/types";
 import { AlertCircle, User, Users } from "lucide-react";
@@ -161,6 +161,7 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
     template: RecurringTemplate | null;
     recurringTemplate: Recurring_template | null;
     reactivatePreset: boolean;
+    prefill?: { name: string; amount: number; category: string; paymentMethod: string; frequency: Frequency } | null;
   } | null>(null);
   const isRecurringModalOpen = recurringModalState !== null;
 
@@ -434,6 +435,7 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
       date: formatDateYMD(new Date()),
       paymentMethod: "cash",
       confidence: 0.4,
+      recurring: false,
     };
 
     try {
@@ -459,28 +461,67 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
         setIsTextProcessing(false);
         return;
       }
-      const transaction: Transaction = {
-        id: "",
-        amount: expense.amount,
-        item: expense.item,
-        category: expense.category,
-        paymentMethod: expense.paymentMethod ?? "cash",
-        timestamp: toTimestamp(expense.date, now),
-      };
-      const id = await addTransaction(transaction);
-      setAddedTx({ ...transaction, id });
-      playMoneySound(transaction.amount, currency);
-      refreshTransactions();
-      // Show undo feedback pill for 4s (same as voice path)
-      if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
-      setTranscriptFeedback({ txId: id, item: expense.item, amount: expense.amount, category: expense.category, paymentMethod: expense.paymentMethod ?? "cash" });
-      undoTimeoutRef.current = setTimeout(() => setTranscriptFeedback(null), 4000);
-      posthog.capture("transaction_added", {
-        amount: expense.amount,
-        category: expense.category,
-        payment_method: expense.paymentMethod ?? "cash",
-        input_method: "text",
-      });
+
+      // Recurring intent: open RecurringEditModal pre-filled
+      if (expense.recurring) {
+        const matchedTemplate = expense.templateId
+          ? RECURRING_TEMPLATES.find((t) => t.id === expense.templateId) ?? null
+          : null;
+
+        // Block if this template is already saved
+        if (matchedTemplate) {
+          const existing = await getRecurringTemplates();
+          if (existing.some((t) => t.recurring_template_id === matchedTemplate.id)) {
+            setLastError(`"${expense.item}" is already set up as a recurring expense.`);
+            stopProcessing();
+            setIsTextProcessing(false);
+            return;
+          }
+        }
+
+        setRecurringModalState({
+          mode: "new",
+          template: matchedTemplate,
+          recurringTemplate: null,
+          reactivatePreset: false,
+          prefill: {
+            name: expense.item,
+            amount: expense.amount,
+            category: matchedTemplate?.category ?? expense.category,
+            paymentMethod: expense.paymentMethod ?? "cash",
+            frequency: (expense.frequency as Frequency) ?? matchedTemplate?.suggestedFrequency ?? "monthly",
+          },
+        });
+        posthog.capture("recurring_detected", {
+          amount: expense.amount,
+          category: expense.category,
+          frequency: expense.frequency ?? "monthly",
+          input_method: "text",
+        });
+      } else {
+        // One-time transaction: instant add + undo pill
+        const transaction: Transaction = {
+          id: "",
+          amount: expense.amount,
+          item: expense.item,
+          category: expense.category,
+          paymentMethod: expense.paymentMethod ?? "cash",
+          timestamp: toTimestamp(expense.date, now),
+        };
+        const id = await addTransaction(transaction);
+        setAddedTx({ ...transaction, id });
+        playMoneySound(transaction.amount, currency);
+        refreshTransactions();
+        if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+        setTranscriptFeedback({ txId: id, item: expense.item, amount: expense.amount, category: expense.category, paymentMethod: expense.paymentMethod ?? "cash" });
+        undoTimeoutRef.current = setTimeout(() => setTranscriptFeedback(null), 4000);
+        posthog.capture("transaction_added", {
+          amount: expense.amount,
+          category: expense.category,
+          payment_method: expense.paymentMethod ?? "cash",
+          input_method: "text",
+        });
+      }
     } catch (error) {
       setLastError(toUserMessage(error, "unableToTranscribeAudio"));
     } finally {
@@ -529,27 +570,66 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
         stopProcessing();
         return;
       }
-      const transaction: Transaction = {
-        id: "",
-        amount: expense.amount,
-        item: expense.item,
-        category: expense.category,
-        paymentMethod: expense.paymentMethod ?? "cash",
-        timestamp: toTimestamp(expense.date, now),
-      };
-      const id = await addTransaction(transaction);
-      setAddedTx({ ...transaction, id });
-      playMoneySound(transaction.amount, currency);
-      refreshTransactions();
-      // Show undo feedback pill for 4s
-      if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
-      setTranscriptFeedback({ txId: id, item: expense.item, amount: expense.amount, category: expense.category, paymentMethod: expense.paymentMethod ?? "cash" });
-      undoTimeoutRef.current = setTimeout(() => setTranscriptFeedback(null), 4000);
-      posthog.capture("transaction_added", {
-        amount: expense.amount,
-        category: expense.category,
-        payment_method: expense.paymentMethod ?? "cash",
-      });
+
+      // Recurring intent: check if template already exists, then open modal or fall through
+      // Recurring intent: open RecurringEditModal pre-filled
+      if (expense.recurring) {
+        const matchedTemplate = expense.templateId
+          ? RECURRING_TEMPLATES.find((t) => t.id === expense.templateId) ?? null
+          : null;
+
+        // Block if this template is already saved
+        if (matchedTemplate) {
+          const existing = await getRecurringTemplates();
+          if (existing.some((t) => t.recurring_template_id === matchedTemplate.id)) {
+            setLastError(`"${expense.item}" is already set up as a recurring expense.`);
+            stopProcessing();
+            return;
+          }
+        }
+
+        setRecurringModalState({
+          mode: "new",
+          template: matchedTemplate,
+          recurringTemplate: null,
+          reactivatePreset: false,
+          prefill: {
+            name: expense.item,
+            amount: expense.amount,
+            category: matchedTemplate?.category ?? expense.category,
+            paymentMethod: expense.paymentMethod ?? "cash",
+            frequency: (expense.frequency as Frequency) ?? matchedTemplate?.suggestedFrequency ?? "monthly",
+          },
+        });
+        posthog.capture("recurring_detected", {
+          amount: expense.amount,
+          category: expense.category,
+          frequency: expense.frequency ?? "monthly",
+          input_method: "voice",
+        });
+      } else {
+        // One-time transaction: instant add + undo pill
+        const transaction: Transaction = {
+          id: "",
+          amount: expense.amount,
+          item: expense.item,
+          category: expense.category,
+          paymentMethod: expense.paymentMethod ?? "cash",
+          timestamp: toTimestamp(expense.date, now),
+        };
+        const id = await addTransaction(transaction);
+        setAddedTx({ ...transaction, id });
+        playMoneySound(transaction.amount, currency);
+        refreshTransactions();
+        if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+        setTranscriptFeedback({ txId: id, item: expense.item, amount: expense.amount, category: expense.category, paymentMethod: expense.paymentMethod ?? "cash" });
+        undoTimeoutRef.current = setTimeout(() => setTranscriptFeedback(null), 4000);
+        posthog.capture("transaction_added", {
+          amount: expense.amount,
+          category: expense.category,
+          payment_method: expense.paymentMethod ?? "cash",
+        });
+      }
     } catch (error) {
       setLastError(toUserMessage(error, "unableToTranscribeAudio"));
       posthog.capture("error_occurred", {
@@ -987,6 +1067,7 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
           template={recurringModalState.template}
           recurringTemplate={recurringModalState.recurringTemplate}
           reactivatePreset={recurringModalState.reactivatePreset}
+          prefill={recurringModalState.prefill}
           onClose={handleCloseRecurringModal}
           onSave={handleSaveRecurring}
         />

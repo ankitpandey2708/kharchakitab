@@ -7,6 +7,9 @@ export const ExpenseSchema = z.object({
   date: z.string().describe("Date in YYYY-MM-DD format"),
   paymentMethod: z.enum(["cash", "upi", "card"]).optional().default("cash"),
   confidence: z.number().optional().describe("Confidence score 0-1"),
+  recurring: z.boolean().optional().default(false),
+  frequency: z.enum(["monthly", "quarterly", "yearly"]).optional(),
+  templateId: z.string().nullable().optional(),
 });
 
 export type Expense = z.infer<typeof ExpenseSchema>;

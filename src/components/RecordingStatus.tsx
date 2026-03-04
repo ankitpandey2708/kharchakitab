@@ -16,17 +16,16 @@ const AUTO_STOP_SECONDS = Math.ceil(MIC_CONFIG.hardTimeoutMs / 1000);
 export const EXAMPLES = [
   "Aaj 500 ka petrol dalwaya...",         // Hindi/Hinglish
   "Auto ki 100 rupees kotta...",          // Telugu
-  "Bhaiya ko groceries ke liye ₹1000...", // Hindi
+  "groceries ke liye ₹1000...", // Hindi
   "Dudha sathi 50 rupaye dile...",        // Marathi
   "Meen vanga 200 aachu...",              // Tamil
   "Swiggy theke 350 takar khabar...",     // Bengali
-  "Had lunch with Rahul for ₹300...",     // English
-  "coffee 150",
-  "petrol 500 card",
-  "sabzi 200",
-  "chai 20 cash",
-  "lunch 350 upi",
-  "auto 100",
+  "netflix 199 monthly subscription",     // English
+  "aaj chai piya 50 ka",
+  "petrol 500 credit card se",
+  "yearly health insurance 10000",
+  "Biryani 350 upi",
+  "auto kiraya 100",
 ];
 
 export const RecordingStatus = React.memo(

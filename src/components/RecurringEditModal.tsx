@@ -28,12 +28,21 @@ import {
   syncAlertsQueue,
 } from "@/src/services/pwaAlerts";
 
+interface RecurringPrefill {
+  name: string;
+  amount: number;
+  category: string;
+  paymentMethod: string;
+  frequency: Frequency;
+}
+
 interface RecurringEditModalProps {
   isOpen: boolean;
   mode: "new" | "edit";
   template?: RecurringTemplate | null; // UI template (for quick add)
   recurringTemplate?: Recurring_template | null; //  DB template (for editing)
   reactivatePreset?: boolean;
+  prefill?: RecurringPrefill | null;
   onClose: () => void;
   onSave: () => void; // Just refresh, no data needed
 }
@@ -63,6 +72,7 @@ export const RecurringEditModal = React.memo(({
   template,
   recurringTemplate,
   reactivatePreset = false,
+  prefill,
   onClose,
   onSave,
 }: RecurringEditModalProps) => {
@@ -77,6 +87,7 @@ export const RecurringEditModal = React.memo(({
   const [reminderDays, setReminderDays] = useState(5);
   const [amortize, setAmortize] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const sortedCategoryOptions = useMemo(
     () => [...CATEGORY_OPTIONS].sort((a, b) => a.label.localeCompare(b.label)),
     []
@@ -84,6 +95,7 @@ export const RecurringEditModal = React.memo(({
 
   useEffect(() => {
     if (!isOpen) return;
+    setSaveError(null);
 
     startTransition(() => {
       // Edit mode: load from DB template
@@ -103,6 +115,21 @@ export const RecurringEditModal = React.memo(({
         }
         setReminderDays(recurringTemplate.recurring_reminder_days);
         setAmortize(recurringTemplate.recurring_amortize ?? false);
+        return;
+      }
+
+      // New mode with prefill from voice/text input (takes priority over template)
+      if (prefill) {
+        setName(prefill.name);
+        setAmountValue(prefill.amount.toString());
+        setCategory(prefill.category);
+        setPaymentMethod(prefill.paymentMethod as PaymentKey);
+        setFrequency(prefill.frequency);
+        const now = Date.now();
+        setStartDate(toDateInputValue(now));
+        setEndDate(toDateInputValue(addOneYear(now)));
+        setReminderDays(5);
+        setAmortize(false);
         return;
       }
 
@@ -133,7 +160,7 @@ export const RecurringEditModal = React.memo(({
       setReminderDays(5);
       setAmortize(false);
     });
-  }, [isOpen, mode, template, recurringTemplate, reactivatePreset]);
+  }, [isOpen, mode, template, recurringTemplate, reactivatePreset, prefill]);
 
   useEscapeKey(isOpen, onClose);
 
@@ -197,7 +224,8 @@ export const RecurringEditModal = React.memo(({
       onSave(); // Trigger parent to reload
       onClose();
     } catch (error) {
-      alert("Failed to save recurring template. Please try again.");
+      const message = error instanceof Error ? error.message : "Failed to save. Please try again.";
+      setSaveError(message);
     } finally {
       setIsSaving(false);
     }
@@ -444,9 +472,9 @@ export const RecurringEditModal = React.memo(({
                 </div>
               </div>
 
-              {validation.error && (
+              {(validation.error || saveError) && (
                 <div className="mt-3 text-xs text-[var(--kk-ember)]">
-                  {validation.error}
+                  {saveError || validation.error}
                 </div>
               )}
 
