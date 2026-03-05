@@ -2,8 +2,7 @@
 
 import React, { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Listbox, Transition } from "@headlessui/react";
-import { ImageUp, Info, Wallet, ChevronDown, Check, BarChart3 } from "lucide-react";
+import { ImageUp, BarChart3, Mic, ArrowDown, Sparkles, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import {
   deleteTransaction,
   fetchTransactions,
@@ -12,13 +11,12 @@ import {
   getDeviceIdentity,
 } from "@/src/db/db";
 import type { Transaction } from "@/src/types";
-import { getRangeForFilter, isToday } from "@/src/utils/dates";
-import { EmptyState } from "@/src/components/EmptyState";
+import { getRangeForFilter } from "@/src/utils/dates";
 import { TransactionRow } from "@/src/components/TransactionRow";
 import { TransactionActionSheet } from "@/src/components/TransactionActionSheet";
 import { useCurrency } from "@/src/hooks/useCurrency";
 import { useMobileSheet } from "@/src/hooks/useMobileSheet";
-import { useSummaryViewSync } from "@/src/hooks/useSummaryViewSync";
+import { CATEGORY_ICON_MAP } from "@/src/config/categories";
 
 
 interface TransactionListProps {
@@ -26,6 +24,7 @@ interface TransactionListProps {
   onViewAll?: () => void;
   onEdit?: (tx: Transaction) => void;
   onDeleted?: (tx: Transaction) => void;
+  onMicPress?: () => void;
   onReceiptUploadClick?: () => void;
   isReceiptProcessing?: boolean;
   addedTx?: Transaction | null;
@@ -33,6 +32,7 @@ interface TransactionListProps {
   editedTx?: Transaction | null;
   pendingTransactions?: Transaction[];
   onMobileSheetChange?: (isOpen: boolean) => void;
+  onEmptyChange?: (isEmpty: boolean) => void;
 }
 
 const sortTransactions = (items: Transaction[]) =>
@@ -107,8 +107,10 @@ export const TransactionList = React.memo(({
   onViewAll,
   onEdit,
   onDeleted,
+  onMicPress,
   onReceiptUploadClick,
   isReceiptProcessing = false,
+  onEmptyChange,
   addedTx,
   deletedTx,
   editedTx,
@@ -117,9 +119,9 @@ export const TransactionList = React.memo(({
 }: TransactionListProps) => {
   const { symbol: currencySymbol, formatCurrency } = useCurrency();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [todayTransactions, setTodayTransactions] = useState<Transaction[]>([]);
   const [periodTransactions, setPeriodTransactions] = useState<Transaction[]>([]);
-  const [monthTotal, setMonthTotal] = useState<number | null>(null);
+  const [thisWeekTxns, setThisWeekTxns] = useState<Transaction[]>([]);
+  const [lastWeekTxns, setLastWeekTxns] = useState<Transaction[]>([]);
   const [identity, setIdentity] = useState<{ device_id: string } | null>(null);
   const [budgets, setBudgets] = useState<{
     monthly: number | null;
@@ -131,9 +133,13 @@ export const TransactionList = React.memo(({
   const [isEditingBudget, setIsEditingBudget] = useState(false);
   const [budgetDraft, setBudgetDraft] = useState("");
   const [budgetError, setBudgetError] = useState<string | null>(null);
-  const [summaryView, setSummaryView] = useState<"today" | "month">("month");
   const [coachmarkDismissed, setCoachmarkDismissed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  const isEmpty = transactions.length === 0 && pendingTransactions.length === 0;
+  useEffect(() => {
+    onEmptyChange?.(isEmpty);
+  }, [isEmpty, onEmptyChange]);
 
   const hasLoadedOnce = React.useRef(false);
   const {
@@ -152,7 +158,6 @@ export const TransactionList = React.memo(({
     baseOpenMobileSheet(id);
   }, [baseOpenMobileSheet]);
   const transactionsRef = React.useRef<Transaction[]>([]);
-  const todayTransactionsRef = React.useRef<Transaction[]>([]);
   const periodTransactionsRef = React.useRef<Transaction[]>([]);
   const hasEdit = Boolean(onEdit);
   const currentMonthKey = useMemo(() => {
@@ -162,16 +167,6 @@ export const TransactionList = React.memo(({
     return `${year}-${month}`;
   }, []);
 
-  const { syncSummaryView } = useSummaryViewSync({
-    parse: (value) => {
-      if (value === "today" || value === "month") return value;
-      return null;
-    },
-    onReceive: (value) => {
-      setSummaryView((prev) => (prev === value ? prev : value));
-    },
-  });
-
   useEffect(() => {
     void (async () => {
       const id = await getDeviceIdentity();
@@ -179,26 +174,14 @@ export const TransactionList = React.memo(({
     })();
   }, []);
 
-  const isInCurrentMonth = useCallback((timestamp: number) => {
-    const now = new Date();
-    const date = new Date(timestamp);
-    return (
-      date.getFullYear() === now.getFullYear() &&
-      date.getMonth() === now.getMonth()
-    );
-  }, []);
-
   const reloadTransactions = useCallback((isActive?: () => boolean) => {
     if (!identity) return;
     const shouldUpdate = () => (isActive ? isActive() : true);
     if (!hasLoadedOnce.current) setIsLoading(true);
-    // Cap "activity" views to "now" so scheduled/future entries don't pollute spent/last-txns UI.
-    // BUG-4 fix: Snap to end-of-today so the cache key stays stable across calls.
     const eod = new Date();
     eod.setHours(23, 59, 59, 999);
     const beforeNow = eod.getTime() + 1;
 
-    // Always fetch recent 5 transactions
     const recentPromise = fetchTransactions({ limit: 5, ownerId: identity.device_id, before: beforeNow })
       .then((items) => {
         if (shouldUpdate()) setTransactions(sortTransactions(items));
@@ -207,48 +190,72 @@ export const TransactionList = React.memo(({
         if (shouldUpdate()) setTransactions([]);
       });
 
-    // A: Always fetch month range; derive today in-memory when needed (saves 1 IDB call)
     const monthRange = getRangeForFilter("month");
     const rangePromise = monthRange
-      ? fetchTransactions({ range: { start: monthRange.start, end: monthRange.end }, ownerId: identity.device_id, before: beforeNow })
+      ? fetchTransactions({ range: { start: monthRange.start, end: monthRange.end }, ownerId: identity.device_id })
         .then((items) => {
           if (!shouldUpdate()) return;
-          const sorted = sortTransactions(items);
           startTransition(() => {
-            if (summaryView === "today") {
-              const todayItems = sorted.filter((tx) => isToday(tx.timestamp));
-              setPeriodTransactions(todayItems);
-              setTodayTransactions(todayItems);
-              const total = items
-                .filter((tx) => !isProcessingRow(tx))
-                .reduce((sum, tx) => sum + tx.amount, 0);
-              setMonthTotal((prev) => (prev === total ? prev : total));
-            } else {
-              setPeriodTransactions(sorted);
-              setTodayTransactions(sorted.filter((tx) => isToday(tx.timestamp)));
-            }
+            setPeriodTransactions(sortTransactions(items));
           });
         })
         .catch(() => {
           if (shouldUpdate()) {
-            startTransition(() => {
-              setPeriodTransactions([]);
-              setTodayTransactions([]);
-              if (summaryView === "today") {
-                setMonthTotal((prev) => (prev === null ? prev : null));
-              }
-            });
+            startTransition(() => setPeriodTransactions([]));
           }
         })
       : Promise.resolve();
 
-    Promise.allSettled([recentPromise, rangePromise]).then(() => {
+    // Fetch this week and last week for week-over-week comparison
+    const now = new Date();
+    const dow = now.getDay();
+    const mondayOffset = dow === 0 ? 6 : dow - 1;
+
+    const thisWeekStart = new Date(now);
+    thisWeekStart.setDate(thisWeekStart.getDate() - mondayOffset);
+    thisWeekStart.setHours(0, 0, 0, 0);
+    const thisWeekEnd = new Date(thisWeekStart);
+    thisWeekEnd.setDate(thisWeekEnd.getDate() + 6);
+    thisWeekEnd.setHours(23, 59, 59, 999);
+
+    const lastWeekEnd = new Date(thisWeekStart);
+    lastWeekEnd.setDate(lastWeekEnd.getDate() - 1);
+    lastWeekEnd.setHours(23, 59, 59, 999);
+    const lastWeekStart = new Date(lastWeekEnd);
+    lastWeekStart.setDate(lastWeekStart.getDate() - 6);
+    lastWeekStart.setHours(0, 0, 0, 0);
+
+    const thisWeekPromise = fetchTransactions({
+      range: { start: thisWeekStart.getTime(), end: thisWeekEnd.getTime() },
+      ownerId: identity.device_id,
+      before: beforeNow,
+    })
+      .then((items) => {
+        if (shouldUpdate()) setThisWeekTxns(items);
+      })
+      .catch(() => {
+        if (shouldUpdate()) setThisWeekTxns([]);
+      });
+
+    const lastWeekPromise = fetchTransactions({
+      range: { start: lastWeekStart.getTime(), end: lastWeekEnd.getTime() },
+      ownerId: identity.device_id,
+      before: beforeNow,
+    })
+      .then((items) => {
+        if (shouldUpdate()) setLastWeekTxns(items);
+      })
+      .catch(() => {
+        if (shouldUpdate()) setLastWeekTxns([]);
+      });
+
+    Promise.allSettled([recentPromise, rangePromise, thisWeekPromise, lastWeekPromise]).then(() => {
       if (shouldUpdate()) {
         hasLoadedOnce.current = true;
         setIsLoading(false);
       }
     });
-  }, [summaryView, identity]);
+  }, [identity]);
 
   useEffect(() => {
     let active = true;
@@ -256,7 +263,7 @@ export const TransactionList = React.memo(({
     return () => {
       active = false;
     };
-  }, [refreshKey, summaryView, identity]);
+  }, [refreshKey, identity]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("kk_budgets");
@@ -287,20 +294,12 @@ export const TransactionList = React.memo(({
   useEffect(() => {
     if (!deletedTx) return;
     setTransactions((prev) => prev.filter((tx) => tx.id !== deletedTx.id));
-    setTodayTransactions((prev) => prev.filter((tx) => tx.id !== deletedTx.id));
     setPeriodTransactions((prev) => prev.filter((tx) => tx.id !== deletedTx.id));
-    if (summaryView !== "month" && isInCurrentMonth(deletedTx.timestamp)) {
-      setMonthTotal((prev) => (prev === null ? prev : prev - deletedTx.amount));
-    }
-  }, [deletedTx, summaryView, isInCurrentMonth]);
+  }, [deletedTx]);
 
   useEffect(() => {
     transactionsRef.current = transactions;
   }, [transactions]);
-
-  useEffect(() => {
-    todayTransactionsRef.current = todayTransactions;
-  }, [todayTransactions]);
 
   useEffect(() => {
     periodTransactionsRef.current = periodTransactions;
@@ -308,31 +307,11 @@ export const TransactionList = React.memo(({
 
   useEffect(() => {
     if (!editedTx) return;
-    const previous =
-      transactionsRef.current.find((tx) => tx.id === editedTx.id) ??
-      todayTransactionsRef.current.find((tx) => tx.id === editedTx.id) ??
-      periodTransactionsRef.current.find((tx) => tx.id === editedTx.id) ??
-      null;
     setTransactions((prev) =>
       sortTransactions(prev.map((tx) => (tx.id === editedTx.id ? editedTx : tx)))
     );
-    setTodayTransactions((prev) => {
-      const exists = prev.find((tx) => tx.id === editedTx.id);
-      if (isToday(editedTx.timestamp)) {
-        if (exists) {
-          return sortTransactions(
-            prev.map((tx) => (tx.id === editedTx.id ? editedTx : tx))
-          );
-        }
-        return sortTransactions([editedTx, ...prev]);
-      }
-      if (exists) {
-        return sortTransactions(prev.filter((tx) => tx.id !== editedTx.id));
-      }
-      return sortTransactions(prev);
-    });
     setPeriodTransactions((prev) => {
-      const range = getRangeForFilter(summaryView === "today" ? "today" : "month");
+      const range = getRangeForFilter("month");
       const inRange = range ? isInRange(editedTx.timestamp, range) : false;
       const exists = prev.find((tx) => tx.id === editedTx.id);
       if (inRange) {
@@ -348,71 +327,54 @@ export const TransactionList = React.memo(({
       }
       return sortTransactions(prev);
     });
-    if (summaryView !== "month") {
-      const wasInMonth = previous ? isInCurrentMonth(previous.timestamp) : false;
-      const nowInMonth = isInCurrentMonth(editedTx.timestamp);
-      let delta = 0;
-      if (previous) {
-        if (wasInMonth && nowInMonth) {
-          delta = editedTx.amount - previous.amount;
-        } else if (wasInMonth && !nowInMonth) {
-          delta = -previous.amount;
-        } else if (!wasInMonth && nowInMonth) {
-          delta = editedTx.amount;
-        }
-      } else if (nowInMonth) {
-        delta = editedTx.amount;
-      }
-      if (delta !== 0) {
-        setMonthTotal((prev) => (prev === null ? prev : prev + delta));
-      }
-    }
-  }, [editedTx, summaryView, isInCurrentMonth]);
+  }, [editedTx]);
 
-  useEffect(() => {
-    if (!addedTx) return;
-    if (summaryView === "month") return;
-    if (!isInCurrentMonth(addedTx.timestamp)) return;
-    setMonthTotal((prev) => (prev === null ? prev : prev + addedTx.amount));
-  }, [addedTx, summaryView, isInCurrentMonth]);
-
-  const { summaryTransactionsFiltered, viewTotal, totalCount, avgToday } =
+  const { viewTotal, topCategories, weekTotal, lastWeekTotal } =
     useMemo(() => {
-      const summaryTransactions =
-        summaryView === "today" ? todayTransactions : periodTransactions;
-      const filtered = summaryTransactions.filter(
-        (tx) => !isProcessingRow(tx)
-      );
+      const filtered = periodTransactions.filter((tx) => !isProcessingRow(tx));
       const total = filtered.reduce((sum, tx) => sum + tx.amount, 0);
-      const count = filtered.length;
+
+      // Category breakdown (month)
+      const catMap = new Map<string, number>();
+      for (const tx of filtered) {
+        catMap.set(tx.category, (catMap.get(tx.category) ?? 0) + tx.amount);
+      }
+      const cats = [...catMap.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3);
+
+      // This week total (separate fetch — covers cross-month weeks)
+      const twFiltered = thisWeekTxns.filter((tx) => !isProcessingRow(tx));
+      const wt = twFiltered.reduce((sum, tx) => sum + tx.amount, 0);
+
+      const lwFiltered = lastWeekTxns.filter((tx) => !isProcessingRow(tx));
+      const lwt = lwFiltered.reduce((sum, tx) => sum + tx.amount, 0);
+
       return {
-        summaryTransactionsFiltered: filtered,
         viewTotal: total,
-        totalCount: count,
-        avgToday: count > 0 ? total / count : null,
+        topCategories: cats,
+        weekTotal: wt,
+        lastWeekTotal: lwt,
       };
-    }, [summaryView, todayTransactions, periodTransactions]);
+    }, [periodTransactions, thisWeekTxns, lastWeekTxns]);
 
   const recentTransactions = useMemo(
     () => [...pendingTransactions, ...transactions].slice(0, 5),
     [pendingTransactions, transactions]
   );
-  const monthToDateTotal = summaryView === "month" ? viewTotal : monthTotal;
   const activeBudget = budgets.monthly;
   const hasBudget = typeof activeBudget === "number" && activeBudget > 0;
-  const { remaining, overspend, budgetPercent, rawRemaining } = useMemo(() => {
+  const { remaining, overspend, budgetPercent } = useMemo(() => {
     if (!hasBudget) {
-      return { remaining: null, overspend: false, budgetPercent: 0, rawRemaining: null };
+      return { remaining: null, overspend: false, budgetPercent: 0 };
     }
-    const total = monthToDateTotal ?? viewTotal;
-    const raw = activeBudget - total;
+    const raw = activeBudget - viewTotal;
     return {
       remaining: Math.max(raw, 0),
       overspend: raw < 0,
-      budgetPercent: Math.min(total / activeBudget, 1),
-      rawRemaining: raw,
+      budgetPercent: Math.min(viewTotal / activeBudget, 1),
     };
-  }, [activeBudget, hasBudget, monthToDateTotal, viewTotal]);
+  }, [activeBudget, hasBudget, viewTotal]);
 
   const budgetLabel = "Monthly Budget";
   const resetHintLabel = useMemo(() => {
@@ -446,11 +408,6 @@ export const TransactionList = React.memo(({
     setBudgetDraft(activeBudget ? String(activeBudget) : "");
     setIsEditingBudget(true);
   };
-  const openBudgetEditorFromPacing = () => {
-    setSummaryView("month");
-    syncSummaryView("month");
-    openBudgetEditor();
-  };
   const dismissCoachmark = () => {
     setCoachmarkDismissed(true);
     setBudgets((prev) => {
@@ -460,159 +417,129 @@ export const TransactionList = React.memo(({
     });
   };
 
-  const isPacingView = summaryView !== "month";
-  const pacingLabel = "Daily cap";
-  const daysLeftInMonth = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    monthEnd.setHours(0, 0, 0, 0);
-    const MS_DAY = 24 * 60 * 60 * 1000;
-    return Math.floor((monthEnd.getTime() - today.getTime()) / MS_DAY) + 1;
-  }, []);
-  const pacingSpent = viewTotal;
-  const pacingTarget =
-    hasBudget &&
-      isPacingView &&
-      rawRemaining !== null &&
-      daysLeftInMonth > 0
-      ? (() => {
-        // Solve (B - (M + x)) / D = T + x for x.
-        // B = activeBudget, M = monthToDateTotal (includes today), T = pacingSpent, D = daysLeftInMonth.
-        return (activeBudget - (monthToDateTotal ?? viewTotal) - daysLeftInMonth * pacingSpent) /
-          (daysLeftInMonth + 1);
-      })()
-      : 0;
-  const pacingCap =
-    summaryView === "today" ? pacingSpent + Math.max(pacingTarget, 0) : 0;
-  const pacingRemaining = Math.max(pacingTarget, 0);
-  const pacingOverspend =
-    hasBudget && isPacingView && pacingTarget < 0;
-  const pacingOverspendAmount = Math.max(-pacingTarget, 0);
-  const pacingPercent =
-    hasBudget && isPacingView && pacingCap > 0
-      ? Math.min(pacingSpent / pacingCap, 1)
-      : 0;
-  const pacingTooltip = `Spent ${currencySymbol}${formatCurrency(pacingSpent)} / Cap ${currencySymbol}${formatCurrency(
-    pacingCap
-  )} • ${pacingOverspend
-    ? `Over by ${currencySymbol}${formatCurrency(pacingOverspendAmount)}`
-    : `Remaining ${currencySymbol}${formatCurrency(pacingRemaining)}`}`;
-
-
-  // compactBudgetRow extracted to module scope (CompactBudgetRow)
-
   const budgetSurface = (
-    <div className="kk-surface kk-shadow-sm px-4 py-4 sm:px-5 sm:py-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+    <div className="relative overflow-hidden rounded-[var(--kk-radius-md)] bg-gradient-to-br from-white/80 to-[var(--kk-cream)]/60 px-4 py-4 sm:px-5 sm:py-4">
+      {/* Subtle decorative corner accent */}
+      <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-[var(--kk-ember)]/5 to-transparent" />
+
+      <div className="relative flex flex-wrap items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
           <div className="kk-label">{budgetLabel}</div>
           <div className="kk-meta mt-1">{resetHintLabel}</div>
         </div>
-        <div className="text-right">
+        <div className="flex-shrink-0">
           {!isEditingBudget && hasBudget && (
             <button
               type="button"
               onClick={openBudgetEditor}
-              className="text-xs font-medium text-[var(--kk-ember)] transition hover:text-[var(--kk-ember-ink)]"
+              className="group flex items-center gap-1 text-xs font-medium text-[var(--kk-ember)] transition-colors hover:text-[var(--kk-ember-ink)]"
               aria-label="Edit budget"
             >
-              Edit
+              <span className="rounded-full bg-[var(--kk-ember)]/10 px-2 py-1 transition-colors group-hover:bg-[var(--kk-ember)]/20">
+                Edit
+              </span>
             </button>
           )}
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
-        <div className="space-y-2">
-          {isEditingBudget ? (
-            <>
-              <div className="flex items-center gap-2">
-                <span className="kk-pill">{currencySymbol}</span>
-                <input
-                  type="number"
-                  min="1"
-                  inputMode="decimal"
-                  placeholder={`Enter ${budgetLabel.toLowerCase()}`}
-                  value={budgetDraft}
-                  onChange={(event) => {
-                    const next = event.target.value;
-                    if (next.trim().startsWith("-")) return;
-                    setBudgetDraft(next);
-                  }}
-                  className="kk-input h-9 text-sm"
-                />
-              </div>
-              {budgetError && (
-                <div className="kk-meta text-[var(--kk-ember)]">{budgetError}</div>
-              )}
-            </>
-          ) : hasBudget ? (
-            <>
-              <div className="flex items-center justify-between gap-4">
-                <div className="text-right">
-                  <div className="kk-meta">Remaining</div>
-                  <div
-                    className={`text-lg font-semibold ${overspend ? "text-[var(--kk-danger-ink)]" : "text-[var(--kk-ink)]"
-                      }`}
-                  >
-                    {overspend
-                      ? <span>-<span className="kk-currency">{currencySymbol}</span>{formatCurrency(viewTotal - (activeBudget ?? 0))}</span>
-                      : <span><span className="kk-currency">{currencySymbol}</span>{formatCurrency(remaining ?? 0)}</span>}
-                  </div>
-                </div>
+      <div className="relative mt-4">
+        {isEditingBudget ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="kk-pill bg-white">{currencySymbol}</span>
+              <input
+                type="number"
+                min="1"
+                inputMode="decimal"
+                placeholder={`Enter ${budgetLabel.toLowerCase()}`}
+                value={budgetDraft}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  if (next.trim().startsWith("-")) return;
+                  setBudgetDraft(next);
+                }}
+                className="kk-input h-9 text-sm flex-1"
+                autoFocus
+              />
+            </div>
+            {budgetError && (
+              <div className="kk-meta text-[var(--kk-ember)]">{budgetError}</div>
+            )}
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsEditingBudget(false)}
+                className="kk-btn-secondary kk-btn-compact"
+              >
+                {hasBudget ? "Cancel" : "Close"}
+              </button>
+              <button
+                type="button"
+                onClick={handleBudgetSave}
+                className="kk-btn-primary kk-btn-compact"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        ) : hasBudget ? (
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-1.5">
+                <span className="kk-meta">Remaining</span>
               </div>
               <div
-                className={`kk-progress-rail ${overspend ? "kk-progress-rail-over" : ""}`}
+                className={`mt-0.5 text-xl font-semibold font-[family:var(--font-mono)] ${overspend ? "text-[var(--kk-danger-ink)]" : "text-[var(--kk-ink)]"
+                  }`}
               >
-                <div
-                  className="kk-progress-fill"
-                  style={{ width: `${Math.round(budgetPercent * 100)}%` }}
-                />
+                {overspend
+                  ? <span>-<span className="kk-currency">{currencySymbol}</span>{formatCurrency(viewTotal - (activeBudget ?? 0))}</span>
+                  : <span><span className="kk-currency">{currencySymbol}</span>{formatCurrency(remaining ?? 0)}</span>}
               </div>
-            </>
-          ) : null}
-        </div>
-        <div className="flex items-center justify-end gap-2">
-          {isEditingBudget
-            ? (() => {
-              const isSavePrimary =
-                budgetDraft.trim() !== "" || Boolean(budgetError);
-              return (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingBudget(false)}
-                    className="kk-btn-secondary kk-btn-compact"
-                  >
-                    {hasBudget ? "Cancel" : "Close"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleBudgetSave}
-                    className={`${isSavePrimary ? "kk-btn-primary" : "kk-btn-secondary"
-                      } kk-btn-compact`}
-                  >
-                    Save
-                  </button>
-                </>
-              );
-            })()
-            : null}
-        </div>
+              <div className="mt-2 text-xs text-[var(--kk-ash)]">
+                of <span className="font-medium text-[var(--kk-ink)]">{currencySymbol}{formatCurrency(activeBudget ?? 0)}</span> total
+              </div>
+            </div>
+            {/* Circular progress indicator */}
+            <div className="relative flex-shrink-0">
+              <svg className="h-16 w-16 -rotate-90" viewBox="0 0 36 36">
+                {/* Background circle */}
+                <path
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  fill="none"
+                  stroke="var(--kk-smoke)"
+                  strokeWidth="3"
+                />
+                {/* Progress circle - with minimum visible stroke for small percentages */}
+                <path
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  fill="none"
+                  stroke={overspend ? "var(--kk-danger)" : "var(--kk-ember)"}
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeDasharray={`${Math.max(Math.min(budgetPercent * 100, 100), budgetPercent > 0 ? 3 : 0)}, 100`}
+                  className="transition-all duration-500"
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className={`text-xs font-bold font-[family:var(--font-mono)] ${overspend ? "text-[var(--kk-danger-ink)]" : "text-[var(--kk-ember)]"}`}>
+                  {Math.round(budgetPercent * 100)}%
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
 
   const coachmarkEligible =
-    summaryView === "month" &&
     !hasBudget &&
     !isEditingBudget &&
     !coachmarkDismissed;
 
   const budgetBlock = (() => {
-    if (summaryView !== "month") return null;
-
     if (hasBudget || isEditingBudget) {
       return budgetSurface;
     }
@@ -630,71 +557,17 @@ export const TransactionList = React.memo(({
     );
   })();
 
-  const pacingBlock =
-    !hasBudget || !isPacingView ? null : (
-      <div className="mt-4 rounded-[var(--kk-radius-md)] border border-[var(--kk-smoke)] bg-white/70 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex w-full items-center justify-between gap-2">
-            <div className="kk-label">Safe to spend today</div>
-            <button
-              type="button"
-              onClick={openBudgetEditorFromPacing}
-              className="text-xs font-medium text-[var(--kk-ember)] transition hover:text-[var(--kk-ember-ink)]"
-              aria-label="Edit monthly budget"
-            >
-              Edit
-            </button>
-          </div>
-        </div>
-        <div className="mt-3 flex items-center justify-start gap-4">
-          {pacingOverspend ? (
-            <div>
-              <div className="kk-meta">Over by</div>
-              <div className="text-base font-semibold text-[var(--kk-danger-ink)]">
-                <span className="kk-currency">{currencySymbol}</span>{formatCurrency(pacingOverspendAmount)}
-              </div>
-            </div>
-          ) : (
-            <div>
-              <div className="kk-meta">Remaining</div>
-              <div className="text-base font-semibold text-[var(--kk-ink)]">
-                <span className="kk-currency">{currencySymbol}</span>{formatCurrency(pacingRemaining)}
-              </div>
-            </div>
-          )}
-        </div>
-        <button
-          type="button"
-          className="relative mt-2 w-full border-0 bg-transparent p-0 text-left"
-          aria-label={pacingTooltip}
-        >
-          <div
-            className={`kk-progress-rail ${pacingOverspend ? "kk-progress-rail-over" : ""}`}
-          >
-            <div
-              className="kk-progress-fill"
-              style={{
-                width: `${Math.round(pacingPercent * 100)}%`,
-              }}
-            />
-          </div>
-        </button>
-      </div>
-    );
-
   const findTxById = useCallback(
     (id: string) =>
       transactions.find((tx) => tx.id === id) ??
-      todayTransactions.find((tx) => tx.id === id) ??
       periodTransactions.find((tx) => tx.id === id) ??
       null,
-    [periodTransactions, todayTransactions, transactions]
+    [periodTransactions, transactions]
   );
 
   const handleDelete = useCallback(async (id: string) => {
     const removed = findTxById(id);
     setTransactions((prev) => prev.filter((tx) => tx.id !== id));
-    setTodayTransactions((prev) => prev.filter((tx) => tx.id !== id));
     try {
       await deleteTransaction(id);
       if (removed) {
@@ -741,115 +614,227 @@ export const TransactionList = React.memo(({
   if (transactions.length === 0 && pendingTransactions.length === 0) {
     return (
       <motion.div
-        initial={{ opacity: 0, y: 16 }}
+        initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45 }}
-        className="kk-card p-8 text-center"
+        transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
       >
-        <EmptyState
-          icon={<Wallet className="h-8 w-8 text-[var(--kk-ash)]" />}
-          title="Your ledger is empty"
-          subtitle="Tap the mic to log your first expense"
-          className="py-2"
-        />
+        <div className="kk-card relative overflow-hidden">
+          {/* Warm radial glow behind mic */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_center,rgba(255,107,53,0.08)_0%,transparent_60%)]" />
 
+          <div className="relative px-6 pt-8 pb-6">
+            {/* Mic CTA (A2) */}
+            <div className="flex flex-col items-center text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--kk-ember)]/10">
+                <Mic className="h-6 w-6 text-[var(--kk-ember)]" strokeWidth={2} />
+              </div>
+
+              <h2 className="mt-5 font-[family:var(--font-display)] text-xl font-bold text-[var(--kk-ink)]">
+                Say it, we&apos;ll log it
+              </h2>
+              <p className="mt-1.5 text-sm text-[var(--kk-ash)] max-w-[220px]">
+                Tap the mic below and try
+              </p>
+
+              {/* Example phrase pill */}
+              <motion.div
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.4, delay: 0.35 }}
+                className="mt-4 rounded-xl bg-[var(--kk-cream)]/80 border border-[var(--kk-smoke)] px-4 py-2.5"
+              >
+                <span className="text-sm font-medium text-[var(--kk-ink)]">
+                  &ldquo;chai 20 rupees&rdquo;
+                </span>
+              </motion.div>
+            </div>
+
+            {/* Divider — ledger fold */}
+            <div className="my-6 flex items-center gap-3">
+              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-[var(--kk-smoke-heavy)] to-transparent" />
+              <Sparkles className="h-3 w-3 text-[var(--kk-saffron)]" />
+              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-[var(--kk-smoke-heavy)] to-transparent" />
+            </div>
+
+            {/* Ghost transaction preview (A3) */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.5 }}
+            >
+              <div className="mb-2.5 flex items-center gap-1.5">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--kk-ash)]">
+                  AI fills this for you
+                </span>
+              </div>
+
+              {/* Mock transaction row */}
+              <div className="flex items-center gap-3 rounded-[var(--kk-radius-md)] border border-dashed border-[var(--kk-smoke-heavy)] bg-[var(--kk-cream)]/40 px-4 py-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--kk-saffron)]/12 text-[var(--kk-saffron)]">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-[var(--kk-ink)]">Chai</div>
+                  <div className="mt-0.5 flex items-center gap-1.5">
+                    <span className="rounded-full bg-[var(--kk-smoke)] px-2 py-0.5 text-[10px] font-medium text-[var(--kk-ash)]">Food</span>
+                    <span className="text-[10px] text-[var(--kk-ash)]">Cash</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-lg font-bold font-[family:var(--font-mono)] text-[var(--kk-ink)]">
+                    <span className="kk-currency text-sm">{currencySymbol}</span>20
+                  </span>
+                </div>
+              </div>
+
+              <p className="mt-3 text-center text-xs text-[var(--kk-ash)]">
+                or type in the bar below
+              </p>
+            </motion.div>
+
+            {/* Bouncing arrow */}
+            <motion.div
+              className="mt-3 flex justify-center"
+              animate={{ y: [0, 5, 0] }}
+              transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+            >
+              <ArrowDown className="h-4 w-4 text-[var(--kk-ash)]/50" />
+            </motion.div>
+          </div>
+        </div>
       </motion.div>
     );
   }
 
   return (
     <div className="space-y-5">
-      {/* Today's Summary Card */}
+      {/* Summary Card — month total, budget, week row, categories */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="kk-card overflow-hidden p-5"
+        className="kk-card overflow-hidden"
       >
-        <div className="flex flex-wrap items-center justify-center gap-3">
-          <Listbox
-            value={summaryView}
-            onChange={(next) => {
-              setSummaryView(next);
-              syncSummaryView(next);
-            }}
-          >
-            <div className="relative">
-              <Listbox.Button className="kk-input kk-input-compact kk-select kk-shadow-sm flex h-8 !w-auto min-w-[110px] max-w-[160px] items-center justify-between rounded-full px-3 text-center">
-                <span className="flex-1 text-center">
-                  {summaryView === "today" ? "Today" : "This month"}
+        {/* Header: Two-column layout with monthly total + weekly stats */}
+        <div className="relative overflow-hidden bg-gradient-to-br from-[var(--kk-cream)]/60 via-white to-[var(--kk-paper)] p-5">
+          {/* Decorative gradient orbs */}
+          <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-gradient-to-br from-[var(--kk-ember)]/5 to-transparent blur-3xl" />
+          <div className="absolute -left-10 -bottom-10 h-32 w-32 rounded-full bg-gradient-to-tr from-[var(--kk-saffron)]/8 to-transparent blur-2xl" />
+
+          <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            {/* Left: Monthly total */}
+            <div className="flex-1 min-w-0">
+              <div className="kk-label mb-2">This month</div>
+              <div className="flex items-baseline gap-2">
+                <span className="kk-currency text-2xl font-bold">{currencySymbol}</span>
+                <span className="text-5xl font-bold leading-none tracking-tight font-[family:var(--font-mono)] sm:text-6xl">
+                  {formatCurrency(viewTotal)}
                 </span>
-                <ChevronDown className="h-3.5 w-3.5 text-[var(--kk-ash)]" />
-              </Listbox.Button>
-              <Transition
-                enter="transition ease-out duration-120"
-                enterFrom="opacity-0 -translate-y-1"
-                enterTo="opacity-100 translate-y-0"
-                leave="transition ease-in duration-90"
-                leaveFrom="opacity-100 translate-y-0"
-                leaveTo="opacity-0 -translate-y-1"
-              >
-                <Listbox.Options className="absolute z-50 mt-2 w-full min-w-[140px] overflow-hidden rounded-xl border border-[var(--kk-smoke)] bg-white p-1 text-sm shadow-[var(--kk-shadow-lg)]">
-                  {[
-                    { key: "today" as const, label: "Today" },
-                    { key: "month" as const, label: "This month" },
-                  ].map((option) => (
-                    <Listbox.Option
-                      key={option.key}
-                      value={option.key}
-                      className={({ active }) =>
-                        `flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm ${active
-                          ? "bg-[var(--kk-cream)] text-[var(--kk-ink)]"
-                          : "text-[var(--kk-ash)]"
-                        }`
-                      }
-                    >
-                      {({ selected }) => (
-                        <>
-                          <span className={`truncate ${selected ? "font-semibold text-[var(--kk-ink)]" : ""}`}>
-                            {option.label}
-                          </span>
-                          {selected && <Check className="h-4 w-4 text-[var(--kk-ember)]" />}
-                        </>
-                      )}
-                    </Listbox.Option>
-                  ))}
-                </Listbox.Options>
-              </Transition>
+              </div>
+              <div className="mt-2 text-sm text-[var(--kk-ash)]">
+                Total spent so far
+              </div>
             </div>
-          </Listbox>
+
+            {/* Right: This week card */}
+            {weekTotal > 0 && (
+              <div className="flex-shrink-0">
+                <div className="inline-flex items-center gap-3 sm:gap-4 rounded-[var(--kk-radius-lg)] bg-white/80 backdrop-blur-sm px-3 py-2 sm:px-4 sm:py-3 shadow-sm border border-[var(--kk-smoke)]">
+                  {/* This week amount */}
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-medium text-[var(--kk-ash)]">This week</span>
+                    </div>
+                    <div className="mt-1 flex items-baseline gap-1">
+                      <span className="kk-currency text-sm text-[var(--kk-ash)]">{currencySymbol}</span>
+                      <span className="text-2xl font-bold text-[var(--kk-ink)] font-[family:var(--font-mono)]">
+                        {formatCurrency(weekTotal)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Vertical divider */}
+                  <div className="h-10 w-px bg-[var(--kk-smoke)]" />
+
+                  {/* Comparison indicator */}
+                  {lastWeekTotal > 0 && (() => {
+                    const diff = ((weekTotal - lastWeekTotal) / lastWeekTotal) * 100;
+                    const isIncrease = diff > 0;
+                    const isDecrease = diff < 0;
+                    return (
+                      <div className="flex flex-col items-center gap-1">
+                        <div className={`flex h-9 w-9 items-center justify-center rounded-full ${isIncrease ? "bg-red-50" : isDecrease ? "bg-emerald-50" : "bg-[var(--kk-smoke)]"}`}>
+                          {isIncrease ? (
+                            <TrendingUp className="h-4 w-4 text-red-500" />
+                          ) : isDecrease ? (
+                            <TrendingDown className="h-4 w-4 text-emerald-500" />
+                          ) : (
+                            <Minus className="h-4 w-4 text-[var(--kk-ash)]" />
+                          )}
+                        </div>
+                        <div className={`text-xs font-bold ${isIncrease ? "text-red-600" : isDecrease ? "text-emerald-600" : "text-[var(--kk-ash)]"}`}>
+                          {diff === 0 ? "Same" : `${Math.abs(Math.round(diff))}%`}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-        <div className="mt-4 flex flex-col items-center gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
-          <div className="text-center sm:text-left">
-            <div className="kk-label">Total</div>
-            <div className="mt-1 flex items-baseline justify-center gap-1 sm:justify-start">
-              <span className="kk-currency text-[clamp(1rem,4vw,1.4rem)] font-bold font-[family:var(--font-mono)]">{currencySymbol}</span>
-              <span className="text-[clamp(1.9rem,8.5vw,2.7rem)] font-bold leading-none tracking-tight font-[family:var(--font-mono)] sm:text-4xl">
-                {formatCurrency(viewTotal)}
-              </span>
+
+        {/* Budget section */}
+        <div className="px-5 py-4">
+          <div>{budgetBlock}</div>
+        </div>
+
+        {/* Top spending with mini progress bars */}
+        {topCategories.length > 0 && (
+          <div className="border-t border-[var(--kk-smoke)] bg-gradient-to-r from-white via-[var(--kk-cream)]/20 to-white px-5 py-4">
+            <div className="kk-label mb-3 text-[10px]">Top spending</div>
+            <div className="space-y-3">
+              {topCategories.map(([cat, amount], index) => {
+                const Icon =
+                  CATEGORY_ICON_MAP[cat as keyof typeof CATEGORY_ICON_MAP] ??
+                  CATEGORY_ICON_MAP.Other;
+                const pct = viewTotal > 0 ? Math.round((amount / viewTotal) * 100) : 0;
+                const colors = [
+                  "from-[var(--kk-ember)] to-[var(--kk-saffron)]",
+                  "from-[var(--kk-ocean)] to-[var(--kk-ocean)]/70",
+                  "from-[var(--kk-sage)] to-[var(--kk-sage)]/70"
+                ];
+                return (
+                  <div key={cat} className="group">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--kk-cream)] text-[var(--kk-ash)]">
+                          <Icon className="h-3 w-3" strokeWidth={2} />
+                        </span>
+                        <span className="text-sm font-medium text-[var(--kk-ink)]">{cat}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-semibold text-[var(--kk-ink)] font-[family:var(--font-mono)] tabular-nums">
+                          {currencySymbol}{formatCurrency(amount)}
+                        </span>
+                        <span className="text-xs text-[var(--kk-ash)] min-w-[36px] text-right tabular-nums">
+                          {pct}%
+                        </span>
+                      </div>
+                    </div>
+                    {/* Mini progress bar */}
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--kk-smoke)]">
+                      <div
+                        className={`h-full rounded-full bg-gradient-to-r ${colors[index % colors.length]} transition-all duration-500`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
-          {totalCount > 0 && (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="kk-pill kk-pill-muted">
-                {totalCount} {totalCount === 1 ? "txn" : "txns"}
-              </span>
-              <span className="kk-pill kk-pill-muted">
-                Avg:{" "}
-                <span className="font-medium text-[var(--kk-ink)]">
-                  {avgToday === null
-                    ? "—"
-                    : <><span className="kk-currency">{currencySymbol}</span>{formatCurrency(avgToday, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}</>}
-                </span>
-              </span>
-            </div>
-          )}
-        </div>
-        {pacingBlock}
-        {summaryView === "month" && <div className="mt-5">{budgetBlock}</div>}
+        )}
       </motion.div>
 
       {hasReceiptEntry && (

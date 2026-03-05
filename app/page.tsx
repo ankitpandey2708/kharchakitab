@@ -40,7 +40,7 @@ import {
 import { RECURRING_TEMPLATES, type Frequency, type RecurringTemplate } from "@/src/config/recurring";
 import type { Expense } from "@/src/utils/schemas";
 import type { Transaction, Recurring_template } from "@/src/types";
-import { AlertCircle, X, User, Users } from "lucide-react";
+import { AlertCircle, X, User, Users, Download } from "lucide-react";
 import { prepareReceiptImage } from "@/src/utils/imageProcessing";
 import {
   DISMISS_TRANSCRIPTS,
@@ -57,6 +57,9 @@ import {
   syncAlertsQueue,
 } from "@/src/services/pwaAlerts";
 import { useCurrency } from "@/src/hooks/useCurrency";
+import { usePwaInstall } from "@/src/hooks/usePwaInstall";
+import { useOnboardingTour } from "@/src/hooks/useOnboardingTour";
+import { scheduleDailyReminder } from "@/src/services/dailyReminder";
 import { useRecording } from "@/src/context/AppContext";
 
 type TransactionInput = Omit<Transaction, "id">;
@@ -124,6 +127,8 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
   const { activeTab, setActiveTab } = useNavigation();
   const { setIncomingPair } = usePairing();
   const { code: currency, symbol: currencySymbol } = useCurrency();
+  const { canPrompt: canInstall, promptInstall, dismiss: dismissInstall } = usePwaInstall();
+  const { showTooltip } = useOnboardingTour();
 
   // Initialize presence at app level for discoverability
   const { isConnected, error } = useSignaling();
@@ -155,6 +160,8 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
   const [isTxnSheetOpen, setIsTxnSheetOpen] = useState(false);
   const [isReceiptProcessing, setIsReceiptProcessing] = useState(false);
   const [isTextProcessing, setIsTextProcessing] = useState(false);
+  const [isListEmpty, setIsListEmpty] = useState(false);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [activeSection, setActiveSection] = useState<TabType>("summary");
   const [recurringModalState, setRecurringModalState] = useState<{
     mode: "new" | "edit";
@@ -199,6 +206,10 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibility);
     };
+  }, []);
+
+  useEffect(() => {
+    scheduleDailyReminder();
   }, []);
 
   useEffect(() => {
@@ -286,6 +297,27 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
       setLastError(audioRecorder.error);
     }
   }, [audioRecorder.error]);
+
+  // Show PWA install banner after first successful transaction (C1)
+  useEffect(() => {
+    if (addedTx && canInstall) {
+      const t = setTimeout(() => setShowInstallBanner(true), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [addedTx, canInstall]);
+
+  // Onboarding tooltips (D4) — single delay lives inside showTooltip
+  useEffect(() => {
+    if (showHousehold && activeTab === "personal") {
+      showTooltip("household-icon", 2500);
+    }
+  }, [showHousehold, activeTab, showTooltip]);
+
+  useEffect(() => {
+    if (activeSection === "recurring") {
+      showTooltip("recurring-presets", 800);
+    }
+  }, [activeSection, showTooltip]);
 
   // Auto-dismiss error after 5s
   useEffect(() => {
@@ -926,6 +958,7 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
                   aria-label={activeTab === "household" ? "Switch to Personal" : "Switch to Household"}
                   className="kk-icon-btn kk-icon-btn-ghost kk-icon-btn-sm"
                   whileTap={{ scale: 0.9 }}
+                  data-tour="household-icon"
                 >
                   {activeTab === "household" ? (
                     <User className="h-4 w-4" style={{ color: "var(--kk-ember)" }} />
@@ -984,10 +1017,12 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
                   pendingTransactions={pendingTransactions}
                   onViewAll={handleOpenHistory}
                   onEdit={openEdit}
+                  onMicPress={onMicPress}
                   onMobileSheetChange={setIsTxnSheetOpen}
                   onDeleted={handleTransactionDeleted}
                   onReceiptUploadClick={onReceiptUploadClick}
                   isReceiptProcessing={isReceiptProcessing}
+                  onEmptyChange={setIsListEmpty}
                 />
               </section>
             </div>
@@ -1015,6 +1050,7 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
           onTabChange={setActiveSection}
           isRecording={isRecording}
           isProcessing={isProcessing}
+          isEmpty={isListEmpty}
           onMicPress={onMicPress}
           onTextSubmit={processTextInput}
           transcriptFeedback={transcriptFeedback ? { ...transcriptFeedback, currencySymbol } : null}
@@ -1071,6 +1107,47 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
           onEdit={openEdit}
         />
       )}
+
+      {/* PWA Install Banner (C1) */}
+      <AnimatePresence>
+        {showInstallBanner && (
+          <motion.div
+            initial={{ opacity: 0, y: 48 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 48 }}
+            transition={{ type: "spring", damping: 24, stiffness: 300 }}
+            className="fixed bottom-32 left-4 right-4 z-[150] mx-auto max-w-md overflow-hidden rounded-[var(--kk-radius-lg)] border border-[var(--kk-smoke)] bg-white/95 px-4 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[var(--kk-ember)]/10 text-[var(--kk-ember)]">
+                <Download className="h-4.5 w-4.5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-[var(--kk-ink)]">Add to Home Screen</div>
+                <div className="text-xs text-[var(--kk-ash)]">Quick access, works offline</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setShowInstallBanner(false); dismissInstall(); }}
+                className="kk-btn-ghost kk-btn-compact flex-shrink-0 text-xs"
+              >
+                Later
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const outcome = await promptInstall();
+                  setShowInstallBanner(false);
+                  posthog.capture("pwa_install_prompted", { outcome: outcome ?? "unknown" });
+                }}
+                className="kk-btn-primary kk-btn-compact flex-shrink-0 text-xs"
+              >
+                Install
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Error Toast — fixed at top, visible on all tabs and scroll positions */}
       <AnimatePresence>

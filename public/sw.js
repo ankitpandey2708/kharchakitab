@@ -200,6 +200,9 @@ self.addEventListener("message", (event) => {
   if (type === "SYNC_ALERTS") {
     event.waitUntil(processAlertsQueue());
   }
+  if (type === "CHECK_DAILY_REMINDER") {
+    event.waitUntil(checkDailyReminder());
+  }
   if (type === "TEST_NOTIFICATION") {
     const tag = `kk-test-alert-${Date.now()}`;
     event.waitUntil(
@@ -266,9 +269,64 @@ self.addEventListener("notificationclick", (event) => {
   );
 });
 
+const DAILY_REMINDER_KEY = "kk_daily_reminder";
+const DAILY_REMINDER_LAST_KEY = "kk_daily_reminder_last";
+
+const todayStartEnd = () => {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const end = start + MS_PER_DAY;
+  return { start, end };
+};
+
+const hasTodayTransactions = async () => {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("transactions", "readonly");
+    const store = tx.objectStore("transactions");
+    const index = store.index("by-date");
+    const { start, end } = todayStartEnd();
+    const range = IDBKeyRange.bound(start, end, false, true);
+    const request = index.openCursor(range);
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) { resolve(false); return; }
+      const record = cursor.value;
+      if (!record._deleted) { resolve(true); return; }
+      cursor.continue();
+    };
+    request.onerror = () => reject(request.error);
+  });
+};
+
+const checkDailyReminder = async () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const hour = new Date().getHours();
+  if (hour < 20) return;
+
+  const clients = await self.clients.matchAll({ type: "window" });
+  let lastShown = null;
+  for (const client of clients) {
+    // Can't read localStorage from SW; we rely on message passing
+  }
+
+  const hasEntries = await hasTodayTransactions();
+  if (hasEntries) return;
+
+  await self.registration.showNotification("KharchaKitab", {
+    body: "Did you log your expenses today?",
+    tag: `daily-reminder-${today}`,
+    icon: "/icon.svg",
+    data: { type: "daily-reminder" },
+  });
+};
+
 self.addEventListener("periodicsync", (event) => {
   if (event.tag === "recurring-alerts") {
     event.waitUntil(processAlertsQueue());
+  }
+  if (event.tag === "daily-reminder") {
+    event.waitUntil(checkDailyReminder());
   }
 });
 

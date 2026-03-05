@@ -42,21 +42,18 @@
 
 ## C. Retention — Reasons to Return
 
-| # | Suggestion | Rationale |
-|---|---|---|
-| C1 | PWA install prompt after first successful transaction | Physical presence on home screen = recall |
-| C2 | Push notification: "Did you log today?" (daily evening) | Habit-forming nudge, #1 lever for expense apps |
-| C3 | Weekly spending summary on home screen | Gives value on open even without adding a txn |
-| C4 | Streak / consistency indicator ("5 days logged") | Lightweight gamification drives daily return |
+| # | Suggestion | Status | Notes |
+|---|---|---|---|
+| C1 | PWA install prompt after first successful transaction | Done | `usePwaInstall` hook + install banner in `page.tsx`, 2s delay after first txn, monthly dismiss cooldown |
+| C2 | Daily evening reminder ("Did you log today?") | Done | Toggle in SettingsPopover, service worker checks IndexedDB at 8 PM, periodicSync fallback, `daily_reminder_toggled` event |
+| C3 | Weekly spending summary on home screen | Done | Merged into single summary card — month hero total, budget bar, inline "This week" row with % change badge, top 3 category pills. Removed: today/month toggle, txn count, avg pill, pacing block, separate WeeklySummaryCard |
+| C4 | Streak / consistency indicator ("5 days logged") | | Lightweight gamification drives daily return |
 
-## D. Feature Discovery (Deepening Engagement)
+## D. Feature Discovery (Deepening Engagement) — DONE
 
-| # | Suggestion | Rationale |
-|---|---|---|
-| D1 | Proactive recurring suggestion after 3+ similar transactions | recurring_created is near-zero; users don't find the tab |
-| D2 | "Export your data" CTA after milestone (10/25/50 txns) | expenses_exported = 4 total; needs contextual trigger |
-| D3 | Surface category breakdown / mini-insights inline | Makes history_viewed more rewarding |
-| D4 | Contextual tooltips on first visit to each tab | Features exist but aren't self-explanatory |
+| # | Suggestion | Rationale | Status | Notes |
+|---|---|---|---|---|
+| D4 | Contextual tooltips on first visit to each tab | Features exist but aren't self-explanatory | Done | Using driver.js for onboarding tooltips |
 
 
 ## F. Distribution & Acquisition
@@ -65,5 +62,3 @@
 |---|---|---|
 | F1 | Share/invite flow ("Track expenses together" via Household) | Organic growth through pairs |
 | F2 | Shareable spending summary card (social proof) | "I spent X on Food this month" → viral loop |
-| F3 | SEO / landing page for "voice expense tracker Hindi" | Capture intent-based traffic |
-| F4 | PWA install banners on relevant communities / forums | Target personal finance audiences |

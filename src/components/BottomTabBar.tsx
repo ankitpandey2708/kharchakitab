@@ -9,7 +9,7 @@ import { EXAMPLES } from "@/src/components/RecordingStatus";
 
 export type TabType = "summary" | "recurring";
 
-export interface TranscriptFeedback {
+interface TranscriptFeedback {
   txId: string;
   item: string;
   amount: number;
@@ -23,6 +23,7 @@ interface BottomTabBarProps {
   onTabChange: (tab: TabType) => void;
   isRecording: boolean;
   isProcessing?: boolean;
+  isEmpty?: boolean;
   onMicPress: () => void;
   onTextSubmit: (text: string) => void;
   transcriptFeedback?: TranscriptFeedback | null;
@@ -39,6 +40,7 @@ export const BottomTabBar = React.memo(({
   onTabChange,
   isRecording,
   isProcessing,
+  isEmpty,
   onMicPress,
   onTextSubmit,
   transcriptFeedback,
@@ -281,24 +283,29 @@ export const BottomTabBar = React.memo(({
                 className="flex-1 min-w-0 text-left text-sm text-[var(--kk-ash)] bg-transparent border-none outline-none cursor-text overflow-hidden"
                 tabIndex={0}
               >
-                <motion.span
-                  key={hintIndex}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.3 }}
-                  className="block truncate"
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.span
+                    key={hintIndex}
+                    initial={{ clipPath: "inset(0 100% 0 0)", opacity: 0 }}
+                    animate={{ clipPath: "inset(0 0% 0 0)", opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ clipPath: { duration: 0.8, ease: [0.4, 0, 0.2, 1] }, opacity: { duration: 0.2 } }}
+                    className="block truncate"
+                  >
+                    {hint}
+                  </motion.span>
+                </AnimatePresence>
+              </button>
+              <span className={`relative flex-shrink-0${isEmpty ? " kk-mic-ring" : ""}`}>
+                <button
+                  type="button"
+                  onClick={handleMicToggle}
+                  aria-label="Start recording"
+                  className="relative z-10 flex items-center justify-center w-8 h-8 rounded-full bg-[var(--kk-ember)] text-white"
                 >
-                  {hint}
-                </motion.span>
-              </button>
-              <button
-                type="button"
-                onClick={handleMicToggle}
-                aria-label="Start recording"
-                className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-[var(--kk-ember)] text-white"
-              >
-                <Mic className="h-4 w-4" strokeWidth={2.5} />
-              </button>
+                  <Mic className="h-4 w-4" strokeWidth={2.5} />
+                </button>
+              </span>
             </motion.div>
           )}
         </AnimatePresence>

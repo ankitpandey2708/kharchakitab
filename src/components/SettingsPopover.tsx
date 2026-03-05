@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Settings } from "lucide-react";
 import { CurrencyToggle } from "@/src/components/CurrencyToggle";
 import { SoundToggle } from "@/src/components/SoundToggle";
+import { DailyReminderToggle } from "@/src/components/DailyReminderToggle";
 
 export const SettingsPopover = React.memo(() => {
   const [isOpen, setIsOpen] = useState(false);
@@ -93,6 +94,23 @@ export const SettingsPopover = React.memo(() => {
                 transition={{ delay: 0.2, duration: 0.2 }}
               >
                 <SoundToggle />
+              </motion.div>
+
+              {/* Daily reminder section */}
+              <motion.div
+                className="kk-label mb-2 mt-3"
+                initial={{ opacity: 0, x: -4 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.25, duration: 0.2 }}
+              >
+                Evening Reminder
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3, duration: 0.2 }}
+              >
+                <DailyReminderToggle />
               </motion.div>
             </div>
           </motion.div>

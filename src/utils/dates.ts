@@ -19,12 +19,6 @@ export const formatDateYMD = (value: Date) => {
 export const toDateInputValue = (value: Date | number) =>
   formatDateYMD(typeof value === "number" ? new Date(value) : value);
 
-export const isToday = (timestamp: number, now = new Date()) => {
-  const { start, end } = getTodayRange(now);
-  return timestamp >= start && timestamp <= end;
-};
-
-
 export const getRangeForFilter = (
   filter: FilterKey,
   options: { now?: Date; customStart?: string; customEnd?: string } = {}
