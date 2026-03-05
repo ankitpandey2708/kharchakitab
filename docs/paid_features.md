@@ -1,22 +1,5 @@
-# Features
-P0
-- Competitor analysis (Play store reviews)
-- intro.js for user education and positioning
-- launching soon for paid features
+Custom alerts
 
-P1
-
-P2
-- Household UX (Shared ledger) and overall functionality
-- Custom alerts
-- entire UX to be STT and not just expense logging
-- add multiple vendor backups for stt
-  - gpt-4o-mini-transcribe: ~$0.18/hr ≈ ₹18/hr (platform.openai.com (https://platform.openai.com/docs/pricing/?
-    utm_source=openai))
-  - Sarvam STT: ₹30/hr (docs.sarvam.ai (https://docs.sarvam.ai/api-reference-docs/getting-started/pricing)
-  - gpt-4o-transcribe: ~$0.36/hr ≈ ₹36/hr (platform.openai.com (https://platform.openai.com/docs/pricing/?
-    utm_source=openai))
-- https://docs.sarvam.ai/api-reference-docs/getting-started/models/saaras#language-support
 
 # Crazy Ideas (Viral Hooks)
 

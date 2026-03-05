@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__posthog__projects-get",
+      "mcp__posthog__event-definitions-list",
+      "mcp__posthog__query-generate-hogql-from-question",
+      "mcp__posthog__query-run"
+    ]
+  }
+}
