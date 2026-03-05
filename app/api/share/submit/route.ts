@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { getPostHogClient } from "@/src/lib/posthog-server";
 
 export const runtime = "nodejs";
 
@@ -91,9 +92,18 @@ const buildShareBridgeHtml = (dataUrl: string) => `<!doctype html>
 </html>`;
 
 export async function POST(request: NextRequest) {
+  const distinctId = request.headers.get("x-posthog-distinct-id") || "anonymous";
+  const posthog = getPostHogClient();
   const formData = await request.formData();
   const file = formData.get("image");
   if (!(file instanceof File)) {
+    if (posthog) {
+      posthog.capture({
+        distinctId,
+        event: "share_failed",
+        properties: { reason: "missing_image" },
+      });
+    }
     return new Response(buildShareBridgeHtml(""), {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
@@ -106,6 +116,14 @@ export async function POST(request: NextRequest) {
   const base64 = Buffer.from(buffer).toString("base64");
   const mimeType = file.type || "image/jpeg";
   const dataUrl = `data:${mimeType};base64,${base64}`;
+
+  if (posthog) {
+    posthog.capture({
+      distinctId,
+      event: "share_received",
+      properties: { file_size_bytes: buffer.byteLength, mime_type: mimeType },
+    });
+  }
 
   return new Response(buildShareBridgeHtml(dataUrl), {
     headers: {

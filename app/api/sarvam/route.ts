@@ -14,6 +14,15 @@ export async function POST(request: NextRequest) {
     window: "60 s"
   });
   if (!limit.allowed) {
+    const distinctId = request.headers.get("x-posthog-distinct-id") || "anonymous";
+    const posthog = getPostHogClient();
+    if (posthog) {
+      posthog.capture({
+        distinctId,
+        event: "transcription_rate_limited",
+        properties: { retry_after: limit.retryAfter ?? null },
+      });
+    }
     return NextResponse.json(
       { error: limit.reason ?? "Too many requests." },
       {
@@ -56,6 +65,15 @@ export async function POST(request: NextRequest) {
 
   if (!response.ok) {
     const errorText = await response.text();
+    const distinctId = request.headers.get("x-posthog-distinct-id") || "anonymous";
+    const posthog = getPostHogClient();
+    if (posthog) {
+      posthog.capture({
+        distinctId,
+        event: "transcription_failed",
+        properties: { status: response.status, audio_file_size: buffer.byteLength },
+      });
+    }
     return NextResponse.json(
       {
         error: "Sarvam transcription failed.",

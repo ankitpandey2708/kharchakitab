@@ -12,6 +12,7 @@ import {
   type RecurringTemplate,
 } from "@/src/config/recurring";
 import { useEscapeKey } from "@/src/hooks/useEscapeKey";
+import posthog from "posthog-js";
 import { toDateInputValue } from "@/src/utils/dates";
 import { normalizeAmount } from "@/src/utils/money";
 import { useCurrency } from "@/src/hooks/useCurrency";
@@ -198,6 +199,14 @@ export const RecurringEditModal = React.memo(({
           recurring_amortize: amortize,
           recurring_template_id: template?.id ?? null,
         });
+        posthog.capture("recurring_created", {
+          name: name.trim(),
+          amount,
+          category,
+          frequency,
+          payment_method: paymentMethod,
+          template_id: template?.id ?? null,
+        });
 
       } else if (recurringTemplate) {
         // Update existing template (deletes old txns, generates new ones)
@@ -211,6 +220,14 @@ export const RecurringEditModal = React.memo(({
           recurring_end_date: endTs,
           recurring_reminder_days: reminderDays,
           recurring_amortize: amortize,
+        });
+        posthog.capture("recurring_updated", {
+          name: name.trim(),
+          amount,
+          category,
+          frequency,
+          payment_method: paymentMethod,
+          reactivated: reactivatePreset,
         });
 
       }

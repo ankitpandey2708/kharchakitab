@@ -39,6 +39,15 @@ export async function POST(request: NextRequest) {
   });
 
   if (!response.ok) {
+    const distinctId = request.headers.get("x-posthog-distinct-id") || "anonymous";
+    const posthog = getPostHogClient();
+    if (posthog) {
+      posthog.capture({
+        distinctId,
+        event: "expense_parse_failed",
+        properties: { status: response.status },
+      });
+    }
     return NextResponse.json({ error: "Gemini request failed." }, { status: 502 });
   }
 

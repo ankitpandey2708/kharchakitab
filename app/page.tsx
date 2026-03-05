@@ -635,6 +635,7 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
           amount: expense.amount,
           category: expense.category,
           payment_method: expense.paymentMethod ?? "cash",
+          input_method: "voice",
         });
       }
     } catch (error) {
@@ -695,6 +696,7 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
         amount: expense.amount,
         category: expense.category,
         payment_method: expense.paymentMethod ?? "cash",
+        input_method: "receipt",
       });
     } catch (error) {
       setLastError(toUserMessage(error, "unableToProcessReceipt"));

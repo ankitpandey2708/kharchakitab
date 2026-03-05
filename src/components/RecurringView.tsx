@@ -58,6 +58,7 @@ import {
   setAlertsEnabled as persistAlertsEnabled,
   syncAlertsQueue,
 } from "@/src/services/pwaAlerts";
+import posthog from "posthog-js";
 
 interface RecurringViewProps {
   refreshKey: number;
@@ -441,6 +442,12 @@ export const RecurringView = React.memo(({
   const handleDelete = async (template: Recurring_template) => {
     await deleteRecurringTemplate(template._id);
     await loadRecurring();
+    posthog.capture("recurring_deleted", {
+      name: template.item,
+      amount: template.amount,
+      category: template.category,
+      frequency: template.recurring_frequency,
+    });
     const env = getAlertsEnvironment();
     if (isAlertsReady(getAlertsEnabled(), env)) {
       const allTemplates = await getRecurringTemplates();
@@ -451,6 +458,7 @@ export const RecurringView = React.memo(({
 
   const handleAlertsToggle = async () => {
     const nextEnabled = !alertsEnabled;
+    posthog.capture("recurring_alerts_toggled", { enabled: nextEnabled });
     setAlertsEnabled(nextEnabled);
     persistAlertsEnabled(nextEnabled);
 
@@ -492,6 +500,7 @@ export const RecurringView = React.memo(({
     const env = getAlertsEnvironment();
     setAlertsBusy(true);
     await sendTestNotification();
+    posthog.capture("recurring_test_notification");
     setAlertsBusy(false);
   };
 
@@ -629,8 +638,8 @@ export const RecurringView = React.memo(({
               <CalendarPickerPopover
                 anchorEl={calendarPicker.anchorEl}
                 onClose={() => setCalendarPicker(null)}
-                onGoogleCalendar={() => { openGoogleCalendar(template, currencySymbol); setCalendarPicker(null); }}
-                onDownloadICS={() => { downloadICS(template, toICSFilename(template.item)); setCalendarPicker(null); }}
+                onGoogleCalendar={() => { posthog.capture("recurring_calendar_added", { method: "google_calendar", name: template.item }); openGoogleCalendar(template, currencySymbol); setCalendarPicker(null); }}
+                onDownloadICS={() => { posthog.capture("recurring_calendar_added", { method: "ics_download", name: template.item }); downloadICS(template, toICSFilename(template.item)); setCalendarPicker(null); }}
               />
             )}
             {!isEnded && (
@@ -712,7 +721,7 @@ export const RecurringView = React.memo(({
         type="button"
         whileHover={{ scale: 1.02, y: -2 }}
         whileTap={{ scale: 0.98 }}
-        onClick={() => onAddRecurring(template)}
+        onClick={() => { posthog.capture("recurring_template_clicked", { template_id: template.id, template_name: template.name }); onAddRecurring(template); }}
         className="group flex items-center gap-3 rounded-xl border border-[var(--kk-smoke)] bg-white/60 p-3.5 text-left transition-colors transition-shadow hover:border-[var(--kk-ember)]/40 hover:bg-white hover:shadow-md transform-gpu will-change-transform"
       >
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--kk-cream)] text-[var(--kk-ash)] transition-all group-hover:bg-[var(--kk-ember)]/10 group-hover:text-[var(--kk-ember)]">
@@ -862,7 +871,7 @@ export const RecurringView = React.memo(({
                 type="button"
                 whileHover={{ scale: 1.05, y: -2 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => downloadICS(activeTemplates, "kharchakitab-recurring.ics")}
+                onClick={() => { posthog.capture("recurring_calendar_added", { method: "ics_bulk", count: activeTemplates.length }); downloadICS(activeTemplates, "kharchakitab-recurring.ics"); }}
                 className="group/export relative flex flex-col items-center rounded-xl border border-[var(--kk-ember)]/20 bg-gradient-to-b from-[var(--kk-ember)]/8 to-[var(--kk-ember)]/15 px-4 py-2 transition-colors transition-shadow hover:border-[var(--kk-ember)]/35 hover:shadow-[0_4px_16px_-6px_rgba(222,88,38,0.3)] transform-gpu"
               >
                 <span className="flex h-7 items-center justify-center">
@@ -897,7 +906,7 @@ export const RecurringView = React.memo(({
                   <button
                     key={filter}
                     type="button"
-                    onClick={() => setRecurringFilter(filter)}
+                    onClick={() => { setRecurringFilter(filter); posthog.capture("recurring_filtered", { filter }); }}
                     className={`flex-1 sm:flex-none text-center rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] transition ${recurringFilter === filter
                       ? "border-[var(--kk-ember)] bg-[var(--kk-ember)] text-white"
                       : "border-[var(--kk-smoke)] bg-white/80 text-[var(--kk-ash)] hover:border-[var(--kk-ember)]/40"
@@ -1123,6 +1132,7 @@ export const RecurringView = React.memo(({
                       type="button"
                       className="kk-btn-secondary flex items-center justify-center gap-2 border-[var(--kk-ember)]/20 bg-gradient-to-b from-[var(--kk-ember)]/5 to-[var(--kk-ember)]/10 text-[var(--kk-ink)] active:scale-[0.97] transition-colors transition-[border-color] hover:border-[var(--kk-ember)]/40 transform-gpu"
                       onClick={() => {
+                        posthog.capture("recurring_calendar_added", { method: "google_calendar", name: actionSheetTemplate.item });
                         openGoogleCalendar(actionSheetTemplate, currencySymbol);
                         setActionSheetTemplate(null);
                       }}
@@ -1134,6 +1144,7 @@ export const RecurringView = React.memo(({
                       type="button"
                       className="kk-btn-secondary flex items-center justify-center gap-2 border-dashed border-[var(--kk-smoke-heavy)] text-[var(--kk-ash)] active:scale-[0.97] transition-colors transition-[border-color] hover:border-solid hover:border-[var(--kk-ember)]/40 hover:text-[var(--kk-ember)] transform-gpu"
                       onClick={() => {
+                        posthog.capture("recurring_calendar_added", { method: "ics_download", name: actionSheetTemplate.item });
                         downloadICS(actionSheetTemplate, toICSFilename(actionSheetTemplate.item));
                         setActionSheetTemplate(null);
                       }}

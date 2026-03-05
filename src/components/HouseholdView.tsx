@@ -41,6 +41,7 @@ import { TransactionRow } from "@/src/components/TransactionRow";
 import { useSyncEvents } from "@/src/hooks/useSyncEvents";
 import { useAppContext } from "@/src/context/AppContext";
 import { useSignaling } from "@/src/context/SignalingContext";
+import posthog from "posthog-js";
 
 const generateCode = () => Math.floor(1000 + Math.random() * 9000).toString();
 
@@ -223,6 +224,7 @@ export const HouseholdView = React.memo(() => {
     if (isSearchingRef.current) {
       return;
     }
+    posthog.capture("nearby_refreshed");
 
     isSearchingRef.current = true;
     setIsSearching(true);
@@ -280,6 +282,7 @@ export const HouseholdView = React.memo(() => {
 
   const handleIncomingPairAccept = async () => {
     if (!incomingPair || !identity) return;
+    posthog.capture("pair_accepted", { partner_device_id: incomingPair.from_device_id });
     const client = await connectSignaling();
     client.send("pairing:accept", {
       session_id: incomingPair.session_id,
@@ -291,6 +294,7 @@ export const HouseholdView = React.memo(() => {
 
   const handleIncomingPairCancel = async () => {
     if (!incomingPair || !identity) return;
+    posthog.capture("pair_cancelled", { partner_device_id: incomingPair.from_device_id });
     const timestamp = new Date().toISOString();
 
 
@@ -313,6 +317,7 @@ export const HouseholdView = React.memo(() => {
   };
 
   const handleSyncWith = async (partnerDeviceId: string) => {
+    posthog.capture("sync_initiated", { partner_device_id: partnerDeviceId });
     setIsSyncing(true);
     setActivePartnerId(partnerDeviceId);
     setSyncSummary("");
@@ -457,6 +462,7 @@ export const HouseholdView = React.memo(() => {
   };
 
   const cancelSync = useCallback(() => {
+    posthog.capture("sync_cancelled");
     setIsSyncing(false);
     setSyncProgress(null);
     setSyncSummary("Sync cancelled");
@@ -780,6 +786,7 @@ export const HouseholdView = React.memo(() => {
 
   const handleResolveConflict = async (transaction: Transaction) => {
     if (!selectedConflict) return;
+    posthog.capture("conflict_resolved", { transaction_id: selectedConflict });
     await updateTransaction(selectedConflict, { ...transaction, conflict: false });
     if (pairings[0]) await clearConflict(pairings[0].partner_device_id, selectedConflict);
     setSelectedConflict(null);
@@ -788,6 +795,7 @@ export const HouseholdView = React.memo(() => {
   };
 
   const handleForgetPartner = async (partnerDeviceId: string) => {
+    posthog.capture("partner_removed", { partner_device_id: partnerDeviceId });
     await removePairing(partnerDeviceId);
     await refreshSyncState();
     await fetchHouseholdTransactions();
@@ -798,6 +806,7 @@ export const HouseholdView = React.memo(() => {
   const saveDisplayName = async () => {
     if (displayNameDraft.trim()) {
       await setDeviceDisplayName(displayNameDraft);
+      posthog.capture("display_name_changed");
       const updated = await getDeviceIdentity();
       setIdentity(updated);
       setIsEditingName(false);
@@ -1044,7 +1053,7 @@ export const HouseholdView = React.memo(() => {
                   {(["all", "you", "partner"] as const).map((filter) => (
                     <button
                       key={filter}
-                      onClick={() => setHouseholdFilter(filter)}
+                      onClick={() => { setHouseholdFilter(filter); posthog.capture("household_filtered", { filter }); }}
                       className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all ${householdFilter === filter
                         ? 'bg-gradient-to-r from-[var(--kk-ember)] to-[var(--kk-ember-deep)] text-white shadow-md'
                         : 'text-[var(--kk-ash)] hover:bg-white hover:text-[var(--kk-ink)]'
@@ -1144,7 +1153,7 @@ export const HouseholdView = React.memo(() => {
                   {viewMode === 'recent' && householdTransactions.length > 5 && (
                     <div className="border-t border-[var(--kk-smoke)] bg-[var(--kk-paper)] px-4 py-4">
                       <button
-                        onClick={() => setViewMode('full')}
+                        onClick={() => { setViewMode('full'); posthog.capture("household_view_switched", { view_mode: "full" }); }}
                         className="group w-full flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[var(--kk-smoke-heavy)] bg-white p-4 text-sm font-semibold text-[var(--kk-ink)] transition-all hover:border-[var(--kk-ember)] hover:bg-[var(--kk-ember)]/5"
                       >
                         View all {householdTransactions.length} entries
@@ -1157,7 +1166,7 @@ export const HouseholdView = React.memo(() => {
                   {viewMode === 'full' && (
                     <div className="border-t border-[var(--kk-smoke)] px-4 py-4">
                       <button
-                        onClick={() => setViewMode('recent')}
+                        onClick={() => { setViewMode('recent'); posthog.capture("household_view_switched", { view_mode: "recent" }); }}
                         className="w-full flex items-center justify-center gap-2 rounded-xl p-3 text-sm font-semibold text-[var(--kk-ash)] transition-colors hover:text-[var(--kk-ink)]"
                       >
                         Show recent only
