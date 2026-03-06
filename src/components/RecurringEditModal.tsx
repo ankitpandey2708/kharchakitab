@@ -27,7 +27,7 @@ import {
   getAlertsEnvironment,
   isAlertsReady,
   syncAlertsQueue,
-} from "@/src/services/pwaAlerts";
+} from "@/src/services/notifications";
 
 interface RecurringPrefill {
   name: string;

@@ -20,11 +20,6 @@ import {
   Sparkles,
   TrendingUp,
   MoreHorizontal,
-  Bell,
-  BellOff,
-  BellRing,
-  ShieldAlert,
-  Smartphone,
   Download,
   Globe,
 } from "lucide-react";
@@ -47,17 +42,11 @@ import type { Recurring_template } from "@/src/types";
 import { useCurrency } from "@/src/hooks/useCurrency";
 import { CategoryIcon } from "@/src/components/CategoryIcon";
 import {
-  clearAlertsQueue,
   getAlertsEnabled,
   getAlertsEnvironment,
-  getAlertsLastSyncAt,
-  getAlertsStatus,
   isAlertsReady,
-  requestNotificationPermission,
-  sendTestNotification,
-  setAlertsEnabled as persistAlertsEnabled,
   syncAlertsQueue,
-} from "@/src/services/pwaAlerts";
+} from "@/src/services/notifications";
 import posthog from "posthog-js";
 
 interface RecurringViewProps {
@@ -229,13 +218,6 @@ export const RecurringView = React.memo(({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [recurringFilter, setRecurringFilter] = useState<"active" | "ended" | "all">("active");
-  const [alertsEnabled, setAlertsEnabled] = useState(false);
-  const [alertsEnv, setAlertsEnv] = useState(() => getAlertsEnvironment());
-  const [alertsStatus, setAlertsStatus] = useState(() =>
-    getAlertsStatus(false, getAlertsEnvironment())
-  );
-  const [alertsBusy, setAlertsBusy] = useState(false);
-  const [alertsLastSync, setAlertsLastSync] = useState<number | null>(null);
   const [calendarPicker, setCalendarPicker] = useState<{ templateId: string; anchorEl: HTMLElement } | null>(null);
 
   const usedTemplateIds = useMemo(() => {
@@ -258,31 +240,6 @@ export const RecurringView = React.memo(({
     [templates, now]
   );
   const monthlyTotal = useMemo(() => calculateMonthlyTotal(activeTemplates), [activeTemplates]);
-  const alertsLabel = (() => {
-    if (!alertsEnabled) return "Disabled";
-    if (alertsEnv.isIos && !alertsEnv.isStandalone) return "Install required";
-    if (alertsEnv.permission === "denied") return "Blocked";
-    if (alertsEnv.permission === "default") return "Needs permission";
-    return "Enabled";
-  })();
-  const alertsTone =
-    alertsLabel === "Enabled"
-      ? "bg-[var(--kk-sage-bg)] text-[var(--kk-sage)]"
-      : alertsLabel === "Blocked"
-        ? "bg-[var(--kk-danger-bg)] text-[var(--kk-danger-ink)]"
-        : "bg-[var(--kk-smoke)] text-[var(--kk-ash)]";
-  const alertsReady = isAlertsReady(alertsEnabled, alertsEnv);
-  const showInstallHint = alertsEnabled && alertsEnv.isIos && !alertsEnv.isStandalone;
-  const AlertIcon =
-    alertsLabel === "Enabled"
-      ? Bell
-      : alertsLabel === "Needs permission"
-        ? BellRing
-        : alertsLabel === "Blocked"
-          ? ShieldAlert
-          : alertsLabel === "Install required"
-            ? Smartphone
-            : BellOff;
 
   const loadRecurring = useCallback(async () => {
     setIsLoading(true);
@@ -330,39 +287,6 @@ export const RecurringView = React.memo(({
     void loadRecurring();
   }, [loadRecurring, refreshKey]);
 
-  useEffect(() => {
-    const env = getAlertsEnvironment();
-    const enabled = getAlertsEnabled();
-    setAlertsEnv(env);
-    setAlertsEnabled(enabled);
-    setAlertsStatus(getAlertsStatus(enabled, env));
-    setAlertsLastSync(getAlertsLastSyncAt());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        setAlertsEnv(getAlertsEnvironment());
-        setAlertsLastSync(getAlertsLastSyncAt());
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!("serviceWorker" in navigator)) return undefined;
-    const handleSwMessage = (event: MessageEvent) => {
-      if (!event.data || event.data.type !== "TEST_NOTIFICATION_SENT") return;
-    };
-    navigator.serviceWorker.addEventListener("message", handleSwMessage);
-    return () => {
-      navigator.serviceWorker.removeEventListener("message", handleSwMessage);
-    };
-  }, []);
 
   useEffect(() => {
     onMobileSheetChange?.(Boolean(actionSheetTemplate));
@@ -452,56 +376,7 @@ export const RecurringView = React.memo(({
     if (isAlertsReady(getAlertsEnabled(), env)) {
       const allTemplates = await getRecurringTemplates();
       await syncAlertsQueue(allTemplates, { force: true });
-      setAlertsLastSync(getAlertsLastSyncAt());
     }
-  };
-
-  const handleAlertsToggle = async () => {
-    const nextEnabled = !alertsEnabled;
-    posthog.capture("recurring_alerts_toggled", { enabled: nextEnabled });
-    setAlertsEnabled(nextEnabled);
-    persistAlertsEnabled(nextEnabled);
-
-    if (!nextEnabled) {
-      await clearAlertsQueue();
-      setAlertsStatus(getAlertsStatus(false, alertsEnv));
-      return;
-    }
-
-    const env = getAlertsEnvironment();
-    setAlertsEnv(env);
-
-    if (!env.isSupported) {
-      setAlertsStatus(getAlertsStatus(true, env));
-      return;
-    }
-
-    if (env.isIos && !env.isStandalone) {
-      setAlertsStatus("disabled");
-      return;
-    }
-
-    setAlertsBusy(true);
-    const permission = await requestNotificationPermission();
-    const nextEnv = { ...env, permission };
-    setAlertsEnv(nextEnv);
-    setAlertsStatus(getAlertsStatus(true, nextEnv));
-
-    if (permission === "granted") {
-      await syncAlertsQueue(templates, { force: true });
-      setAlertsLastSync(getAlertsLastSyncAt());
-      await sendTestNotification();
-    }
-
-    setAlertsBusy(false);
-  };
-
-  const handleTestNotification = async () => {
-    const env = getAlertsEnvironment();
-    setAlertsBusy(true);
-    await sendTestNotification();
-    posthog.capture("recurring_test_notification");
-    setAlertsBusy(false);
   };
 
 
@@ -761,78 +636,6 @@ export const RecurringView = React.memo(({
 
   return (
     <div className="space-y-8">
-      <section className="relative overflow-hidden rounded-2xl border border-[var(--kk-smoke)] bg-white/80 p-5 sm:p-6">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,133,0,0.12),transparent_55%),radial-gradient(circle_at_bottom_right,rgba(46,164,79,0.12),transparent_52%)]" />
-        <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full bg-[var(--kk-ember)]/10 blur-2xl" />
-        <div className="relative grid gap-4 grid-cols-[1fr_auto] items-center">
-          <div className="flex items-start gap-4">
-            <div
-              className={`relative flex h-12 w-12 items-center justify-center rounded-2xl border ${alertsReady
-                ? "border-[var(--kk-sage)]/30 bg-[var(--kk-sage-bg)] text-[var(--kk-sage)]"
-                : "border-[var(--kk-smoke)] bg-[var(--kk-cream)] text-[var(--kk-ash)]"
-                }`}
-            >
-              <AlertIcon className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="text-sm font-semibold text-[var(--kk-ink)]">Alerts & reminders</div>
-              </div>
-              <div className="mt-1 text-xs text-[var(--kk-ash)]">
-                Daily 9:00 AM reminders for upcoming dues.
-              </div>
-              {null}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 sm:justify-end">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={alertsEnabled}
-              aria-label="Enable alerts"
-              onClick={handleAlertsToggle}
-              disabled={alertsBusy}
-              className={`group relative h-7 w-[54px] rounded-full border transition-colors transition-shadow ${alertsEnabled
-                ? "border-[var(--kk-ember)]/50 bg-[var(--kk-ember)]/20 shadow-[0_6px_14px_-10px_rgba(222,88,38,0.6)]"
-                : "border-[var(--kk-smoke-heavy)] bg-[var(--kk-cream)]"
-                }`}
-            >
-              <span
-                aria-hidden="true"
-                className={`absolute inset-0 rounded-full ${alertsEnabled
-                  ? "shadow-[inset_0_0_0_1px_rgba(222,88,38,0.18)]"
-                  : "shadow-[inset_0_0_0_1px_rgba(0,0,0,0.04)]"
-                  }`}
-              />
-              <span
-                aria-hidden="true"
-                className={`absolute top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-white shadow-[0_6px_12px_-8px_rgba(18,18,18,0.6)] transition ${alertsEnabled ? "right-[6px] ring-2 ring-[var(--kk-ember)]/20"
-                  : "left-[6px]"
-                  }`}
-              />
-            </button>
-          </div>
-        </div>
-
-        {(alertsStatus === "blocked" || alertsStatus === "unsupported" || showInstallHint) && (
-          <div className="relative mt-4 rounded-xl border border-[var(--kk-smoke)] bg-white/80 px-3 py-2 text-xs text-[var(--kk-ash)]">
-            {alertsStatus === "blocked" && (
-              <span>Notifications are blocked. Enable them in your browser settings.</span>
-            )}
-            {alertsStatus === "unsupported" && (
-              <span>This browser does not support notification alerts.</span>
-            )}
-            {showInstallHint && (
-              <span className="inline-flex items-center gap-1">
-                <Smartphone className="h-3.5 w-3.5" />
-                Add to Home Screen to get alerts on iOS.
-              </span>
-            )}
-          </div>
-        )}
-      </section>
-
       {/* Summary Header - Only show if there are active templates */}
       {activeTemplates.length > 0 && (
         <div className="relative overflow-hidden rounded-2xl border border-[var(--kk-smoke)] bg-gradient-to-br from-white via-white to-[var(--kk-cream)]/50 p-6">

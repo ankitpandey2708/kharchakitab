@@ -1,24 +1,24 @@
 "use client";
 
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import posthog from "posthog-js";
 import {
-  getDailyReminderEnabled,
-  setDailyReminderEnabled,
-  scheduleDailyReminder,
-  registerDailyReminderSync,
-  unregisterDailyReminderSync,
+  clearAlertsQueue,
   ensureNotificationsEnabled,
+  getAlertsEnabled,
+  setAlertsEnabled as persistAlertsEnabled,
+  syncAlertsQueue,
 } from "@/src/services/notifications";
+import { getRecurringTemplates } from "@/src/db/db";
 
 const OPTIONS = [
   { value: "true", label: "On" },
   { value: "false", label: "Off" },
 ] as const;
 
-export const DailyReminderToggle = React.memo(() => {
-  const [enabled, setEnabled] = useState(() => getDailyReminderEnabled());
+export const RecurringAlertsToggle = React.memo(() => {
+  const [enabled, setEnabled] = useState(() => getAlertsEnabled());
 
   const toggle = useCallback(async (value: string) => {
     const on = value === "true";
@@ -26,16 +26,16 @@ export const DailyReminderToggle = React.memo(() => {
     if (on) {
       const permission = await ensureNotificationsEnabled();
       if (permission !== "granted") return;
-      setDailyReminderEnabled(true);
+      persistAlertsEnabled(true);
       setEnabled(true);
-      scheduleDailyReminder();
-      registerDailyReminderSync();
-      posthog.capture("daily_reminder_toggled", { enabled: true });
+      const templates = await getRecurringTemplates();
+      await syncAlertsQueue(templates, { force: true });
+      posthog.capture("recurring_alerts_toggled", { enabled: true });
     } else {
-      setDailyReminderEnabled(false);
+      persistAlertsEnabled(false);
       setEnabled(false);
-      unregisterDailyReminderSync();
-      posthog.capture("daily_reminder_toggled", { enabled: false });
+      await clearAlertsQueue();
+      posthog.capture("recurring_alerts_toggled", { enabled: false });
     }
   }, []);
 
@@ -43,7 +43,7 @@ export const DailyReminderToggle = React.memo(() => {
     <div
       className="relative inline-flex items-center rounded-full border border-[var(--kk-smoke-heavy)] bg-white/80 p-[2px]"
       role="radiogroup"
-      aria-label="Evening reminder"
+      aria-label="Recurring alerts"
     >
       <motion.div
         className="absolute top-[2px] bottom-[2px] rounded-full"
@@ -87,4 +87,4 @@ export const DailyReminderToggle = React.memo(() => {
   );
 });
 
-DailyReminderToggle.displayName = "DailyReminderToggle";
+RecurringAlertsToggle.displayName = "RecurringAlertsToggle";

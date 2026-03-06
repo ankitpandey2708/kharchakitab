@@ -49,25 +49,9 @@ export const StreakBadge = React.memo(
       setMounted(true);
     }, []);
 
-    if (displayCount === 0 && !broke) return null;
+    if (!mounted || (displayCount === 0 && !broke)) return null;
 
     const { color, glowColor, bgColor } = getMilestone(displayCount);
-
-    // Render static version on server to avoid hydration mismatch
-    if (!mounted) {
-      return (
-        <div
-          className={`flex items-center gap-1 rounded-full px-2 py-0.5 ${bgColor} ${!broke && glowColor ? `shadow-sm ${glowColor}` : ""}`}
-        >
-          <Flame className={`h-3.5 w-3.5 ${color}`} strokeWidth={2.5} />
-          <span
-            className={`text-xs font-bold ${color} font-[family:var(--font-mono)] tabular-nums`}
-          >
-            {displayCount}
-          </span>
-        </div>
-      );
-    }
 
     return (
       <AnimatePresence mode="wait">

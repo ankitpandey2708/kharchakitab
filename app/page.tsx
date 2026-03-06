@@ -55,13 +55,13 @@ import {
   getAlertsEnvironment,
   isAlertsReady,
   syncAlertsQueue,
-} from "@/src/services/pwaAlerts";
+  scheduleDailyReminder,
+} from "@/src/services/notifications";
 import { useCurrency } from "@/src/hooks/useCurrency";
 import { usePwaInstall } from "@/src/hooks/usePwaInstall";
 import { useOnboardingTour } from "@/src/hooks/useOnboardingTour";
 import { useStreak } from "@/src/hooks/useStreak";
 import { StreakBadge } from "@/src/components/StreakBadge";
-import { scheduleDailyReminder } from "@/src/services/dailyReminder";
 import { useRecording } from "@/src/context/AppContext";
 
 type TransactionInput = Omit<Transaction, "id">;
@@ -130,7 +130,7 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
   const { setIncomingPair } = usePairing();
   const { code: currency, symbol: currencySymbol } = useCurrency();
   const { canPrompt: canInstall, promptInstall, dismiss: dismissInstall } = usePwaInstall();
-  const { showTooltip } = useOnboardingTour();
+  const { showTooltip, showTooltipsInOrder } = useOnboardingTour();
   const { count: streakCount, broke: streakBroke, lostCount: streakLostCount, recordActivity: recordStreak } = useStreak();
 
   // Initialize presence at app level for discoverability
@@ -320,6 +320,11 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
       showTooltip("recurring-presets", 800);
     }
   }, [activeSection, showTooltip]);
+
+  // First-visit tooltips shown in explicit priority order, sequenced by user dismissal
+  useEffect(() => {
+    showTooltipsInOrder(["notifications-toggle"], 3000);
+  }, [showTooltipsInOrder]);
 
   // Auto-dismiss error after 5s
   useEffect(() => {

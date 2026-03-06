@@ -4,6 +4,10 @@ const DB_VERSION = 5;
 const ALERTS_STORE = "recurring_alerts";
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
 const openDb = () =>
   new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -45,6 +49,27 @@ const requestToPromise = (request) =>
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
+
+/** Single place to show any push notification from this SW. */
+const notify = (title, body, options = {}) =>
+  self.registration.showNotification(title, {
+    icon: "/icon.svg",
+    ...options,
+    body,
+  });
+
+// Master toggle state — updated via SET_MASTER_ENABLED message from client.
+// Defaults to true so existing users aren't broken on first SW load.
+let masterEnabled = true;
+
+const broadcastToClients = async (message) => {
+  const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  clients.forEach((client) => client.postMessage(message));
+};
+
+// ---------------------------------------------------------------------------
+// Date math (duplicated from client because SW can't import ES modules)
+// ---------------------------------------------------------------------------
 
 const atLocalNine = (timestamp) => {
   const date = new Date(timestamp);
@@ -102,17 +127,16 @@ const daysBetweenLocal = (from, to) => {
   return Math.round((toDate.getTime() - fromDate.getTime()) / MS_PER_DAY);
 };
 
-const showAlert = async (entry, now) => {
-  const daysLeft = Math.max(0, daysBetweenLocal(now, entry.due_at));
-  const title = entry.item || "Upcoming payment";
-  const body = `Due in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`;
+// ---------------------------------------------------------------------------
+// Feature: Recurring alerts
+// ---------------------------------------------------------------------------
 
-  await self.registration.showNotification(title, {
-    body,
+const showRecurringAlert = async (entry, now) => {
+  const daysLeft = Math.max(0, daysBetweenLocal(now, entry.due_at));
+  await notify(entry.item || "Upcoming payment", `Due in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`, {
     tag: `recurring-${entry.template_id}-${entry.due_at}`,
     data: { template_id: entry.template_id, due_at: entry.due_at },
     actions: [{ action: "stop-cycle", title: "Stop for this cycle" }],
-    icon: "/icon.svg",
   });
 };
 
@@ -130,7 +154,7 @@ const processAlertsQueue = async () => {
       if (now < entry.next_fire) continue;
       if (entry.last_fired_at && entry.last_fired_at === entry.next_fire) continue;
 
-      await showAlert(entry, now);
+      await showRecurringAlert(entry, now);
 
       const schedule = computeSchedule(now + 1000, entry);
       if (!schedule) {
@@ -187,90 +211,9 @@ const stopForThisCycle = async (templateId, dueAt) => {
   });
 };
 
-self.addEventListener("install", () => {
-  self.skipWaiting();
-});
-
-self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
-});
-
-self.addEventListener("message", (event) => {
-  const { type } = event.data || {};
-  if (type === "SYNC_ALERTS") {
-    event.waitUntil(processAlertsQueue());
-  }
-  if (type === "CHECK_DAILY_REMINDER") {
-    event.waitUntil(checkDailyReminder());
-  }
-  if (type === "TEST_NOTIFICATION") {
-    const tag = `kk-test-alert-${Date.now()}`;
-    event.waitUntil(
-      self.registration
-        .showNotification("KharchaKitab", {
-          body: "This is a test reminder notification.",
-          tag,
-          renotify: true,
-          requireInteraction: true,
-          silent: false,
-          icon: "/icon.svg",
-        })
-        .then(async () => {
-          const notifications = await self.registration.getNotifications({ tag });
-          await self.clients
-            .matchAll({ type: "window", includeUncontrolled: true })
-            .then((clients) => {
-              clients.forEach((client) =>
-                client.postMessage({
-                  type: "TEST_NOTIFICATION_SENT",
-                  ok: true,
-                  tag,
-                  count: notifications.length,
-                })
-              );
-            });
-        })
-        .catch((error) => {
-          return self.clients
-            .matchAll({ type: "window", includeUncontrolled: true })
-            .then((clients) => {
-              clients.forEach((client) =>
-                client.postMessage({
-                  type: "TEST_NOTIFICATION_SENT",
-                  ok: false,
-                  error: String(error),
-                  tag,
-                })
-              );
-            });
-        })
-    );
-  }
-});
-
-self.addEventListener("notificationclick", (event) => {
-  const { action } = event;
-  const data = event.notification.data || {};
-  event.notification.close();
-
-  if (action === "stop-cycle") {
-    event.waitUntil(stopForThisCycle(data.template_id, data.due_at));
-    return;
-  }
-
-  event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      if (clients.length > 0) {
-        clients[0].focus();
-        return;
-      }
-      return self.clients.openWindow("/");
-    })
-  );
-});
-
-const DAILY_REMINDER_KEY = "kk_daily_reminder";
-const DAILY_REMINDER_LAST_KEY = "kk_daily_reminder_last";
+// ---------------------------------------------------------------------------
+// Feature: Daily reminder
+// ---------------------------------------------------------------------------
 
 const todayStartEnd = () => {
   const now = new Date();
@@ -300,37 +243,144 @@ const hasTodayTransactions = async () => {
 };
 
 const checkDailyReminder = async () => {
-  const today = new Date().toISOString().slice(0, 10);
   const hour = new Date().getHours();
   if (hour < 20) return;
-
-  const clients = await self.clients.matchAll({ type: "window" });
-  let lastShown = null;
-  for (const client of clients) {
-    // Can't read localStorage from SW; we rely on message passing
-  }
 
   const hasEntries = await hasTodayTransactions();
   if (hasEntries) return;
 
-  await self.registration.showNotification("KharchaKitab", {
-    body: "Did you log your expenses today?",
+  const today = new Date().toISOString().slice(0, 10);
+  await notify("KharchaKitab", "Did you log your expenses today?", {
     tag: `daily-reminder-${today}`,
-    icon: "/icon.svg",
     data: { type: "daily-reminder" },
   });
 };
 
-self.addEventListener("periodicsync", (event) => {
-  if (event.tag === "recurring-alerts") {
-    event.waitUntil(processAlertsQueue());
+// ---------------------------------------------------------------------------
+// Feature: Test notification
+// ---------------------------------------------------------------------------
+
+const handleTestNotification = async () => {
+  const tag = `kk-test-alert-${Date.now()}`;
+  try {
+    await notify("KharchaKitab", "This is a test reminder notification.", {
+      tag,
+      renotify: true,
+      requireInteraction: true,
+      silent: false,
+    });
+    const notifications = await self.registration.getNotifications({ tag });
+    await broadcastToClients({
+      type: "TEST_NOTIFICATION_SENT",
+      ok: true,
+      tag,
+      count: notifications.length,
+    });
+  } catch (error) {
+    await broadcastToClients({
+      type: "TEST_NOTIFICATION_SENT",
+      ok: false,
+      error: String(error),
+      tag,
+    });
   }
-  if (event.tag === "daily-reminder") {
-    event.waitUntil(checkDailyReminder());
+};
+
+// ---------------------------------------------------------------------------
+// SW lifecycle
+// ---------------------------------------------------------------------------
+
+self.addEventListener("install", () => {
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
+// ---------------------------------------------------------------------------
+// Message dispatch — one table, easy to extend
+// ---------------------------------------------------------------------------
+
+// Handlers that should be blocked when master toggle is off
+const gatedHandlers = {
+  SYNC_ALERTS: () => processAlertsQueue(),
+  CHECK_DAILY_REMINDER: () => checkDailyReminder(),
+};
+
+// Handlers that always work regardless of master toggle
+const ungatedHandlers = {
+  TEST_NOTIFICATION: () => handleTestNotification(),
+  SET_MASTER_ENABLED: (event) => {
+    masterEnabled = event.data.enabled !== false;
+  },
+};
+
+self.addEventListener("message", (event) => {
+  const { type, _masterEnabled } = event.data || {};
+
+  // Update cached master state from every message that carries it
+  if (typeof _masterEnabled === "boolean") {
+    masterEnabled = _masterEnabled;
+  }
+
+  const ungated = ungatedHandlers[type];
+  if (ungated) {
+    ungated(event);
+    return;
+  }
+
+  // Gate: if master is off, skip all notification processing
+  if (!masterEnabled) return;
+
+  const gated = gatedHandlers[type];
+  if (gated) {
+    event.waitUntil(gated(event));
   }
 });
 
+// ---------------------------------------------------------------------------
+// Notification click dispatch
+// ---------------------------------------------------------------------------
+
+self.addEventListener("notificationclick", (event) => {
+  const { action } = event;
+  const data = event.notification.data || {};
+  event.notification.close();
+
+  if (action === "stop-cycle") {
+    event.waitUntil(stopForThisCycle(data.template_id, data.due_at));
+    return;
+  }
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      if (clients.length > 0) {
+        clients[0].focus();
+        return;
+      }
+      return self.clients.openWindow("/");
+    })
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Periodic & background sync dispatch
+// ---------------------------------------------------------------------------
+
+const periodicSyncHandlers = {
+  "recurring-alerts": () => processAlertsQueue(),
+  "daily-reminder": () => checkDailyReminder(),
+};
+
+self.addEventListener("periodicsync", (event) => {
+  if (!masterEnabled) return;
+  const handler = periodicSyncHandlers[event.tag];
+  if (handler) event.waitUntil(handler());
+});
+
 self.addEventListener("sync", (event) => {
+  if (!masterEnabled) return;
   if (event.tag === "recurring-alerts") {
     event.waitUntil(processAlertsQueue());
   }

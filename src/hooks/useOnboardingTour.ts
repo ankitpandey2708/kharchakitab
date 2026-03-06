@@ -6,7 +6,8 @@ import "driver.js/dist/driver.css";
 
 export type TooltipId =
     | "recurring-presets"
-    | "household-icon";
+    | "household-icon"
+    | "notifications-toggle";
 
 const TOOLTIP_CONFIG: Record<TooltipId, DriveStep> = {
     "recurring-presets": {
@@ -27,6 +28,16 @@ const TOOLTIP_CONFIG: Record<TooltipId, DriveStep> = {
                 "Connect with family members to sync expenses in real-time across devices.",
             side: "bottom",
             align: "start",
+        },
+    },
+    "notifications-toggle": {
+        element: "[data-tour='notifications-toggle']",
+        popover: {
+            title: "Enable Notifications",
+            description:
+                "Get reminders before bills are due and a daily nudge to log expenses. Tap here to turn them on.",
+            side: "bottom",
+            align: "end",
         },
     },
 };
@@ -69,16 +80,14 @@ function hasSeenTip(id: TooltipId): boolean {
 export function useOnboardingTour() {
     const driverRef = useRef<ReturnType<typeof driver> | null>(null);
     const currentTooltipRef = useRef<TooltipId | null>(null);
-    const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const pendingTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
     const queueRef = useRef<TooltipId[]>([]);
 
     // Cleanup on unmount
     useEffect(() => {
         return () => {
-            if (pendingTimerRef.current) {
-                clearTimeout(pendingTimerRef.current);
-                pendingTimerRef.current = null;
-            }
+            pendingTimersRef.current.forEach(clearTimeout);
+            pendingTimersRef.current.clear();
             driverRef.current?.destroy();
         };
     }, []);
@@ -133,9 +142,8 @@ export function useOnboardingTour() {
             if (queueRef.current.includes(id)) return;
             if (currentTooltipRef.current === id) return;
 
-            // Single delay: callers pass the delay, no outer setTimeout needed
-            pendingTimerRef.current = setTimeout(() => {
-                pendingTimerRef.current = null;
+            const timer = setTimeout(() => {
+                pendingTimersRef.current.delete(timer);
 
                 // Re-check after delay
                 if (hasSeenTip(id)) return;
@@ -146,6 +154,31 @@ export function useOnboardingTour() {
                 queueRef.current.push(id);
                 showNext();
             }, delay);
+            pendingTimersRef.current.add(timer);
+        },
+        [showNext]
+    );
+
+    /**
+     * Enqueue multiple tooltips in a defined order after a single initial delay.
+     * The queue processes them sequentially — each shows after the user dismisses the previous.
+     * Use this for "always show on first visit" tooltips to avoid coordinating arbitrary delays.
+     */
+    const showTooltipsInOrder = useCallback(
+        (ids: TooltipId[], initialDelay = 3000) => {
+            const timer = setTimeout(() => {
+                pendingTimersRef.current.delete(timer);
+                for (const id of ids) {
+                    if (hasSeenTip(id)) continue;
+                    const el = document.querySelector(TOOLTIP_CONFIG[id].element as string);
+                    if (!el) continue;
+                    if (queueRef.current.includes(id)) continue;
+                    if (currentTooltipRef.current === id) continue;
+                    queueRef.current.push(id);
+                }
+                showNext();
+            }, initialDelay);
+            pendingTimersRef.current.add(timer);
         },
         [showNext]
     );
@@ -154,10 +187,8 @@ export function useOnboardingTour() {
 
     const resetAllTips = useCallback(() => {
         if (typeof window === "undefined") return;
-        if (pendingTimerRef.current) {
-            clearTimeout(pendingTimerRef.current);
-            pendingTimerRef.current = null;
-        }
+        pendingTimersRef.current.forEach(clearTimeout);
+        pendingTimersRef.current.clear();
         driverRef.current?.destroy();
         localStorage.removeItem(STORAGE_KEY);
         seenTipsCache = null;
@@ -167,6 +198,7 @@ export function useOnboardingTour() {
 
     return {
         showTooltip,
+        showTooltipsInOrder,
         hasSeen,
         resetAllTips,
     };
