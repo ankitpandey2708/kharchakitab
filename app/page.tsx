@@ -40,7 +40,7 @@ import {
 import { RECURRING_TEMPLATES, type Frequency, type RecurringTemplate } from "@/src/config/recurring";
 import type { Expense } from "@/src/utils/schemas";
 import type { Transaction, Recurring_template } from "@/src/types";
-import { AlertCircle, X, User, Users, Download } from "lucide-react";
+import { AlertCircle, X, Download } from "lucide-react";
 import { prepareReceiptImage } from "@/src/utils/imageProcessing";
 import {
   DISMISS_TRANSCRIPTS,
@@ -164,7 +164,6 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
   const [isTextProcessing, setIsTextProcessing] = useState(false);
   const [isListEmpty, setIsListEmpty] = useState(false);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
-  const [activeSection, setActiveSection] = useState<TabType>("summary");
   const [recurringModalState, setRecurringModalState] = useState<{
     mode: "new" | "edit";
     template: RecurringTemplate | null;
@@ -251,17 +250,11 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
   }, [client, setActiveTab, setIncomingPair, showHousehold]);
 
   useEffect(() => {
-    // Force back to personal if currently on household and disabled
+    // Force back to summary if household is disabled while on household tab
     if (!showHousehold && activeTab === "household") {
-      setActiveTab("personal");
+      setActiveTab("summary");
     }
   }, [showHousehold, activeTab, setActiveTab]);
-
-  useEffect(() => {
-    if (activeTab !== "personal") {
-      setActiveSection("summary");
-    }
-  }, [activeTab]);
 
   const [transcriptFeedback, setTranscriptFeedback] = useState<{
     txId: string; item: string; amount: number; category: string; paymentMethod: string;
@@ -280,10 +273,10 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
   }, []);
 
   useEffect(() => {
-    if (activeSection !== "summary") {
+    if (activeTab !== "summary") {
       setIsTxnSheetOpen(false);
     }
-  }, [activeSection]);
+  }, [activeTab]);
 
   useEffect(() => {
     setIsRecording(audioRecorder.isRecording);
@@ -310,16 +303,16 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
 
   // Onboarding tooltips (D4) — single delay lives inside showTooltip
   useEffect(() => {
-    if (showHousehold && activeTab === "personal") {
+    if (showHousehold && activeTab !== "household") {
       showTooltip("household-icon", 2500);
     }
   }, [showHousehold, activeTab, showTooltip]);
 
   useEffect(() => {
-    if (activeSection === "recurring") {
+    if (activeTab === "recurring") {
       showTooltip("recurring-presets", 800);
     }
-  }, [activeSection, showTooltip]);
+  }, [activeTab, showTooltip]);
 
   // First-visit tooltips shown in explicit priority order, sequenced by user dismissal
   useEffect(() => {
@@ -913,10 +906,9 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
     });
   }, []);
 
-  // Memoize the header tab switch handler
-  const handleTabSwitch = useCallback(() => {
-    setActiveTab(activeTab === "household" ? "personal" : "household");
-  }, [activeTab, setActiveTab]);
+  const handleTabChange = useCallback((tab: TabType) => {
+    setActiveTab(tab);
+  }, [setActiveTab]);
 
   return (
     <div className="relative min-h-screen bg-[var(--kk-paper)] pb-28 text-[var(--kk-ink)]">
@@ -939,24 +931,7 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
       <header className="sticky top-0 z-30 border-b border-[var(--kk-smoke)] bg-[var(--kk-paper)] px-6 py-4">
         <div className="mx-auto max-w-4xl">
           <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-2">
-            <div className="justify-self-start">
-              {showHousehold && (
-                <motion.button
-                  type="button"
-                  onClick={handleTabSwitch}
-                  aria-label={activeTab === "household" ? "Switch to Personal" : "Switch to Household"}
-                  className="kk-icon-btn kk-icon-btn-ghost kk-icon-btn-sm"
-                  whileTap={{ scale: 0.9 }}
-                  data-tour="household-icon"
-                >
-                  {activeTab === "household" ? (
-                    <User className="h-4 w-4" style={{ color: "var(--kk-ember)" }} />
-                  ) : (
-                    <Users className="h-4 w-4" />
-                  )}
-                </motion.button>
-              )}
-            </div>
+            <div className="justify-self-start" />
             <div className="min-w-0 text-center">
               <motion.h1
                 initial={headerInitial}
@@ -984,59 +959,57 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
 
       {/* Main Content */}
       <main className="relative z-10 mx-auto max-w-4xl px-4 pb-28 pt-6 sm:px-6">
-        {activeTab === "personal" ? (
-          <>
-            {/* Summary section — always mounted, hidden when not active */}
-            <div style={{ display: activeSection === "summary" ? undefined : "none" }}>
-              {/* Recording/Processing Status */}
-              <RecordingStatus
-                isRecording={false}
-                isProcessing={false}
-                isReceiptProcessing={isReceiptProcessing}
-                isTextProcessing={isTextProcessing}
-              />
+        {/* Summary — always mounted, hidden when not active */}
+        <div style={{ display: activeTab === "summary" ? undefined : "none" }}>
+          <RecordingStatus
+            isRecording={false}
+            isProcessing={false}
+            isReceiptProcessing={isReceiptProcessing}
+            isTextProcessing={isTextProcessing}
+          />
+          <section>
+            <TransactionList
+              refreshKey={refreshKey}
+              addedTx={addedTx}
+              deletedTx={deletedTx}
+              editedTx={editedTx}
+              pendingTransactions={pendingTransactions}
+              onViewAll={handleOpenHistory}
+              onEdit={openEdit}
+              onMicPress={onMicPress}
+              onMobileSheetChange={setIsTxnSheetOpen}
+              onDeleted={handleTransactionDeleted}
+              onReceiptUploadClick={onReceiptUploadClick}
+              isReceiptProcessing={isReceiptProcessing}
+              onEmptyChange={setIsListEmpty}
+            />
+          </section>
+        </div>
 
-              {/* Transaction List */}
-              <section>
-                <TransactionList
-                  refreshKey={refreshKey}
-                  addedTx={addedTx}
-                  deletedTx={deletedTx}
-                  editedTx={editedTx}
-                  pendingTransactions={pendingTransactions}
-                  onViewAll={handleOpenHistory}
-                  onEdit={openEdit}
-                  onMicPress={onMicPress}
-                  onMobileSheetChange={setIsTxnSheetOpen}
-                  onDeleted={handleTransactionDeleted}
-                  onReceiptUploadClick={onReceiptUploadClick}
-                  isReceiptProcessing={isReceiptProcessing}
-                  onEmptyChange={setIsListEmpty}
-                />
-              </section>
-            </div>
+        {/* Recurring — always mounted, hidden when not active */}
+        <section style={{ display: activeTab === "recurring" ? undefined : "none" }}>
+          <RecurringView
+            refreshKey={refreshKey}
+            onAddRecurring={handleAddRecurring}
+            onEditRecurring={handleEditRecurring}
+            onReactivateRecurring={handleReactivateRecurring}
+            onMobileSheetChange={setIsTxnSheetOpen}
+          />
+        </section>
 
-            {/* Recurring section — always mounted, hidden when not active */}
-            <section style={{ display: activeSection === "recurring" ? undefined : "none" }}>
-              <RecurringView
-                refreshKey={refreshKey}
-                onAddRecurring={handleAddRecurring}
-                onEditRecurring={handleEditRecurring}
-                onReactivateRecurring={handleReactivateRecurring}
-                onMobileSheetChange={setIsTxnSheetOpen}
-              />
-            </section>
-          </>
-        ) : showHousehold ? (
-          <HouseholdView />
-        ) : null}
+        {/* Household — always mounted when enabled, hidden when not active */}
+        {showHousehold && (
+          <div style={{ display: activeTab === "household" ? undefined : "none" }}>
+            <HouseholdView />
+          </div>
+        )}
       </main>
 
       {/* Bottom Tab Bar */}
-      {!isTxnSheetOpen && activeTab === "personal" && (
+      {!isTxnSheetOpen && (
         <BottomTabBar
-          activeTab={activeSection}
-          onTabChange={setActiveSection}
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
           isRecording={isRecording}
           isProcessing={isProcessing}
           isEmpty={isListEmpty}
@@ -1044,6 +1017,7 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
           onTextSubmit={processTextInput}
           transcriptFeedback={transcriptFeedback ? { ...transcriptFeedback, currencySymbol } : null}
           onUndoTranscript={handleUndoTranscript}
+          showHousehold={showHousehold}
         />
       )}
       <input

@@ -2,12 +2,13 @@
 
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { BarChart3, Mic, RefreshCw, ArrowUp, Square, Check, Loader2, Keyboard } from "lucide-react";
+import { BarChart3, Mic, RefreshCw, ArrowUp, Square, Check, Loader2, Keyboard, Users } from "lucide-react";
 import { EXAMPLES } from "@/src/components/RecordingStatus";
+import type { AppTab } from "@/src/context/NavigationContext";
 
-export type TabType = "summary" | "recurring";
+export type TabType = AppTab;
 
 interface TranscriptFeedback {
   txId: string;
@@ -28,11 +29,13 @@ interface BottomTabBarProps {
   onTextSubmit: (text: string) => void;
   transcriptFeedback?: TranscriptFeedback | null;
   onUndoTranscript?: () => void;
+  showHousehold?: boolean;
 }
 
-const tabs: { key: TabType; label: string; icon: React.ElementType }[] = [
+const BASE_TABS: { key: TabType; label: string; icon: React.ElementType }[] = [
   { key: "summary", label: "Summary", icon: BarChart3 },
   { key: "recurring", label: "Recurring", icon: RefreshCw },
+  { key: "household", label: "Household", icon: Users },
 ];
 
 export const BottomTabBar = React.memo(({
@@ -45,7 +48,12 @@ export const BottomTabBar = React.memo(({
   onTextSubmit,
   transcriptFeedback,
   onUndoTranscript,
+  showHousehold,
 }: BottomTabBarProps) => {
+  const tabs = useMemo(
+    () => showHousehold ? BASE_TABS : BASE_TABS.filter((t) => t.key !== "household"),
+    [showHousehold]
+  );
   const [isExpanded, setIsExpanded] = useState(false);
   const [displayValue, setDisplayValue] = useState("");
   const [textValue, setTextValue] = useState("");
@@ -135,8 +143,8 @@ export const BottomTabBar = React.memo(({
 
   return (
     <>
-      {/* ── Unified Input Pill ── */}
-      <div className="kk-text-bar" aria-live="polite" aria-atomic="true">
+      {/* ── Unified Input Pill — hidden on household tab ── */}
+      <div className="kk-text-bar" aria-live="polite" aria-atomic="true" style={{ display: activeTab === "household" ? "none" : undefined }}>
         <AnimatePresence mode="wait" initial={false}>
           {pillState === "recording" && (
             <motion.div
@@ -320,6 +328,7 @@ export const BottomTabBar = React.memo(({
               key={tab.key}
               type="button"
               onClick={() => onTabChange(tab.key)}
+              data-tour={tab.key === "household" ? "household-icon" : undefined}
               className={`kk-tab-item ${activeTab === tab.key ? "kk-tab-active" : ""}`}
             >
               <Icon className="h-5 w-5" strokeWidth={2} />

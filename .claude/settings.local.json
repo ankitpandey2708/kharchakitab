@@ -7,7 +7,9 @@
       "mcp__posthog__query-run",
       "Bash(npx tsc:*)",
       "mcp__posthog__event-definition-update",
-      "Bash(npx next:*)"
+      "Bash(npx next:*)",
+      "mcp__posthog__feature-flag-get-all",
+      "mcp__posthog__update-feature-flag"
     ]
   }
 }

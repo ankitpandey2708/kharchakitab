@@ -5,17 +5,19 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { ERROR_MESSAGES } from "@/src/utils/error";
 
+export type AppTab = "summary" | "recurring" | "household";
+
 interface NavigationContextValue {
-    activeTab: "personal" | "household";
-    setActiveTab: (tab: "personal" | "household") => void;
+    activeTab: AppTab;
+    setActiveTab: (tab: AppTab) => void;
 }
 
 const NavigationContext = createContext<NavigationContextValue | null>(null);
 
 export const NavigationProvider = ({ children }: { children: React.ReactNode }) => {
-    const [activeTab, setActiveTabState] = useState<"personal" | "household">("personal");
+    const [activeTab, setActiveTabState] = useState<AppTab>("summary");
 
-    const setActiveTab = useCallback((tab: "personal" | "household") => {
+    const setActiveTab = useCallback((tab: AppTab) => {
         setActiveTabState(tab);
     }, []);
 

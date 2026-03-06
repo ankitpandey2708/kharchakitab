@@ -46,7 +46,7 @@ export const useAppContext = () => {
     // Recording
     isRecording: recording.isRecording,
     setIsRecording: recording.setIsRecording,
-    // Navigation
+    // Navigation (AppTab: "summary" | "recurring" | "household")
     activeTab: navigation.activeTab,
     setActiveTab: navigation.setActiveTab,
     // Currency
