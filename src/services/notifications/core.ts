@@ -32,7 +32,7 @@ export const getAlertsEnvironment = (): AlertsEnvironment => {
 const getAlertsStatus = (
   enabled: boolean,
   env: AlertsEnvironment
-): AlertsStatus => {
+): "unsupported" | "disabled" | "blocked" | "enabled" => {
   if (!env.isSupported) return "unsupported";
   if (!enabled) return "disabled";
   if (env.permission === "denied") return "blocked";
