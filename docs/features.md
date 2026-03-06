@@ -1,9 +1,4 @@
-Custom alerts
-
-
 # Crazy Ideas (Viral Hooks)
-
-## Funnel: Multiplayer (Acquisition) → Growth (Activation) → Delight (Engagement) → Retention (Habit) → Monetizable user
 
 ## A. Retention — "Why I open the app daily" (solo, habitual)
 
@@ -18,14 +13,6 @@ Your future self sends a morning message. Parasocial relationship with your own 
 - **Edge cases:** No transactions yesterday = "Kal kuch nahi kharch kiya. Zinda toh hai na?" First-time user with no data = skip, don't show.
 - **Cost:** 1 Gemini Flash call/day/user. Same model as existing expense parsing.
 
-### "Snap Streak"
-Consecutive days of logging at least one expense. Like Snapchat streaks for financial discipline.
-- **Trigger:** On app open, check if user logged any transaction yesterday
-- **Storage:** localStorage keys: `kk_streak_count` (number), `kk_streak_last_date` (YYYY-MM-DD)
-- **Logic:** On open, compare today vs `kk_streak_last_date`. If yesterday = increment count. If today = no change. If older = reset to 0 with burn animation.
-- **UI:** Small flame icon + count next to date in header (e.g., "🔥 12"). On streak break: flame icon shatters/burns with framer-motion animation, count resets to 0.
-- **Milestones:** 7 days = bronze flame, 30 days = silver, 100 days = gold. Color change on the streak icon.
-- **No server needed.** Pure client-side localStorage + IndexedDB timestamp check.
 
 ## B. Delight — "Why I enjoy logging expenses" (per-transaction, in-the-moment)
 

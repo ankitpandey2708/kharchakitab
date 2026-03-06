@@ -47,7 +47,7 @@
 | C1 | PWA install prompt after first successful transaction | Done | `usePwaInstall` hook + install banner in `page.tsx`, 2s delay after first txn, monthly dismiss cooldown |
 | C2 | Daily evening reminder ("Did you log today?") | Done | Toggle in SettingsPopover, service worker checks IndexedDB at 8 PM, periodicSync fallback, `daily_reminder_toggled` event |
 | C3 | Weekly spending summary on home screen | Done | Merged into single summary card — month hero total, budget bar, inline "This week" row with % change badge, top 3 category pills. Removed: today/month toggle, txn count, avg pill, pacing block, separate WeeklySummaryCard |
-| C4 | Streak / consistency indicator ("5 days logged") | | Lightweight gamification drives daily return |
+| C4 | Streak / consistency indicator ("5 days logged") | Done | Lightweight gamification drives daily return |
 
 ## D. Feature Discovery (Deepening Engagement) — DONE
 
@@ -58,7 +58,7 @@
 
 ## F. Distribution & Acquisition
 
-| # | Suggestion | Rationale |
-|---|---|---|
-| F1 | Share/invite flow ("Track expenses together" via Household) | Organic growth through pairs |
-| F2 | Shareable spending summary card (social proof) | "I spent X on Food this month" → viral loop |
+| # | Suggestion | Rationale | Status | Notes |
+|---|---|---|---|---|
+
+| F1 | Shareable spending summary card (social proof) | "I spent X on Food this month" → viral loop | | |

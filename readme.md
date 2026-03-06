@@ -76,6 +76,10 @@ This application is fully PWA-compliant. You can install it on your mobile devic
 *****
 *******
 await new Promise(r => indexedDB.open("QuickLogDB").onsuccess = e => e.target.result.transaction("transactions").objectStore("transactions").getAll().onsuccess = ev => r(ev.target.result.sort((a, b) => a.timestamp - b.timestamp).map(tx => ({...tx, timestamp: new Date(tx.timestamp).toLocaleDateString("en-IN", {day: "2-digit", month: "short", year: "numeric"})}))));
+
+
+localStorage.setItem('kk_streak_count', '12');
+localStorage.setItem('kk_streak_last_date', '2026-03-03');
 *******
 iOS User Setup (send this to any iOS user)
 

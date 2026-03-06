@@ -59,6 +59,8 @@ import {
 import { useCurrency } from "@/src/hooks/useCurrency";
 import { usePwaInstall } from "@/src/hooks/usePwaInstall";
 import { useOnboardingTour } from "@/src/hooks/useOnboardingTour";
+import { useStreak } from "@/src/hooks/useStreak";
+import { StreakBadge } from "@/src/components/StreakBadge";
 import { scheduleDailyReminder } from "@/src/services/dailyReminder";
 import { useRecording } from "@/src/context/AppContext";
 
@@ -129,6 +131,7 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
   const { code: currency, symbol: currencySymbol } = useCurrency();
   const { canPrompt: canInstall, promptInstall, dismiss: dismissInstall } = usePwaInstall();
   const { showTooltip } = useOnboardingTour();
+  const { count: streakCount, broke: streakBroke, lostCount: streakLostCount, recordActivity: recordStreak } = useStreak();
 
   // Initialize presence at app level for discoverability
   const { isConnected, error } = useSignaling();
@@ -550,6 +553,7 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
         const id = await addTransaction(transaction);
         setAddedTx({ ...transaction, id });
         playMoneySound(transaction.amount, currency);
+        recordStreak();
         refreshTransactions();
         if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
         setTranscriptFeedback({ txId: id, item: expense.item, amount: expense.amount, category: expense.category, paymentMethod: expense.paymentMethod ?? "cash" });
@@ -659,6 +663,7 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
         const id = await addTransaction(transaction);
         setAddedTx({ ...transaction, id });
         playMoneySound(transaction.amount, currency);
+        recordStreak();
         refreshTransactions();
         if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
         setTranscriptFeedback({ txId: id, item: expense.item, amount: expense.amount, category: expense.category, paymentMethod: expense.paymentMethod ?? "cash" });
@@ -718,6 +723,7 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
       const id = await addTransaction(transaction);
       setAddedTx({ ...transaction, id });
       playMoneySound(transaction.amount, currency);
+      recordStreak();
       refreshTransactions();
       posthog.capture("receipt_processed", {
         amount: expense.amount,
@@ -815,17 +821,6 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
   }, []);
 
   // useDeferredValue for search/filter inputs to keep UI responsive
-  const [todayLabel, setTodayLabel] = useState("");
-
-  useEffect(() => {
-    const label = new Date().toLocaleDateString("en-IN", {
-      weekday: "short",
-      day: "2-digit",
-      month: "short",
-    });
-    setTodayLabel(label);
-  }, []);
-
   const openEdit = useCallback(async (tx: Transaction) => {
     const isShared = await isTransactionShared(tx.id);
     setEditState({
@@ -899,6 +894,7 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
         const id = await addTransaction(transaction);
         setAddedTx({ ...transaction, id });
         playMoneySound(transaction.amount, currency);
+        recordStreak();
         posthog.capture("transaction_added", {
           amount: data.amount,
           category: data.category,
@@ -949,7 +945,7 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
       {/* Header */}
       <header className="sticky top-0 z-30 border-b border-[var(--kk-smoke)] bg-[var(--kk-paper)] px-6 py-4">
         <div className="mx-auto max-w-4xl">
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-2">
             <div className="justify-self-start">
               {showHousehold && (
                 <motion.button
@@ -969,22 +965,22 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
               )}
             </div>
             <div className="min-w-0 text-center">
-              <motion.div
-                initial={headerInitial}
-                animate={headerAnimate}
-                transition={headerTransition}
-                className="kk-label"
-              >
-                {todayLabel}
-              </motion.div>
               <motion.h1
                 initial={headerInitial}
                 animate={headerAnimate}
-                transition={headerTransitionDelay}
-                className="mt-0.5 text-2xl font-bold font-[family:var(--font-display)] tracking-tight"
+                transition={headerTransition}
+                className="text-2xl font-bold font-[family:var(--font-display)] tracking-tight"
               >
                 Kharcha<span className="text-[var(--kk-ember)]">Kitab</span>
               </motion.h1>
+              <motion.div
+                initial={headerInitial}
+                animate={headerAnimate}
+                transition={headerTransitionDelay}
+                className="mt-0.5 flex items-center justify-center"
+              >
+                <StreakBadge count={streakCount} broke={streakBroke} lostCount={streakLostCount} />
+              </motion.div>
             </div>
             <div className="justify-self-end">
               <SettingsPopover />

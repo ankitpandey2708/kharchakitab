@@ -12,7 +12,6 @@ export const loadFonts = () => {
     continueRender(waitForFont);
   });
   link.addEventListener("error", () => {
-    console.error("Failed to load fonts");
     continueRender(waitForFont);
   });
   document.head.appendChild(link);

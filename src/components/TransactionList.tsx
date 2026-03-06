@@ -2,7 +2,7 @@
 
 import React, { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ImageUp, BarChart3, Mic, ArrowDown, Sparkles, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { ImageUp, BarChart3, Mic, ArrowDown, Sparkles, TrendingUp, TrendingDown, Minus, Calendar } from "lucide-react";
 import {
   deleteTransaction,
   fetchTransactions,
@@ -135,6 +135,7 @@ export const TransactionList = React.memo(({
   const [budgetError, setBudgetError] = useState<string | null>(null);
   const [coachmarkDismissed, setCoachmarkDismissed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [topSpendingPeriod, setTopSpendingPeriod] = useState<"week" | "month">("month");
 
   const isEmpty = transactions.length === 0 && pendingTransactions.length === 0;
   useEffect(() => {
@@ -329,7 +330,7 @@ export const TransactionList = React.memo(({
     });
   }, [editedTx]);
 
-  const { viewTotal, topCategories, weekTotal, lastWeekTotal } =
+  const { viewTotal, topCategories, weekTotal, lastWeekTotal, weekTopCategories } =
     useMemo(() => {
       const filtered = periodTransactions.filter((tx) => !isProcessingRow(tx));
       const total = filtered.reduce((sum, tx) => sum + tx.amount, 0);
@@ -350,11 +351,21 @@ export const TransactionList = React.memo(({
       const lwFiltered = lastWeekTxns.filter((tx) => !isProcessingRow(tx));
       const lwt = lwFiltered.reduce((sum, tx) => sum + tx.amount, 0);
 
+      // Weekly category breakdown
+      const weekCatMap = new Map<string, number>();
+      for (const tx of twFiltered) {
+        weekCatMap.set(tx.category, (weekCatMap.get(tx.category) ?? 0) + tx.amount);
+      }
+      const weekCats = [...weekCatMap.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3);
+
       return {
         viewTotal: total,
         topCategories: cats,
         weekTotal: wt,
         lastWeekTotal: lwt,
+        weekTopCategories: weekCats,
       };
     }, [periodTransactions, thisWeekTxns, lastWeekTxns]);
 
@@ -721,121 +732,124 @@ export const TransactionList = React.memo(({
           <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-gradient-to-br from-[var(--kk-ember)]/5 to-transparent blur-3xl" />
           <div className="absolute -left-10 -bottom-10 h-32 w-32 rounded-full bg-gradient-to-tr from-[var(--kk-saffron)]/8 to-transparent blur-2xl" />
 
-          <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-            {/* Left: Monthly total */}
+          <div className="relative flex flex-row items-start justify-between gap-3">
+            {/* Left: Total spent */}
             <div className="flex-1 min-w-0">
-              <div className="kk-label mb-2">This month</div>
+              <div className="kk-label mb-2">Total spent</div>
               <div className="flex items-baseline gap-2">
                 <span className="kk-currency text-2xl font-bold">{currencySymbol}</span>
-                <span className="text-5xl font-bold leading-none tracking-tight font-[family:var(--font-mono)] sm:text-6xl">
-                  {formatCurrency(viewTotal)}
+                <span className="text-4xl font-bold leading-none tracking-tight font-[family:var(--font-mono)] sm:text-5xl">
+                  {formatCurrency(topSpendingPeriod === "month" ? viewTotal : weekTotal)}
                 </span>
-              </div>
-              <div className="mt-2 text-sm text-[var(--kk-ash)]">
-                Total spent so far
               </div>
             </div>
 
-            {/* Right: This week card */}
-            {weekTotal > 0 && (
-              <div className="flex-shrink-0">
-                <div className="inline-flex items-center gap-3 sm:gap-4 rounded-[var(--kk-radius-lg)] bg-white/80 backdrop-blur-sm px-3 py-2 sm:px-4 sm:py-3 shadow-sm border border-[var(--kk-smoke)]">
-                  {/* This week amount */}
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-medium text-[var(--kk-ash)]">This week</span>
-                    </div>
-                    <div className="mt-1 flex items-baseline gap-1">
-                      <span className="kk-currency text-sm text-[var(--kk-ash)]">{currencySymbol}</span>
-                      <span className="text-2xl font-bold text-[var(--kk-ink)] font-[family:var(--font-mono)]">
-                        {formatCurrency(weekTotal)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Vertical divider */}
-                  <div className="h-10 w-px bg-[var(--kk-smoke)]" />
-
-                  {/* Comparison indicator */}
-                  {lastWeekTotal > 0 && (() => {
-                    const diff = ((weekTotal - lastWeekTotal) / lastWeekTotal) * 100;
-                    const isIncrease = diff > 0;
-                    const isDecrease = diff < 0;
-                    return (
-                      <div className="flex flex-col items-center gap-1">
-                        <div className={`flex h-9 w-9 items-center justify-center rounded-full ${isIncrease ? "bg-red-50" : isDecrease ? "bg-emerald-50" : "bg-[var(--kk-smoke)]"}`}>
-                          {isIncrease ? (
-                            <TrendingUp className="h-4 w-4 text-red-500" />
-                          ) : isDecrease ? (
-                            <TrendingDown className="h-4 w-4 text-emerald-500" />
-                          ) : (
-                            <Minus className="h-4 w-4 text-[var(--kk-ash)]" />
-                          )}
-                        </div>
-                        <div className={`text-xs font-bold ${isIncrease ? "text-red-600" : isDecrease ? "text-emerald-600" : "text-[var(--kk-ash)]"}`}>
-                          {diff === 0 ? "Same" : `${Math.abs(Math.round(diff))}%`}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
+            {/* Right: Week/Month toggle */}
+            <div className="flex-shrink-0">
+              <div className="flex items-center gap-1 rounded-full bg-[var(--kk-smoke)]/50 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setTopSpendingPeriod("week")}
+                  className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-all whitespace-nowrap ${topSpendingPeriod === "week"
+                    ? "bg-white text-[var(--kk-ink)] shadow-sm"
+                    : "text-[var(--kk-ash)] hover:text-[var(--kk-ink)]"
+                    }`}
+                >
+                  <Calendar className="h-3 w-3 flex-shrink-0" />
+                  <span>Week</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTopSpendingPeriod("month")}
+                  className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-all whitespace-nowrap ${topSpendingPeriod === "month"
+                    ? "bg-white text-[var(--kk-ink)] shadow-sm"
+                    : "text-[var(--kk-ash)] hover:text-[var(--kk-ink)]"
+                    }`}
+                >
+                  <Calendar className="h-3 w-3 flex-shrink-0" />
+                  <span>Month</span>
+                </button>
               </div>
-            )}
+            </div>
           </div>
         </div>
 
-        {/* Budget section */}
-        <div className="px-5 py-4">
-          <div>{budgetBlock}</div>
-        </div>
-
         {/* Top spending with mini progress bars */}
-        {topCategories.length > 0 && (
+        {(topCategories.length > 0 || weekTopCategories.length > 0) && (
           <div className="border-t border-[var(--kk-smoke)] bg-gradient-to-r from-white via-[var(--kk-cream)]/20 to-white px-5 py-4">
+            {/* Header */}
             <div className="kk-label mb-3 text-[10px]">Top spending</div>
+
+            {/* Categories list */}
             <div className="space-y-3">
-              {topCategories.map(([cat, amount], index) => {
-                const Icon =
-                  CATEGORY_ICON_MAP[cat as keyof typeof CATEGORY_ICON_MAP] ??
-                  CATEGORY_ICON_MAP.Other;
-                const pct = viewTotal > 0 ? Math.round((amount / viewTotal) * 100) : 0;
-                const colors = [
-                  "from-[var(--kk-ember)] to-[var(--kk-saffron)]",
-                  "from-[var(--kk-ocean)] to-[var(--kk-ocean)]/70",
-                  "from-[var(--kk-sage)] to-[var(--kk-sage)]/70"
-                ];
-                return (
-                  <div key={cat} className="group">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--kk-cream)] text-[var(--kk-ash)]">
-                          <Icon className="h-3 w-3" strokeWidth={2} />
-                        </span>
-                        <span className="text-sm font-medium text-[var(--kk-ink)]">{cat}</span>
+              {(topSpendingPeriod === "month" ? topCategories : weekTopCategories).map(
+                ([cat, amount], index) => {
+                  const Icon =
+                    CATEGORY_ICON_MAP[cat as keyof typeof CATEGORY_ICON_MAP] ??
+                    CATEGORY_ICON_MAP.Other;
+                  const totalForPeriod =
+                    topSpendingPeriod === "month" ? viewTotal : weekTotal;
+                  const pct =
+                    totalForPeriod > 0 ? Math.round((amount / totalForPeriod) * 100) : 0;
+                  const colors = [
+                    "from-[var(--kk-ember)] to-[var(--kk-saffron)]",
+                    "from-[var(--kk-ocean)] to-[var(--kk-ocean)]/70",
+                    "from-[var(--kk-sage)] to-[var(--kk-sage)]/70",
+                  ];
+                  return (
+                    <div key={cat} className="group">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--kk-cream)] text-[var(--kk-ash)]">
+                            <Icon className="h-3 w-3" strokeWidth={2} />
+                          </span>
+                          <span className="text-sm font-medium text-[var(--kk-ink)]">
+                            {cat}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-semibold text-[var(--kk-ink)] font-[family:var(--font-mono)] tabular-nums">
+                            {currencySymbol}
+                            {formatCurrency(amount)}
+                          </span>
+                          <span className="text-xs text-[var(--kk-ash)] min-w-[36px] text-right tabular-nums">
+                            {pct}%
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-semibold text-[var(--kk-ink)] font-[family:var(--font-mono)] tabular-nums">
-                          {currencySymbol}{formatCurrency(amount)}
-                        </span>
-                        <span className="text-xs text-[var(--kk-ash)] min-w-[36px] text-right tabular-nums">
-                          {pct}%
-                        </span>
+                      {/* Mini progress bar */}
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--kk-smoke)]">
+                        <div
+                          className={`h-full rounded-full bg-gradient-to-r ${colors[index % colors.length]} transition-all duration-500`}
+                          style={{ width: `${pct}%` }}
+                        />
                       </div>
                     </div>
-                    {/* Mini progress bar */}
-                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--kk-smoke)]">
-                      <div
-                        className={`h-full rounded-full bg-gradient-to-r ${colors[index % colors.length]} transition-all duration-500`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                }
+              )}
+              {/* Empty state for selected period */}
+              {(topSpendingPeriod === "month" ? topCategories : weekTopCategories).length === 0 && (
+                <div className="py-4 text-center text-xs text-[var(--kk-ash)]">
+                  No spending yet this {topSpendingPeriod}
+                </div>
+              )}
             </div>
           </div>
         )}
       </motion.div>
+
+      {/* Budget Card — standalone */}
+      {budgetBlock && (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.03 }}
+          className="px-0"
+        >
+          {budgetBlock}
+        </motion.div>
+      )}
 
       {hasReceiptEntry && (
         <motion.div
