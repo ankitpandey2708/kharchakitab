@@ -15,8 +15,8 @@ Both show **only once** — `hasSeenTip` ensures that. The difference is only in
 | ID | Element | Trigger | Delay |
 |---|---|---|---|
 | `notifications-toggle` | Settings gear icon | Mount (`showTooltipsInOrder`) | 3000ms |
-| `household-icon` | Household tab button | `showHousehold && activeTab === "personal"` | 2500ms |
-| `recurring-presets` | Recurring presets section | `activeSection === "recurring"` | 800ms |
+| `household-icon` | Household tab button | `showHousehold && activeTab !== "household"` | 2500ms |
+| `recurring-presets` | Recurring presets section | `activeTab === "recurring"` | 800ms |
 
 ## Conflict & ordering rules
 

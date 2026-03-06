@@ -22,11 +22,15 @@ export class SignalingClient {
         const ws = new WebSocket(this.url);
         this.ws = ws;
 
-        ws.onopen = () => resolve();
+        ws.onopen = () => {
+          console.log(`[Signaling] WebSocket connected to ${this.url}`);
+          resolve();
+        };
 
-        ws.onerror = () => {
+        ws.onerror = (err) => {
+          console.error(`[Signaling] WebSocket error:`, err);
           if (remaining > 0) {
-
+            console.log(`[Signaling] Retrying connection (${remaining} attempts left)...`);
             setTimeout(() => attempt(remaining - 1, delay * 2), delay);
           } else {
             reject(new Error("Unable to connect to signaling server after multiple attempts"));
@@ -34,11 +38,12 @@ export class SignalingClient {
         };
 
         ws.onmessage = (event) => {
-
           try {
             const message = JSON.parse(String(event.data)) as SignalingMessage;
+            console.log(`[Signaling] Received message: ${message.type}`, message.payload);
 
             if (message.request_id && this.pending.has(message.request_id)) {
+              console.log(`[Signaling] Handling response for request_id: ${message.request_id}`);
               const resolver = this.pending.get(message.request_id);
               this.pending.delete(message.request_id);
               resolver?.(message.payload);
@@ -47,15 +52,19 @@ export class SignalingClient {
             const set = this.handlers.get(message.type);
 
             if (set) {
+              console.log(`[Signaling] Dispatching ${message.type} to ${set.size} handlers`);
               set.forEach((handler) => handler(message.payload));
+            } else {
+              console.log(`[Signaling] No handlers registered for ${message.type}`);
             }
           } catch (e) {
-
+            console.error(`[Signaling] Error parsing message:`, e);
             // ignore malformed messages
           }
         };
 
         ws.onclose = () => {
+          console.log(`[Signaling] WebSocket closed`);
           this.pending.clear();
         };
       };

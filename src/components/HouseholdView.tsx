@@ -106,8 +106,6 @@ export const HouseholdView = React.memo(() => {
 
   // Get shared signaling client from context
   const { client } = useSignaling();
-
-  const clientRef = useRef<SignalingClient | null>(null);
   const pairingKeyRef = useRef<{
     session_id: string;
     code: string;
@@ -209,16 +207,7 @@ export const HouseholdView = React.memo(() => {
     setConflictIds(state?.conflicts ?? []);
   }, []);
 
-  const connectSignaling = useCallback(async () => {
-    if (clientRef.current) {
-      await clientRef.current.ensureConnected();
-      return clientRef.current;
-    }
-    const client = new SignalingClient(SIGNALING_URL);
-    clientRef.current = client;
-    await client.connect();
-    return client;
-  }, []);
+  // We use the shared client from context, so no need for local connectSignaling
 
   const refreshNearby = useCallback(async () => {
     if (isSearchingRef.current) {
@@ -238,7 +227,12 @@ export const HouseholdView = React.memo(() => {
         return;
       }
 
-      const client = await connectSignaling();
+      if (!client) {
+        setErrorMessage("Signaling not connected");
+        setIsSearching(false);
+        return;
+      }
+      await client.ensureConnected();
       client.send("presence:join", {
         device_id: device.device_id,
         display_name: device.display_name,
@@ -256,16 +250,29 @@ export const HouseholdView = React.memo(() => {
       isSearchingRef.current = false;
       setIsSearching(false);
     }
-  }, [connectSignaling]);
+  }, [client]);
 
   const preparePairing = async (deviceId: string, displayName: string) => {
-    if (!identity) return;
-    const client = await connectSignaling();
+    if (!identity) {
+      console.warn("[Pairing] preparePairing called but identity is null");
+      return;
+    }
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] [Pairing] preparePairing initiated for device: ${displayName} (${deviceId})`);
+
+    if (!client) {
+      console.warn("[Pairing] preparePairing called but client is null");
+      return;
+    }
+    await client.ensureConnected();
     const session_id = `pair_${Date.now()}_${Math.random().toString(16).slice(2)}`;
     const code = generateCode();
     const keyPair = await generateKeyPair();
     pairingKeyRef.current = { session_id, code, keyPair, to_device_id: deviceId, attempts: 0 };
     setOutgoingPair({ session_id, to_device_id: deviceId, to_display_name: displayName, code });
+
+    console.log(`[${timestamp}] [Pairing] Sending pairing:request. Session: ${session_id}, Code: ${code}`);
+
     client.send("pairing:request", {
       session_id,
       from_device_id: identity.device_id,
@@ -282,8 +289,12 @@ export const HouseholdView = React.memo(() => {
 
   const handleIncomingPairAccept = async () => {
     if (!incomingPair || !identity) return;
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] [Pairing] handleIncomingPairAccept. Session: ${incomingPair.session_id}, Code: ${incomingCode.trim()}`);
+
     posthog.capture("pair_accepted", { partner_device_id: incomingPair.from_device_id });
-    const client = await connectSignaling();
+    if (!client) return;
+    await client.ensureConnected();
     client.send("pairing:accept", {
       session_id: incomingPair.session_id,
       from_device_id: identity.device_id,
@@ -296,10 +307,10 @@ export const HouseholdView = React.memo(() => {
     if (!incomingPair || !identity) return;
     posthog.capture("pair_cancelled", { partner_device_id: incomingPair.from_device_id });
     const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] [Pairing] handleIncomingPairCancel. Session: ${incomingPair.session_id}`);
 
-
-
-    const client = await connectSignaling();
+    if (!client) return;
+    await client.ensureConnected();
     client.send("pairing:reject", {
       session_id: incomingPair.session_id,
       from_device_id: identity.device_id,
@@ -324,8 +335,9 @@ export const HouseholdView = React.memo(() => {
     setErrorMessage(null);
     setSyncProgress(null);
 
+    if (!client) return;
     try {
-      const client = await connectSignaling();
+      await client.ensureConnected();
       const pairing = pairings.find((p) => p.partner_device_id === partnerDeviceId);
       if (!pairing) {
         setErrorMessage("Please pair with this device first");
@@ -500,28 +512,26 @@ export const HouseholdView = React.memo(() => {
   }, [refreshTrigger, fetchHouseholdTransactions, refreshSyncState]);
 
   useEffect(() => {
-    if (!identity) {
-
-      return;
-    }
-
-    if (!client) {
-
-      return;
-    }
-
-
-    clientRef.current = client;
+    if (!identity) return;
+    if (!client) return;
 
     // Signaling event handlers
     const offPairRequest = () => { };
 
 
     const offPairAccept = client.on("pairing:accept", async (payload) => {
-      if (!payload || !pairingKeyRef.current || payload.session_id !== pairingKeyRef.current.session_id) return;
+      const timestamp = new Date().toISOString();
+      console.log(`[${timestamp}] [Pairing] Received pairing:accept:`, payload);
+
+      if (!payload || !pairingKeyRef.current || payload.session_id !== pairingKeyRef.current.session_id) {
+        console.log(`[${timestamp}] [Pairing] pairing:accept ignored (session mismatch or no current pairing)`);
+        return;
+      }
       if (payload.code !== pairingKeyRef.current.code) {
+        console.warn(`[${timestamp}] [Pairing] Code mismatch. Entered: ${payload.code}, Expected: ${pairingKeyRef.current.code}`);
         pairingKeyRef.current.attempts = (pairingKeyRef.current.attempts || 0) + 1;
         if (pairingKeyRef.current.attempts >= 3) {
+          console.error(`[${timestamp}] [Pairing] Max attempts reached. Rejecting.`);
           client.send("pairing:reject", { session_id: payload.session_id, to_device_id: payload.from_device_id, reason: "max_attempts", message: "Too many incorrect attempts", final: true });
           setErrorMessage("Pairing failed: Partner entered wrong code too many times.");
           pairingKeyRef.current = null;
@@ -531,21 +541,22 @@ export const HouseholdView = React.memo(() => {
         }
         return;
       }
+      console.log(`[${timestamp}] [Pairing] Code verified! Sending pairing:confirm...`);
       const publicKey = await exportPublicKey(pairingKeyRef.current.keyPair.publicKey);
       client.send("pairing:confirm", { session_id: payload.session_id, from_device_id: identityRef.current?.device_id, to_device_id: payload.from_device_id, public_key: publicKey });
     });
 
     const offPairReject = client.on("pairing:reject", (payload) => {
       const timestamp = new Date().toISOString();
+      console.log(`[${timestamp}] [Pairing] Received pairing:reject:`, payload);
 
       // Check if this is for incoming pair (Device B receiving rejection - shouldn't happen but just in case)
       if (payload && incomingPairRef.current && payload.session_id === incomingPairRef.current.session_id) {
-
+        console.log(`[${timestamp}] [Pairing] Handling reject for incoming pairing`);
         if (payload.reason === "wrong_code") {
           setErrorMessage(payload.message || "Incorrect code. Please try again.");
           setIncomingCode("");
         } else if (payload.reason === "max_attempts" || payload.reason === "expired" || payload.reason === "cancelled") {
-
           setErrorMessage(payload.message || "Pairing failed: " + (payload.message || "Session ended."));
           setIncomingPair(null);
           setIncomingCode("");
@@ -555,11 +566,8 @@ export const HouseholdView = React.memo(() => {
 
       // Check if this is for outgoing pair (Device A receiving rejection from Device B)
       if (payload && pairingKeyRef.current && payload.session_id === pairingKeyRef.current.session_id) {
-
-
-
+        console.log(`[${timestamp}] [Pairing] Handling reject for outgoing pairing`);
         if (payload.reason === "cancelled") {
-
           setErrorMessage("Pairing request was declined by the other device.");
         } else if (payload.reason === "wrong_code") {
           setErrorMessage(payload.message || "Incorrect code. Please try again.");
@@ -577,24 +585,21 @@ export const HouseholdView = React.memo(() => {
 
     const offPairCancel = client.on("pairing:cancel", (payload) => {
       const timestamp = new Date().toISOString();
-
+      console.log(`[${timestamp}] [Pairing] Received pairing:cancel:`, payload);
 
       if (!payload || !incomingPairRef.current) {
-
         return;
       }
       if (payload.session_id === incomingPairRef.current.session_id) {
-
-
+        console.log(`[${timestamp}] [Pairing] Incoming pairing cancelled by remote`);
         setIncomingPair(null);
         setIncomingCode("");
-
-      } else {
-
       }
     });
 
     const offError = client.on("error", (payload) => {
+      const timestamp = new Date().toISOString();
+      console.error(`[${timestamp}] [Pairing] Signaling error:`, payload);
       if (payload?.code === "PAIRING_EXPIRED") {
         setErrorMessage(payload.message || "Pairing session expired.");
         if (pairingKeyRef.current?.session_id) { pairingKeyRef.current = null; setOutgoingPair(null); }
@@ -603,13 +608,20 @@ export const HouseholdView = React.memo(() => {
     });
 
     const offPairConfirm = client.on("pairing:confirm", async (payload) => {
-      if (!payload || !incomingPairRef.current || payload.session_id !== incomingPairRef.current.session_id) return;
+      const timestamp = new Date().toISOString();
+      console.log(`[${timestamp}] [Pairing] Received pairing:confirm:`, payload);
+      if (!payload || !incomingPairRef.current || payload.session_id !== incomingPairRef.current.session_id) {
+        console.log(`[${timestamp}] [Pairing] pairing:confirm ignored (session mismatch or no incoming pairing)`);
+        return;
+      }
+      console.log(`[${timestamp}] [Pairing] Derbying shared key and saving pairing...`);
       const keyPair = await generateKeyPair();
       const peerKey = await importPublicKey(payload.public_key);
       const sharedKey = await deriveSharedKey(keyPair.privateKey, peerKey);
       const sharedKeyRaw = await exportAesKey(sharedKey);
       await savePairing({ partner_device_id: incomingPairRef.current.from_device_id, partner_display_name: incomingPairRef.current.from_display_name, shared_key_id: sharedKeyRaw, created_at: Date.now(), trust_level: "paired" });
       const publicKey = await exportPublicKey(keyPair.publicKey);
+      console.log(`[${timestamp}] [Pairing] Sending pairing:confirm-response...`);
       client.send("pairing:confirm-response", { session_id: incomingPairRef.current.session_id, from_device_id: identityRef.current?.device_id, to_device_id: incomingPairRef.current.from_device_id, public_key: publicKey });
       setIncomingPair(null);
       setIncomingCode("");
@@ -617,7 +629,13 @@ export const HouseholdView = React.memo(() => {
     });
 
     const offPairConfirmResponse = client.on("pairing:confirm-response", async (payload) => {
-      if (!payload || !pairingKeyRef.current || payload.session_id !== pairingKeyRef.current.session_id) return;
+      const timestamp = new Date().toISOString();
+      console.log(`[${timestamp}] [Pairing] Received pairing:confirm-response:`, payload);
+      if (!payload || !pairingKeyRef.current || payload.session_id !== pairingKeyRef.current.session_id) {
+        console.log(`[${timestamp}] [Pairing] pairing:confirm-response ignored (session mismatch or no current pairing)`);
+        return;
+      }
+      console.log(`[${timestamp}] [Pairing] Finalizing pairing on initiator side...`);
       const peerKey = await importPublicKey(payload.public_key);
       const sharedKey = await deriveSharedKey(pairingKeyRef.current.keyPair.privateKey, peerKey);
       const sharedKeyRaw = await exportAesKey(sharedKey);
@@ -625,6 +643,7 @@ export const HouseholdView = React.memo(() => {
       pairingKeyRef.current = null;
       setOutgoingPair(null);
       await refreshSyncState();
+      console.log(`[${timestamp}] [Pairing] Pairing successful!`);
     });
 
     const offOffer = client.on("webrtc:offer", async (payload) => {
@@ -693,9 +712,8 @@ export const HouseholdView = React.memo(() => {
       offPairRequest(); offPairAccept(); offPairConfirm(); offPairConfirmResponse();
       offOffer(); offAnswer(); offCandidate(); offPairReject(); offPairCancel(); offError();
       // Don't disconnect - client is shared with SignalingProvider
-      clientRef.current = null;
     };
-  }, [identity?.device_id, refreshSyncState, fetchHouseholdTransactions]);
+  }, [client, identity?.device_id, refreshSyncState, fetchHouseholdTransactions]);
 
 
 
@@ -890,7 +908,7 @@ export const HouseholdView = React.memo(() => {
                   <div key={i} className="flex h-16 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--kk-ember)] to-[var(--kk-ember-deep)] text-3xl font-bold text-white shadow-lg">{digit}</div>
                 ))}
               </div>
-              <button onClick={async () => { const toDeviceId = pairingKeyRef.current?.to_device_id; const sessionId = pairingKeyRef.current?.session_id; setOutgoingPair(null); pairingKeyRef.current = null; if (toDeviceId && sessionId && identityRef.current) { try { const client = await connectSignaling(); client.send("pairing:cancel", { session_id: sessionId, to_device_id: toDeviceId, from_device_id: identityRef.current?.device_id, from_display_name: identityRef.current?.display_name }); } catch { } } }} className="kk-btn-ghost text-xs">Cancel request</button>
+              <button onClick={async () => { const toDeviceId = pairingKeyRef.current?.to_device_id; const sessionId = pairingKeyRef.current?.session_id; setOutgoingPair(null); pairingKeyRef.current = null; if (toDeviceId && sessionId && identityRef.current && client) { try { await client.ensureConnected(); client.send("pairing:cancel", { session_id: sessionId, to_device_id: toDeviceId, from_device_id: identityRef.current?.device_id, from_display_name: identityRef.current?.display_name }); } catch { } } }} className="kk-btn-ghost text-xs">Cancel request</button>
             </div>
           )}
 

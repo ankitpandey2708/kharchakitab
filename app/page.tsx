@@ -214,40 +214,13 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
   }, []);
 
   useEffect(() => {
-    if (!client) return;
+    if (!client) {
+      console.log("[Pairing] No signaling client available in AppShell yet");
+      return;
+    }
 
-    const offReq = client.on("pairing:request", (payload) => {
-      if (!payload || payload.to_device_id !== identityRef.current?.device_id) {
-        return;
-      }
-
-      // Capture the request in global state
-      setIncomingPair({
-        session_id: payload.session_id,
-        from_device_id: payload.from_device_id,
-        from_display_name: payload.from_display_name,
-      });
-
-      // Auto-switch to Household tab ONLY if the feature is enabled
-      setTimeout(() => {
-        if (showHousehold) {
-          setActiveTab("household");
-        }
-      }, 300);
-    });
-
-    const offCancel = client.on("pairing:cancel", (payload) => {
-      // We don't have access to current incomingPair here without a ref, 
-      // but we can just call a function that checks it or rely on HouseholdView 
-      // once it's mounted. For now, let's at least clear it if it exists.
-      setIncomingPair(null);
-    });
-
-    return () => {
-      offReq();
-      offCancel();
-    };
-  }, [client, setActiveTab, setIncomingPair, showHousehold]);
+    console.log("[Pairing] Signaling client available in AppShell (Global listeners handled by SignalingProvider)");
+  }, [client]);
 
   useEffect(() => {
     // Force back to summary if household is disabled while on household tab
@@ -1161,13 +1134,17 @@ function useHouseholdFlag() {
   const [enabled, setEnabled] = useState(false);
   useEffect(() => {
     const host = window.location.hostname;
+    console.log(`[FeatureFlag] Checking household-view for host: ${host}`);
     const isLocal = host === "localhost" || host === "127.0.0.1" || host === "::1";
     if (isLocal) {
+      console.log("[FeatureFlag] Enabling household-view (local environment)");
       setEnabled(true);
       return;
     }
     posthog.onFeatureFlags(() => {
-      setEnabled(!!posthog.isFeatureEnabled("household-view"));
+      const isEnabled = !!posthog.isFeatureEnabled("household-view");
+      console.log(`[FeatureFlag] PostHog household-view enabled: ${isEnabled}`);
+      setEnabled(isEnabled);
     });
   }, []);
   return enabled;
