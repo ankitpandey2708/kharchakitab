@@ -87,7 +87,7 @@ const CompactBudgetRow = ({
             aria-label="Dismiss budget nudge"
             title="Dismiss"
           >
-            Not now
+            Later
           </button>
         )}
         <button
@@ -555,16 +555,28 @@ export const TransactionList = React.memo(({
       return budgetSurface;
     }
 
-    if (!coachmarkEligible) return null;
+    if (coachmarkEligible) {
+      return (
+        <CompactBudgetRow
+          title="Want a monthly budget?"
+          subtitle="See monthly progress and pace limits"
+          actionLabel="Add"
+          onAction={openBudgetEditor}
+          tone="coachmark"
+          onDismiss={dismissCoachmark}
+        />
+      );
+    }
+
+    // Coachmark dismissed — show a quiet ghost entry point
     return (
-      <CompactBudgetRow
-        title="Want a monthly budget?"
-        subtitle="See monthly progress and pace limits"
-        actionLabel="Add"
-        onAction={openBudgetEditor}
-        tone="coachmark"
-        onDismiss={dismissCoachmark}
-      />
+      <button
+        type="button"
+        onClick={openBudgetEditor}
+        className="w-full text-center text-xs text-[var(--kk-ash)] hover:text-[var(--kk-ink)] transition-colors py-1"
+      >
+        + Set monthly budget
+      </button>
     );
   })();
 
