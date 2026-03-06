@@ -144,8 +144,7 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
   const [editedTx, setEditedTx] = useState<Transaction | null>(null);
   const [addedTx, setAddedTx] = useState<Transaction | null>(null);
   const [editState, setEditState] = useState<{
-    mode: "new" | "edit";
-    id?: string;
+    id: string;
     amount: number;
     item: string;
     category: string;
@@ -567,6 +566,10 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
       }
     } catch (error) {
       setLastError(toUserMessage(error, "unableToTranscribeAudio"));
+      posthog.capture("error_occurred", {
+        error_type: "text_parse_failed",
+        error_message: toUserMessage(error, "unableToTranscribeAudio"),
+      });
     } finally {
       removePendingTransaction(pendingId);
       stopProcessing();
@@ -579,8 +582,8 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
     // Clear stale feedback so old pill doesn't flash when new recording stops
     if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
     setTranscriptFeedback(null);
-    posthog.capture("recording_started");
     await audioRecorder.startRecording();
+    posthog.capture("recording_started");
   }, [audioRecorder]);
 
   const getAudioValidationError = useCallback((blob: Blob | null, durationMs: number) => {
@@ -694,6 +697,12 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
     setTranscriptFeedback(null);
     await deleteTransaction(txId);
     setDeletedTx({ id: txId, amount, item, category, paymentMethod: paymentMethod as Transaction["paymentMethod"], timestamp: Date.now() });
+    posthog.capture("transaction_deleted", {
+      amount,
+      category,
+      payment_method: paymentMethod,
+      source: "undo",
+    });
     refreshTransactions();
   }, [transcriptFeedback, refreshTransactions]);
 
@@ -725,11 +734,6 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
       playMoneySound(transaction.amount, currency);
       recordStreak();
       refreshTransactions();
-      posthog.capture("receipt_processed", {
-        amount: expense.amount,
-        category: expense.category,
-        payment_method: expense.paymentMethod ?? "cash",
-      });
       posthog.capture("transaction_added", {
         amount: expense.amount,
         category: expense.category,
@@ -824,7 +828,6 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
   const openEdit = useCallback(async (tx: Transaction) => {
     const isShared = await isTransactionShared(tx.id);
     setEditState({
-      mode: "edit",
       id: tx.id,
       amount: tx.amount,
       item: tx.item,
@@ -871,42 +874,27 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
         setLastError(ERROR_MESSAGES.amountGreaterThanZero);
         return;
       }
-      if (editState?.mode === "edit" && editState.id) {
-        const updated = buildTransaction(
-          {
-            ...data,
-            is_private: data.isPrivate ?? false,
-          },
-          editState.id
-        );
-        await updateTransaction(editState.id, updated);
-        setEditedTx(updated);
-        posthog.capture("transaction_edited", {
-          amount: data.amount,
-          category: data.category,
-          payment_method: data.paymentMethod,
-        });
-      } else {
-        const transaction = buildTransaction({
+      if (!editState) return;
+      const updated = buildTransaction(
+        {
           ...data,
           is_private: data.isPrivate ?? false,
-        });
-        const id = await addTransaction(transaction);
-        setAddedTx({ ...transaction, id });
-        playMoneySound(transaction.amount, currency);
-        recordStreak();
-        posthog.capture("transaction_added", {
-          amount: data.amount,
-          category: data.category,
-          payment_method: data.paymentMethod,
-        });
-      }
+        },
+        editState.id
+      );
+      await updateTransaction(editState.id, updated);
+      setEditedTx(updated);
+      posthog.capture("transaction_edited", {
+        amount: data.amount,
+        category: data.category,
+        payment_method: data.paymentMethod,
+      });
       startTransition(() => {
         setRefreshKey((prev) => prev + 1);
       });
       setEditState(null);
     },
-    [currency, editState]
+    [editState]
   );
 
   const handleCloseHistory = useCallback(() => {
