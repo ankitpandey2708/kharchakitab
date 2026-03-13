@@ -27,7 +27,7 @@ const monoFont = JetBrains_Mono({
 });
 
 const metadataBase = new URL(SITE_URL);
-const defaultTitle = `${SITE_NAME} | Hinglish Expense Tracker`;
+const defaultTitle = `${SITE_NAME} — Hinglish Voice Expense Tracker for India`;
 
 export const metadata: Metadata = {
   metadataBase,
@@ -57,7 +57,7 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: `${SITE_NAME} logo`,
+        alt: `KharchaKitab app — say 'chai 20 rupees' and it logs instantly`,
       },
     ],
   },
@@ -112,6 +112,14 @@ const structuredData = {
   inLanguage: "en-IN",
   availableLanguage: ["en-IN", "hi-IN"],
   isAccessibleForFree: true,
+  featureList: [
+    "Hinglish voice input",
+    "Automatic expense categorization",
+    "Recurring expense tracking",
+    "Spending summaries",
+    "PWA — works offline",
+  ],
+  screenshot: `${SITE_URL}/og-image.png`,
   offers: {
     "@type": "Offer",
     price: "0",

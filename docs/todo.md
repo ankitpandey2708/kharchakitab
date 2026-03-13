@@ -56,9 +56,11 @@ End of month/week shareable story-format cards with stats and a vibe-based headl
 5. showcase private vs shared
 6. import/export wrt solo|household
 7. signalingClient and hosuehold mode behind paywall
-8. RecurringView icon revamp
+8. RecurringView UI revamp to icon based like bharat billpay
 9. sync beyond 2 devices possible?
-
+10. add bharat billpay if possible?
+11. scan to pay and webhook back to kharchakitab possible?
+12. multiple expenses in 1 go
 
 Festival/Event "Buckets"
 The Research: Indian financial cycles are heavily punctuated by specific events (Diwali, a sibling's wedding, etc.). These events often require temporary immense pooling of resources.
@@ -67,6 +69,7 @@ The Vitamin: Allow the creation of a temporary "Shared Savings Bucket" (e.g., "G
  Instead of exporting a boring Excel sheet on the 1st of the month, generate an Instagram-style "Wrap Up." (e.g., "You went on 4 dates this month! ❤️", "You successfully kept Zomato/Swiggy under ₹2000! 🏆")
 
   Replace "Who owes whom" with a dynamic pie chart showing contribution vs. agreed-upon household ratio.
+
 
 *******
 await new Promise(r => indexedDB.open("QuickLogDB").onsuccess = e => e.target.result.transaction("transactions").objectStore("transactions").getAll().onsuccess = ev => r(ev.target.result.sort((a, b) => a.timestamp - b.timestamp).map(tx => ({...tx, timestamp: new Date(tx.timestamp).toLocaleDateString("en-IN", {day: "2-digit", month: "short", year: "numeric"})}))));

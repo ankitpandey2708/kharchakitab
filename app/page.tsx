@@ -899,6 +899,7 @@ const AppShell = ({ showHousehold }: { showHousehold: boolean }) => {
                 className="text-2xl font-bold font-[family:var(--font-display)] tracking-tight"
               >
                 Kharcha<span className="text-[var(--kk-ember)]">Kitab</span>
+                <span className="sr-only"> — Hinglish Voice Expense Tracker</span>
               </motion.h1>
               <motion.div
                 initial={headerInitial}

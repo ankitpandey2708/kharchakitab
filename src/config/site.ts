@@ -5,7 +5,7 @@ export const SITE_URL = rawSiteUrl.endsWith("/")
   : rawSiteUrl;
 export const SITE_NAME = "KharchaKitab";
 export const SITE_DESCRIPTION =
-  "Hinglish-first voice expense tracker that turns speech into clean, categorized entries so you can log daily spending fast and stay on budget.";
+  "Hinglish-first voice expense tracker that turns speech into clean, categorized entries — log daily spending fast, stay on budget. Free to use.";
 export const SITE_KEYWORDS = [
   "Hinglish expense tracker",
   "Hindi English voice expense",
