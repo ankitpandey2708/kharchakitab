@@ -1,6 +1,61 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { SITE_NAME } from "@/src/config/site";
+import { SITE_NAME, SITE_URL } from "@/src/config/site";
+
+const faqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: [
+    {
+      "@type": "Question",
+      name: "What is KharchaKitab?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "KharchaKitab is a free Hinglish voice expense tracker for Indian users. You speak your expenses in Hindi, English, or Hinglish, and the app logs them automatically with AI-powered categorization.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "How does Hinglish voice expense tracking work?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Tap the mic and say your expense naturally — for example 'chai 20 rupees' or 'auto 80'. KharchaKitab transcribes your speech using Sarvam AI and parses it with Google Gemini to extract the amount, category, and date automatically.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Is KharchaKitab free to use?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Yes. KharchaKitab is completely free. No account or sign-up is required.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Where is my expense data stored?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "All your expenses are stored locally on your device using IndexedDB. No expense data is sent to or stored on KharchaKitab servers.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Does KharchaKitab work offline?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Yes. KharchaKitab is a Progressive Web App (PWA) and works offline after the first load. Voice input and AI parsing require an internet connection, but browsing and editing your expenses works fully offline.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Can I install KharchaKitab on my phone?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: `Yes. Open ${SITE_URL} in Chrome or Safari, then use 'Add to Home Screen' to install it as a native-like app on Android or iOS.`,
+      },
+    },
+  ],
+};
 
 export const metadata: Metadata = {
   title: "About",
@@ -13,6 +68,10 @@ export const metadata: Metadata = {
 export default function AboutPage() {
   return (
     <main className="mx-auto max-w-2xl px-6 py-12 font-[family:var(--font-body)]">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+      />
       <nav className="mb-8">
         <Link
           href="/"
