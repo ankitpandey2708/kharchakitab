@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__posthog__projects-get",
+      "mcp__posthog__event-definitions-list",
+      "mcp__posthog__query-generate-hogql-from-question",
+      "mcp__posthog__query-run",
+      "Bash(npx tsc:*)",
+      "mcp__posthog__event-definition-update",
+      "Bash(npx next:*)",
+      "mcp__posthog__feature-flag-get-all",
+      "mcp__posthog__update-feature-flag",
+      "mcp__posthog__properties-list",
+      "Bash(curl:*)",
+      "WebSearch",
+      "mcp__posthog__surveys-get-all",
+      "mcp__posthog__survey-update",
+      "Bash(python3:*)",
+      "Bash(npx eslint:*)",
+      "Bash(find:*)"
+    ]
+  }
+}
