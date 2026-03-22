@@ -8,7 +8,6 @@ Use this doc as the single source of truth for mic behavior, troubleshooting, an
 - **Media permissions:** Call `navigator.mediaDevices.getUserMedia({ audio: true })`. If unsupported or denied, set an error and alert the user.
 - **Recording pipeline:** Start `MediaRecorder`, buffer chunks in `chunksRef`, and assemble a single `audio/webm` blob on stop.
 - **Silence detection:** Use `AudioContext` + `AnalyserNode` to compute RMS every 0.2s. If RMS < 0.02 for > 0.6s, auto-stop after the initial 2s warm-up.
-- **Hard timeout:** Force stop after 8s even if silence detection fails.
 - **Manual stop:** Let users tap again to stop immediately.
 - **Stop flow:** Call `stopRecording()`, stop `MediaRecorder`, resolve `{ audioBlob, duration }`, then tear down tracks, intervals, and audio context.
 - **Double-stop safety:** If the recorder is already inactive, return the last known `{ audioBlob, duration }`.
@@ -35,17 +34,15 @@ Use this doc as the single source of truth for mic behavior, troubleshooting, an
 - **Do cleanup only on unmount or explicit stop:** Cleanup on state changes ends streams immediately.
 - **Route all stops through `stopRecording()`:** Avoid hidden cleanup paths that bypass recorder events.
 - **Preserve blobs on inactive stop:** If the recorder is inactive, return the last blob instead of `null`.
-- **Clear timeouts on stop:** Clear the hard-timeout inside `recorder.onstop` to avoid late stop calls.
 - **Sync state on stop:** Set `isRecording = false` inside `recorder.onstop` so downstream effects can process the blob.
 
 ## Tunable Variables (Current Defaults)
 
 Edit `src/config/mic.ts` to change these values.
 
-- **Silence RMS threshold:** `0.02` (below this is treated as silence)
-- **Silence duration:** `0.6s` (continuous silence needed before auto-stop)
-- **Sampling interval:** `0.2s` (how often RMS is checked)
-- **Hard timeout:** `8s` (absolute maximum recording length)
+- **Silence RMS threshold:** `0.02` (below this is treated as silence) — `MIC_CONFIG.silenceThreshold`
+- **Silence duration:** `0.6s` (continuous silence needed before auto-stop) — `MIC_CONFIG.silenceDurationMs`
+- **Sampling interval:** `0.2s` (how often RMS is checked) — `MIC_CONFIG.sampleIntervalMs`
 
 ### 1) Silence RMS threshold
 
@@ -70,11 +67,3 @@ Edit `src/config/mic.ts` to change these values.
 
   - Faster → more responsive, more CPU
   - Slower → cheaper, but may feel delayed
-
-### 4) Hard timeout
-
-  Typical range: 6 – 12 seconds
-  Common starting point: 8 seconds
-
-  - Short → may truncate long entries
-  - Long → users may forget it’s recording, adds cost
