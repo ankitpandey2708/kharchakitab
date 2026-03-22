@@ -4,12 +4,12 @@ import React, { useCallback, useState } from "react";
 import { motion } from "framer-motion";
 import posthog from "posthog-js";
 import {
-  getApniAwaazEnabled,
-  setApniAwaazEnabled,
-  scheduleApniAwaaz,
-  registerApniAwaazSync,
-  unregisterApniAwaazSync,
-} from "@/src/services/notifications/apniAwaaz";
+  getMannKiBaatEnabled,
+  setMannKiBaatEnabled,
+  scheduleMannKiBaat,
+  registerMannKiBaatSync,
+  unregisterMannKiBaatSync,
+} from "@/src/services/notifications/mannKiBaat";
 import { ensureNotificationsEnabled } from "@/src/services/notifications/core";
 
 const OPTIONS = [
@@ -17,8 +17,8 @@ const OPTIONS = [
   { value: "false", label: "Off" },
 ] as const;
 
-export const ApniAwaazToggle = React.memo(() => {
-  const [enabled, setEnabled] = useState(() => getApniAwaazEnabled());
+export const MannKiBaatToggle = React.memo(() => {
+  const [enabled, setEnabled] = useState(() => getMannKiBaatEnabled());
 
   const toggle = useCallback(async (value: string) => {
     const on = value === "true";
@@ -26,16 +26,16 @@ export const ApniAwaazToggle = React.memo(() => {
     if (on) {
       const permission = await ensureNotificationsEnabled();
       if (permission !== "granted") return;
-      setApniAwaazEnabled(true);
+      setMannKiBaatEnabled(true);
       setEnabled(true);
-      scheduleApniAwaaz();
-      registerApniAwaazSync();
-      posthog.capture("apni_awaaz_toggled", { enabled: true });
+      scheduleMannKiBaat();
+      registerMannKiBaatSync();
+      posthog.capture("mann_ki_baat_toggled", { enabled: true });
     } else {
-      setApniAwaazEnabled(false);
+      setMannKiBaatEnabled(false);
       setEnabled(false);
-      unregisterApniAwaazSync();
-      posthog.capture("apni_awaaz_toggled", { enabled: false });
+      unregisterMannKiBaatSync();
+      posthog.capture("mann_ki_baat_toggled", { enabled: false });
     }
   }, []);
 
@@ -43,7 +43,7 @@ export const ApniAwaazToggle = React.memo(() => {
     <div
       className="relative inline-flex items-center rounded-full border border-[var(--kk-smoke-heavy)] bg-white/80 p-[2px]"
       role="radiogroup"
-      aria-label="Apni Awaaz"
+      aria-label="Mann Ki Baat"
     >
       <motion.div
         className="absolute top-[2px] bottom-[2px] rounded-full"
@@ -87,4 +87,4 @@ export const ApniAwaazToggle = React.memo(() => {
   );
 });
 
-ApniAwaazToggle.displayName = "ApniAwaazToggle";
+MannKiBaatToggle.displayName = "MannKiBaatToggle";

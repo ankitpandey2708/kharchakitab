@@ -27,7 +27,7 @@ Rules:
 - Default recurring:false
 - Valid JSON array only. No markdown.`;
 
-export const APNI_AWAAZ_TYPE_INSTRUCTIONS: Record<string, string> = {
+export const MANN_KI_BAAT_TYPE_INSTRUCTIONS: Record<string, string> = {
   roast: "Tease about specific items/categories they over-spent on",
   pattern: "Call out repeated items or category patterns across days",
   praise: "Celebrate a low-spend day genuinely",
@@ -35,7 +35,7 @@ export const APNI_AWAAZ_TYPE_INSTRUCTIONS: Record<string, string> = {
   streak: "Encourage continuing a low-spend streak",
 };
 
-export const getApniAwaazPrompt = (typeInstruction: string) =>
+export const getMannKiBaatPrompt = (typeInstruction: string) =>
   `Hinglish (Hindi-English mix) inner voice reacting to user's spending data. Brutally honest but affectionate tone.
 
 Rules:

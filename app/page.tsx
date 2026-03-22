@@ -1,5 +1,3 @@
-// PERF-RERENDER: Added useTransition for expensive state updates, useDeferredValue for search/filter inputs, and useMemo/useCallback throughout
-// Also using split contexts (useNavigation, usePairing) instead of monolithic useAppContext for better performance isolation
 
 "use client";
 
@@ -57,7 +55,7 @@ import {
   isAlertsReady,
   syncAlertsQueue,
   scheduleDailyReminder,
-  scheduleApniAwaaz,
+  scheduleMannKiBaat,
 } from "@/src/services/notifications";
 import { useCurrency } from "@/src/hooks/useCurrency";
 import { usePwaInstall } from "@/src/hooks/usePwaInstall";
@@ -212,7 +210,7 @@ const AppShell = () => {
 
   useEffect(() => {
     scheduleDailyReminder();
-    scheduleApniAwaaz();
+    scheduleMannKiBaat();
   }, []);
 
   useEffect(() => {
@@ -873,18 +871,18 @@ const AppShell = () => {
           <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-2">
             <div className="justify-self-start">
               <div className="relative">
-                  <motion.button
-                    type="button"
-                    onClick={handleOpenSync}
-                    aria-label="Household Sync"
-                    className="kk-icon-btn kk-icon-btn-ghost kk-icon-btn-sm"
-                    whileHover={{ scale: 1.1, color: "var(--kk-ocean)" }}
-                    whileTap={{ scale: 0.9 }}
-                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                  >
-                    <Users className="h-4 w-4" />
-                  </motion.button>
-                </div>
+                <motion.button
+                  type="button"
+                  onClick={handleOpenSync}
+                  aria-label="Household Sync"
+                  className="kk-icon-btn kk-icon-btn-ghost kk-icon-btn-sm"
+                  whileHover={{ scale: 1.1, color: "var(--kk-ocean)" }}
+                  whileTap={{ scale: 0.9 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                >
+                  <Users className="h-4 w-4" />
+                </motion.button>
+              </div>
             </div>
             <div className="min-w-0 text-center">
               <motion.h1
@@ -1035,30 +1033,30 @@ const AppShell = () => {
 
       {/* Sync Manager — full-screen overlay */}
       <AnimatePresence mode="wait">
-          {isSyncOpen && (
-            <motion.div
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="fixed inset-0 z-50 bg-[var(--kk-paper)] overflow-auto overscroll-contain"
-            >
-              <div className="mx-auto h-full w-full max-w-4xl flex flex-col">
-                <header className="z-20 shrink-0 border-b border-[var(--kk-smoke)] bg-[var(--kk-paper)]/90 px-5 py-4 backdrop-blur-md">
-                  <div className="flex items-center gap-3">
-                    <button type="button" onClick={handleCloseSync} className="kk-icon-btn kk-icon-btn-lg">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
-                    </button>
-                    <div className="text-2xl font-semibold font-[family:var(--font-display)]">Household</div>
-                  </div>
-                </header>
-                <div className="flex-1">
-                  <SyncManager onSyncComplete={refreshTransactions} />
+        {isSyncOpen && (
+          <motion.div
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", damping: 30, stiffness: 300 }}
+            className="fixed inset-0 z-50 bg-[var(--kk-paper)] overflow-auto overscroll-contain"
+          >
+            <div className="mx-auto h-full w-full max-w-4xl flex flex-col">
+              <header className="z-20 shrink-0 border-b border-[var(--kk-smoke)] bg-[var(--kk-paper)]/90 px-5 py-4 backdrop-blur-md">
+                <div className="flex items-center gap-3">
+                  <button type="button" onClick={handleCloseSync} className="kk-icon-btn kk-icon-btn-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
+                  </button>
+                  <div className="text-2xl font-semibold font-[family:var(--font-display)]">Household</div>
                 </div>
+              </header>
+              <div className="flex-1">
+                <SyncManager onSyncComplete={refreshTransactions} />
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* PWA Install Banner (C1) */}
       <AnimatePresence>

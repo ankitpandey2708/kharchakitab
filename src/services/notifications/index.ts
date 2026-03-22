@@ -26,5 +26,5 @@ export {
   unregisterDailyReminderSync,
 } from "./dailyReminder";
 
-// Apni Awaaz
-export { scheduleApniAwaaz } from "./apniAwaaz";
+// Mann Ki Baat
+export { scheduleMannKiBaat } from "./mannKiBaat";

@@ -3,10 +3,10 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
-import type { ApniAwaazMessage } from "@/src/utils/apniAwaaz";
+import type { MannKiBaatMessage } from "@/src/utils/mannKiBaat";
 
-interface ApniAwaazBubbleProps {
-  message: ApniAwaazMessage;
+interface MannKiBaatProps {
+  message: MannKiBaatMessage;
   isLoading: boolean;
   onDismiss: () => void;
 }
@@ -68,11 +68,11 @@ const OrganicBlob = () => (
    Main Bubble — Organic, sound-wave inspired notification
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export const ApniAwaazBubble = React.memo(({
+export const MannKiBaat = React.memo(({
   message,
   isLoading,
   onDismiss,
-}: ApniAwaazBubbleProps) => {
+}: MannKiBaatProps) => {
   /* ── Loading skeleton ── */
   if (isLoading) {
     return (
@@ -149,4 +149,4 @@ export const ApniAwaazBubble = React.memo(({
   );
 });
 
-ApniAwaazBubble.displayName = "ApniAwaazBubble";
+MannKiBaat.displayName = "MannKiBaat";

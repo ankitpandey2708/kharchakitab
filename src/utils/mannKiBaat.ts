@@ -36,7 +36,7 @@ interface RecentContext {
 
 export type MessageType = "roast" | "pattern" | "praise" | "warning" | "streak";
 
-export interface ApniAwaazMessage {
+export interface MannKiBaatMessage {
   message: string;
   type: MessageType;
   emoji: string;
@@ -145,7 +145,7 @@ const aggregateTransactions = (txs: Transaction[]): DayStats => {
 // Full data pipeline
 // ---------------------------------------------------------------------------
 
-export const getApniAwaazData = async (ownerId?: string) => {
+export const getMannKiBaatData = async (ownerId?: string) => {
   const [yesterdayTxRaw, weekTxRaw, monthTxRaw] = await Promise.all([
     fetchTransactions({ range: yesterdayRange() }),
     fetchTransactions({ range: dayRange(7) }),
@@ -237,7 +237,7 @@ export const selectMessageType = (stats: DayStats, ctx: RecentContext): MessageT
 // Fallback messages (no Gemini needed) - Enhanced with item-level details
 // ---------------------------------------------------------------------------
 
-export const getFallbackMessage = (stats: DayStats, type: MessageType): ApniAwaazMessage => {
+export const getFallbackMessage = (stats: DayStats, type: MessageType): MannKiBaatMessage => {
   const total = Math.round(stats.totalSpend);
 
   // Build item-aware messages when Gemini is unavailable
@@ -297,7 +297,7 @@ export const getFallbackMessage = (stats: DayStats, type: MessageType): ApniAwaa
 // Gemini API call
 // ---------------------------------------------------------------------------
 
-export const fetchApniAwaazMessage = async (
+export const fetchMannKiBaatMessage = async (
   stats: DayStats,
   ctx: RecentContext,
   type: MessageType
@@ -306,7 +306,7 @@ export const fetchApniAwaazMessage = async (
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      type: "apni-awaaz",
+      type: "mann-ki-baat",
       messageType: type,
       text: JSON.stringify({
         yesterday: {
@@ -336,4 +336,3 @@ export const fetchApniAwaazMessage = async (
 
   throw new Error("Invalid response shape");
 };
-

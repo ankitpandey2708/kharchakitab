@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { DailyReminderToggle } from "@/src/components/DailyReminderToggle";
 import { RecurringAlertsToggle } from "@/src/components/RecurringAlertsToggle";
-import { ApniAwaazToggle } from "@/src/components/ApniAwaazToggle";
+import { MannKiBaatToggle } from "@/src/components/MannKiBaatToggle";
 import {
     getMasterEnabled,
     setMasterEnabled,
@@ -307,7 +307,7 @@ export const NotificationsSettings = React.memo(
                         icon: <AudioLines className="h-4 w-4" />,
                         label: "Mann Ki Baat",
                         description: "Daily spending insights delivered every morning",
-                        toggle: <ApniAwaazToggle />,
+                        toggle: <MannKiBaatToggle />,
                         time: "9:00 AM",
                     },
                 ],

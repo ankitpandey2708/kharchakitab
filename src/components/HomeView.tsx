@@ -19,8 +19,8 @@ import { useCurrency } from "@/src/hooks/useCurrency";
 import { useMobileSheet } from "@/src/hooks/useMobileSheet";
 import { CATEGORY_ICON_MAP } from "@/src/config/categories";
 import { BudgetCard } from "@/src/components/BudgetCard";
-import { ApniAwaazBubble } from "@/src/components/ApniAwaazBubble";
-import { useApniAwaaz } from "@/src/hooks/useApniAwaaz";
+import { MannKiBaat } from "@/src/components/MannKiBaat";
+import { useMannKiBaat } from "@/src/hooks/useMannKiBaat";
 import { syncEvents } from "@/src/services/sync/syncEvents";
 
 import { isProcessingTransaction } from "@/src/utils/transactions";
@@ -76,7 +76,7 @@ export const HomeView = React.memo(({
   onMobileSheetChange,
 }: TransactionListProps) => {
   const { symbol: currencySymbol, formatCurrency } = useCurrency();
-  const apniAwaaz = useApniAwaaz();
+  const mannKiBaat = useMannKiBaat();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [periodTransactions, setPeriodTransactions] = useState<Transaction[]>([]);
   const [identity, setIdentity] = useState<{ device_id: string } | null>(null);
@@ -579,12 +579,12 @@ export const HomeView = React.memo(({
 
   return (
     <div className="space-y-5">
-      {/* Apni Awaaz — daily spending insight */}
-      {!apniAwaaz.isDismissed && (apniAwaaz.message || apniAwaaz.isLoading) && (
-        <ApniAwaazBubble
-          message={apniAwaaz.message!}
-          isLoading={apniAwaaz.isLoading}
-          onDismiss={apniAwaaz.dismiss}
+      {/* Mann Ki Baat — daily spending insight */}
+      {!mannKiBaat.isDismissed && (mannKiBaat.message || mannKiBaat.isLoading) && (
+        <MannKiBaat
+          message={mannKiBaat.message!}
+          isLoading={mannKiBaat.isLoading}
+          onDismiss={mannKiBaat.dismiss}
         />
       )}
 

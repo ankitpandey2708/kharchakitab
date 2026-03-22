@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPostHogClient } from "@/src/lib/posthog-server";
-import { getApniAwaazPrompt, APNI_AWAAZ_TYPE_INSTRUCTIONS } from "@/src/utils/prompts";
+import { getMannKiBaatPrompt, MANN_KI_BAAT_TYPE_INSTRUCTIONS } from "@/src/utils/prompts";
 
 type AIResult = { text: string } | { error: string };
 
@@ -123,15 +123,15 @@ export async function POST(request: NextRequest) {
 
   // Build prompt based on type
   let basePrompt: string;
-  if (requestType === "apni-awaaz") {
+  if (requestType === "mann-ki-baat") {
     const typeKey = body.messageType || "roast";
-    const typeInstruction = APNI_AWAAZ_TYPE_INSTRUCTIONS[typeKey] || APNI_AWAAZ_TYPE_INSTRUCTIONS.roast;
-    basePrompt = `${getApniAwaazPrompt(typeInstruction)}\n\nUser data:\n${text}`;
+    const typeInstruction = MANN_KI_BAAT_TYPE_INSTRUCTIONS[typeKey] || MANN_KI_BAAT_TYPE_INSTRUCTIONS.roast;
+    basePrompt = `${getMannKiBaatPrompt(typeInstruction)}\n\nUser data:\n${text}`;
   } else {
     basePrompt = text;
   }
 
-  const temperature = requestType === "apni-awaaz" ? 0.7 : 0;
+  const temperature = requestType === "mann-ki-baat" ? 0.7 : 0;
 
   let result: AIResult = { error: "No models configured." };
   let provider = "unknown";
@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
   }
 
   if ("error" in result) {
-    const event = requestType === "apni-awaaz" ? "apni_awaaz_generate_failed" : "expense_parse_failed";
+    const event = requestType === "mann-ki-baat" ? "mann_ki_baat_generate_failed" : "expense_parse_failed";
     if (posthog) {
       posthog.capture({
         distinctId,
@@ -169,7 +169,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: result.error }, { status: 502 });
   }
 
-  const event = requestType === "apni-awaaz" ? "apni_awaaz_generated" : "expense_parsed";
+  const event = requestType === "mann-ki-baat" ? "mann_ki_baat_generated" : "expense_parsed";
   if (posthog) {
     posthog.capture({
       distinctId,
@@ -182,8 +182,8 @@ export async function POST(request: NextRequest) {
   if (parsed === null) {
     return NextResponse.json({ error: "Invalid JSON from AI." }, { status: 502 });
   }
-  // Only wrap in array for expense parsing, not for apni-awaaz
-  if (requestType !== "apni-awaaz" && !Array.isArray(parsed)) parsed = [parsed];
+  // Only wrap in array for expense parsing, not for mann-ki-baat
+  if (requestType !== "mann-ki-baat" && !Array.isArray(parsed)) parsed = [parsed];
 
   console.log(`[AI] ${event}: provider=${provider} total_request=${Date.now() - reqStart}ms`);
   return NextResponse.json({ data: parsed });

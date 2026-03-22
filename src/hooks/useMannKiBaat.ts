@@ -2,40 +2,40 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getDeviceIdentity, fetchTransactions } from "@/src/db/db";
-import { getApniAwaazEnabled } from "@/src/services/notifications/apniAwaaz";
+import { getMannKiBaatEnabled } from "@/src/services/notifications/mannKiBaat";
 import {
-  getApniAwaazData,
+  getMannKiBaatData,
   selectMessageType,
   getFallbackMessage,
-  fetchApniAwaazMessage,
-  type ApniAwaazMessage,
-} from "@/src/utils/apniAwaaz";
+  fetchMannKiBaatMessage,
+  type MannKiBaatMessage,
+} from "@/src/utils/mannKiBaat";
 import posthog from "posthog-js";
 
-const CACHE_KEY = "kk_apniAwaaz";
+const CACHE_KEY = "kk_mannKiBaat";
 const todayDate = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
-export const useApniAwaaz = () => {
-  const [message, setMessage] = useState<ApniAwaazMessage | null>(null);
+export const useMannKiBaat = () => {
+  const [message, setMessage] = useState<MannKiBaatMessage | null>(null);
   const [isDismissed, setIsDismissed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const generatingRef = useRef(false);
 
   const tryLoad = useCallback(() => {
-    if (!getApniAwaazEnabled()) return;
+    if (!getMannKiBaatEnabled()) return;
 
     const today = todayDate();
     const cached = localStorage.getItem(CACHE_KEY);
     if (cached) {
       try {
-        const data = JSON.parse(cached) as ApniAwaazMessage & { date?: string };
+        const data = JSON.parse(cached) as MannKiBaatMessage & { date?: string };
         if (data.date === today) {
           if (data.dismissed) { setIsDismissed(true); return; }
           setMessage(data);
-          posthog.capture("apni_awaaz_shown", { type: data.type, source: "cache" });
+          posthog.capture("mann_ki_baat_shown", { type: data.type, source: "cache" });
           return;
         }
         // Stale (different day) — remove and regenerate
@@ -76,7 +76,7 @@ export const useApniAwaaz = () => {
     return () => document.removeEventListener("visibilitychange", handleVisible);
   }, [tryLoad]);
 
-  const cacheSet = (msg: ApniAwaazMessage) => {
+  const cacheSet = (msg: MannKiBaatMessage) => {
     localStorage.setItem(CACHE_KEY, JSON.stringify({ ...msg, date: todayDate() }));
   };
 
@@ -91,7 +91,7 @@ export const useApniAwaaz = () => {
 
       // b. First transaction ever - show welcome message
       if (allTx.length === 1) {
-        const msg: ApniAwaazMessage = {
+        const msg: MannKiBaatMessage = {
           message: "Pehla transaction! Ab roz yahan aaoge. 👋",
           type: "praise",
           emoji: "🎉",
@@ -112,7 +112,7 @@ export const useApniAwaaz = () => {
         };
         cacheSet(msg);
         setMessage(msg);
-        posthog.capture("apni_awaaz_shown", { type: "welcome", source: "first_txn" });
+        posthog.capture("mann_ki_baat_shown", { type: "welcome", source: "first_txn" });
         return;
       }
 
@@ -121,12 +121,12 @@ export const useApniAwaaz = () => {
       const ownerId = identity?.device_id;
 
       // d. Run aggregation pipeline
-      const { yesterdayStats, recentContext } = await getApniAwaazData(ownerId);
+      const { yesterdayStats, recentContext } = await getMannKiBaatData(ownerId);
 
       if (yesterdayStats.txCount === 0) {
         // No history at all — simple nudge
         if (recentContext.month.totalSpend === 0) {
-          const msg: ApniAwaazMessage = {
+          const msg: MannKiBaatMessage = {
             message: "Kal kuch nahi kharch kiya ya bhool gaya add karna?",
             type: "praise",
             emoji: "😇",
@@ -135,7 +135,7 @@ export const useApniAwaaz = () => {
           };
           cacheSet(msg);
           setMessage(msg);
-          posthog.capture("apni_awaaz_shown", { type: "praise", source: "zero_spend" });
+          posthog.capture("mann_ki_baat_shown", { type: "praise", source: "zero_spend" });
           return;
         }
         // Has history — let Gemini craft a personalized zero-spend message
@@ -144,35 +144,35 @@ export const useApniAwaaz = () => {
 
       // e. Determine message type (deterministic)
       const messageType = selectMessageType(yesterdayStats, recentContext);
-      console.log("[ApniAwaaz] messageType:", messageType);
-      console.log("[ApniAwaaz] yesterdayStats:", JSON.stringify(yesterdayStats, null, 2));
-      console.log("[ApniAwaaz] recentContext:", JSON.stringify(recentContext, null, 2));
+      console.log("[MannKiBaat] messageType:", messageType);
+      console.log("[MannKiBaat] yesterdayStats:", JSON.stringify(yesterdayStats, null, 2));
+      console.log("[MannKiBaat] recentContext:", JSON.stringify(recentContext, null, 2));
 
       // f. Call Gemini
       let result: { message: string; type: string; emoji: string };
       try {
-        result = await fetchApniAwaazMessage(yesterdayStats, recentContext, messageType);
-        console.log("[ApniAwaaz] gemini result:", JSON.stringify(result));
+        result = await fetchMannKiBaatMessage(yesterdayStats, recentContext, messageType);
+        console.log("[MannKiBaat] gemini result:", JSON.stringify(result));
       } catch (err) {
-        console.log("[ApniAwaaz] gemini failed, using fallback:", err);
+        console.log("[MannKiBaat] gemini failed, using fallback:", err);
         // Fallback — NOT cached, so next online open retries Gemini
         const fallback = getFallbackMessage(yesterdayStats, messageType);
         setMessage(fallback);
-        posthog.capture("apni_awaaz_shown", { type: messageType, source: "fallback" });
+        posthog.capture("mann_ki_baat_shown", { type: messageType, source: "fallback" });
         return;
       }
 
       // g. Cache + set
-      const msg: ApniAwaazMessage = {
+      const msg: MannKiBaatMessage = {
         message: result.message,
-        type: result.type as ApniAwaazMessage["type"],
+        type: result.type as MannKiBaatMessage["type"],
         emoji: result.emoji,
         stats: yesterdayStats,
         generatedAt: Date.now(),
       };
       cacheSet(msg);
       setMessage(msg);
-      posthog.capture("apni_awaaz_shown", { type: msg.type, source: "gemini" });
+      posthog.capture("mann_ki_baat_shown", { type: msg.type, source: "gemini" });
     } finally {
       setIsLoading(false);
       generatingRef.current = false;
@@ -191,7 +191,7 @@ export const useApniAwaaz = () => {
       }
     }
     setIsDismissed(true);
-    posthog.capture("apni_awaaz_dismissed");
+    posthog.capture("mann_ki_baat_dismissed");
   }, []);
 
   return { message, isDismissed, isLoading, dismiss };

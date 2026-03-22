@@ -2,9 +2,9 @@ import { createFeatureToggle, getMasterEnabled, postToSW, registerPeriodicSync, 
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-const apniAwaazToggle = createFeatureToggle("kk_apni_awaaz_enabled", true);
-export const getApniAwaazEnabled = apniAwaazToggle.get;
-export const setApniAwaazEnabled = apniAwaazToggle.set;
+const mannKiBaatToggle = createFeatureToggle("kk_mann_ki_baat_enabled", true);
+export const getMannKiBaatEnabled = mannKiBaatToggle.get;
+export const setMannKiBaatEnabled = mannKiBaatToggle.set;
 
 let scheduledTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -13,7 +13,7 @@ const alreadyGeneratedToday = () => {
   const d = new Date();
   const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-  const cached = window.localStorage.getItem("kk_apniAwaaz");
+  const cached = window.localStorage.getItem("kk_mannKiBaat");
   if (!cached) return false;
   try {
     return JSON.parse(cached).date === today;
@@ -29,30 +29,30 @@ const msUntilNine = () => {
   return target.getTime() - now.getTime();
 };
 
-export const scheduleApniAwaaz = () => {
+export const scheduleMannKiBaat = () => {
   if (scheduledTimeout) {
     clearTimeout(scheduledTimeout);
     scheduledTimeout = null;
   }
-  if (!getMasterEnabled() || !getApniAwaazEnabled()) return;
+  if (!getMasterEnabled() || !getMannKiBaatEnabled()) return;
   if (alreadyGeneratedToday()) return;
 
   const ms = msUntilNine();
   if (ms < 0) {
-    postToSW({ type: "GENERATE_APNI_AWAAZ" });
+    postToSW({ type: "GENERATE_MANN_KI_BAAT" });
     return;
   }
 
   scheduledTimeout = setTimeout(() => {
-    postToSW({ type: "GENERATE_APNI_AWAAZ" });
+    postToSW({ type: "GENERATE_MANN_KI_BAAT" });
     scheduledTimeout = null;
   }, ms);
 };
 
-export const registerApniAwaazSync = async () => {
-  await registerPeriodicSync("apni-awaaz", MS_PER_DAY);
+export const registerMannKiBaatSync = async () => {
+  await registerPeriodicSync("mann-ki-baat", MS_PER_DAY);
 };
 
-export const unregisterApniAwaazSync = async () => {
-  await unregisterPeriodicSync("apni-awaaz");
+export const unregisterMannKiBaatSync = async () => {
+  await unregisterPeriodicSync("mann-ki-baat");
 };
