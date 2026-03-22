@@ -4,7 +4,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { BarChart3, Mic, RefreshCw, ArrowUp, Square, Check, Loader2, Keyboard, Home } from "lucide-react";
+import { BarChart3, Mic, RefreshCw, ArrowUp, Square, Check, Loader2, Home, Keyboard } from "lucide-react";
 import { EXAMPLES } from "@/src/components/RecordingStatus";
 import type { AppTab } from "@/src/context/NavigationContext";
 
@@ -36,6 +36,10 @@ const BASE_TABS: { key: TabType; label: string; icon: React.ElementType }[] = [
   { key: "recurring", label: "Recurring", icon: RefreshCw },
   { key: "analytics", label: "Analytics", icon: BarChart3 },
 ];
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Main Component
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 export const BottomTabBar = React.memo(({
   activeTab,
@@ -89,7 +93,7 @@ export const BottomTabBar = React.memo(({
     }
   }, [isExpanded]);
 
-  // Collapse typing mode when recording/processing starts or feedback appears
+  // Collapse typing when recording/processing starts or feedback appears
   useEffect(() => {
     if (isRecording || isProcessing || transcriptFeedback) {
       setIsExpanded(false);
@@ -124,11 +128,13 @@ export const BottomTabBar = React.memo(({
     [handleSubmit]
   );
 
-  const expand = useCallback(() => setIsExpanded(true), []);
+  const expand = useCallback(() => {
+    setIsExpanded(true);
+  }, []);
 
   const hint = EXAMPLES[hintIndex];
 
-  // Pill state machine — priority order
+  // Pill state machine — now 4 states, agent lives elsewhere
   const pillState: "recording" | "processing" | "feedback" | "typing" | "idle" =
     isRecording ? "recording" :
       isProcessing ? "processing" :
@@ -279,7 +285,14 @@ export const BottomTabBar = React.memo(({
               exit={{ opacity: 0, y: 6 }}
               transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
             >
-              <Keyboard className="h-4 w-4 text-[var(--kk-ash)] flex-shrink-0" strokeWidth={2} />
+              <button
+                type="button"
+                onClick={expand}
+                aria-label="Type expense"
+                className="flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-full text-[var(--kk-ash)] hover:text-[var(--kk-ember)] transition-colors"
+              >
+                <Keyboard className="h-4 w-4" strokeWidth={2} />
+              </button>
               <button
                 type="button"
                 onClick={expand}
@@ -314,7 +327,7 @@ export const BottomTabBar = React.memo(({
         </AnimatePresence>
       </div>
 
-      {/* ── Bottom tab bar — simplified, no center FAB ── */}
+      {/* ── Bottom tab bar ── */}
       <div className="kk-bottom-tab-bar">
         {tabs.map((tab) => {
           const Icon = tab.icon;

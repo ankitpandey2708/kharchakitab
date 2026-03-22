@@ -1653,6 +1653,232 @@ body {
   will-change: transform;
 }
 
+/* Hide page-agent element index labels and highlight overlays */
+.playwright-highlight-label {
+  display: none !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Agent FAB — Floating action button + command panel
+   Separate surface for agent commands, decoupled from expense input pill
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.kk-agent-fab {
+  position: fixed;
+  bottom: calc(148px + env(safe-area-inset-bottom, 0px));
+  right: 16px;
+  z-index: 52;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1.5px solid var(--kk-smoke-heavy);
+  background: var(--kk-cream);
+  color: var(--kk-ash);
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  transition: transform var(--kk-duration-fast) var(--kk-ease-out),
+    color var(--kk-duration-fast) var(--kk-ease-out),
+    border-color var(--kk-duration-fast) var(--kk-ease-out),
+    background var(--kk-duration-fast) var(--kk-ease-out);
+  will-change: transform;
+}
+
+.kk-agent-fab:hover {
+  color: var(--kk-ember);
+  border-color: var(--kk-ember);
+  transform: scale(1.06);
+}
+
+.kk-agent-fab:active {
+  transform: scale(0.92);
+}
+
+.kk-agent-fab-active {
+  background: var(--kk-ember);
+  color: white;
+  border-color: var(--kk-ember);
+  box-shadow: 0 4px 16px rgba(255, 107, 53, 0.3);
+}
+
+.kk-agent-fab-active:hover {
+  color: white;
+  border-color: var(--kk-ember-deep);
+}
+
+/* ── Backdrop ── */
+.kk-agent-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 51;
+  background: rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+/* ── Panel ── */
+.kk-agent-panel {
+  position: fixed;
+  bottom: calc(200px + env(safe-area-inset-bottom, 0px));
+  right: 16px;
+  z-index: 53;
+  width: min(320px, calc(100vw - 32px));
+  background: white;
+  border: 1px solid var(--kk-smoke-heavy);
+  border-radius: var(--kk-radius-lg);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(255, 107, 53, 0.06);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.kk-agent-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px 8px;
+  color: var(--kk-ember);
+}
+
+.kk-agent-panel-title {
+  flex: 1;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--kk-ember);
+}
+
+.kk-agent-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--kk-ash);
+  cursor: pointer;
+  transition: color var(--kk-duration-fast) var(--kk-ease-out),
+    background var(--kk-duration-fast) var(--kk-ease-out);
+}
+
+.kk-agent-close:hover:not(:disabled) {
+  background: var(--kk-smoke);
+  color: var(--kk-ink);
+}
+
+.kk-agent-close:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* ── Suggestions ── */
+.kk-agent-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 14px 10px;
+}
+
+.kk-agent-chip {
+  font-size: 0.6875rem;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-weight: 500;
+  background: var(--kk-cream);
+  color: var(--kk-ash);
+  border: 1px solid var(--kk-smoke-heavy);
+  cursor: pointer;
+  transition: border-color var(--kk-duration-fast) var(--kk-ease-out),
+    color var(--kk-duration-fast) var(--kk-ease-out);
+}
+
+.kk-agent-chip:hover {
+  border-color: var(--kk-ember);
+  color: var(--kk-ember);
+}
+
+/* ── Activity status ── */
+.kk-agent-activity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  font-size: 0.6875rem;
+  color: var(--kk-ash);
+  overflow: hidden;
+}
+
+.kk-agent-activity strong {
+  color: var(--kk-ink);
+  font-weight: 600;
+}
+
+.kk-agent-activity-done {
+  color: var(--kk-sage);
+}
+
+.kk-agent-activity-error {
+  color: var(--kk-danger-ink);
+}
+
+/* ── Input row ── */
+.kk-agent-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 12px;
+  border-top: 1px solid var(--kk-smoke);
+}
+
+.kk-agent-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--kk-smoke-heavy);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 0.8125rem;
+  color: var(--kk-ink);
+  background: var(--kk-cream);
+  outline: none;
+  caret-color: var(--kk-ember);
+  transition: border-color var(--kk-duration-fast) var(--kk-ease-out);
+}
+
+.kk-agent-input::placeholder {
+  color: var(--kk-ash);
+  font-style: italic;
+  opacity: 0.7;
+}
+
+.kk-agent-input:focus {
+  border-color: var(--kk-ember);
+  background: white;
+}
+
+.kk-agent-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.kk-agent-stop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--kk-danger-ink);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    Driver.js Onboarding Tooltips — "Ink & Ember" Edition
    Warm ledger-book popover with ember accent, matching the KK design system

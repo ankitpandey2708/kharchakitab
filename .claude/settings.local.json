@@ -17,7 +17,9 @@
       "mcp__posthog__survey-update",
       "Bash(python3:*)",
       "Bash(npx eslint:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "mcp__github__get_file_contents"
     ]
   }
 }

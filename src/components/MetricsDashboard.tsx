@@ -637,4 +637,4 @@ export const MetricsDashboard = memo(({
 
 MetricsDashboard.displayName = "MetricsDashboard";
 
-export type { ChartMeta, AllocationMetrics };
+export type { ChartMeta };

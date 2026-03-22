@@ -14,6 +14,7 @@ import { AppProvider } from "@/src/context/AppContext";
 import { useNavigation, usePairing } from "@/src/context/AppContext";
 import { SignalingProvider, useSignaling } from "@/src/context/SignalingContext";
 import { BottomTabBar, type TabType } from "@/src/components/BottomTabBar";
+// import { AgentFab } from "@/src/components/AgentFab";
 import { EditModal } from "@/src/components/EditModal";
 import { HomeView } from "@/src/components/HomeView";
 import { AnalyticsView } from "@/src/components/AnalyticsView";
@@ -954,17 +955,20 @@ const AppShell = () => {
 
       {/* Bottom Tab Bar */}
       {!isTxnSheetOpen && (
-        <BottomTabBar
-          activeTab={activeTab}
-          onTabChange={handleTabChange}
-          isRecording={isRecording}
-          isProcessing={isProcessing}
-          isEmpty={isListEmpty}
-          onMicPress={onMicPress}
-          onTextSubmit={processTextInput}
-          transcriptFeedback={transcriptFeedback ? { ...transcriptFeedback, currencySymbol } : null}
-          onUndoTranscript={handleUndoTranscript}
-        />
+        <>
+          {/* <AgentFab /> */}
+          <BottomTabBar
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
+            isRecording={isRecording}
+            isProcessing={isProcessing}
+            isEmpty={isListEmpty}
+            onMicPress={onMicPress}
+            onTextSubmit={processTextInput}
+            transcriptFeedback={transcriptFeedback ? { ...transcriptFeedback, currencySymbol } : null}
+            onUndoTranscript={handleUndoTranscript}
+          />
+        </>
       )}
       <input
         ref={receiptInputRef}

@@ -987,14 +987,14 @@ export const AnalyticsView = React.memo(({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-[var(--kk-paper)] transform-gpu will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]"
+      className="fixed inset-0 z-50 bg-[var(--kk-paper)] transform-gpu will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] overflow-auto"
       style={{ transform: isOpen ? "translateX(0)" : "translateX(100%)", pointerEvents: isOpen ? "auto" : "none" }}
       aria-hidden={!isOpen}
+      ref={listRef}
     >
-          <div className="mx-auto h-full w-full max-w-4xl">
+          <div className="mx-auto w-full max-w-4xl">
             <div
-              ref={listRef}
-              className="flex h-full min-h-0 flex-col overflow-auto overscroll-contain [-webkit-overflow-scrolling:touch]"
+              className="flex min-h-0 flex-col"
             >
               {/* Header */}
               <header className="z-20 shrink-0 border-b border-[var(--kk-smoke)] bg-[var(--kk-paper)]/90 px-5 py-4 backdrop-blur-md transform-gpu">
