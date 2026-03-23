@@ -128,9 +128,10 @@ wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
         const partnerSet = new Set(partnerIds);
         list = online.filter((client) => partnerSet.has(client.device_id));
       } else {
-        // No partners yet — return same-IP devices so first-time pairing works
-        const requesterIp = clients.get(deviceId)?.ip || ip;
-        list = online.filter((client) => client.ip === requesterIp);
+        // IP filtering commented out — return all online devices for now
+        // const requesterIp = clients.get(deviceId)?.ip || ip;
+        // list = online.filter((client) => client.ip === requesterIp);
+        list = online;
       }
 
       sendMessage(ws, "presence:list", list.map((c) => ({ device_id: c.device_id, display_name: c.display_name })), request_id);

@@ -53,18 +53,12 @@
     Create a `.env.local` file in the root directory and populate it with your keys:
 
     ```env
-    # AI Services
-    GEMINI_API_KEY=""
-    SARVAM_KEY=""
+    GEMINI_API_KEY = ""
+    GEMINI_MODEL="models/gemini-3.1-flash-lite-preview,models/gemma-3-27b-it"
+    
+    SARVAM_KEY = ""
+    SARVAM_MODEL="saaras:v3"
 
-    # Database (Upstash Redis for Sync)
-    UPSTASH_REDIS_REST_URL=""
-    UPSTASH_REDIS_REST_TOKEN=""
-
-    # Analytics (PostHog)
-    NEXT_PUBLIC_POSTHOG_KEY=""
-    NEXT_PUBLIC_POSTHOG_HOST="https://us.i.posthog.com"
-    NEXT_PUBLIC_POSTHOG_ENABLED="false"
     ```
 
 4.  **Run the development server:**
