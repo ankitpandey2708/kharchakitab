@@ -30,7 +30,6 @@ const RecurringView = dynamic(() => import("@/src/components/RecurringView").the
 const RecurringEditModal = dynamic(() => import("@/src/components/RecurringEditModal").then(m => ({ default: m.RecurringEditModal })), { ssr: false });
 const NotificationsSettings = dynamic(() => import("@/src/components/NotificationsSettings").then(m => ({ default: m.NotificationsSettings })), { ssr: false });
 const BulkExpensePreview = dynamic(() => import("@/src/components/BulkExpensePreview").then(m => ({ default: m.BulkExpensePreview })), { ssr: false });
-import { useAudioRecorder } from "@/src/hooks/useAudioRecorder";
 import { useStreamingSTT } from "@/src/hooks/useStreamingSTT";
 import {
   addTransaction,
@@ -45,11 +44,7 @@ import type { Expense } from "@/src/utils/schemas";
 import type { Transaction, Recurring_template } from "@/src/types";
 import { AlertCircle, X, Download, Users, Sparkles } from "lucide-react";
 import { prepareReceiptImage } from "@/src/utils/imageProcessing";
-import {
-  DISMISS_TRANSCRIPTS,
-  MIN_AUDIO_DURATION_MS,
-  MIN_AUDIO_SIZE_BYTES,
-} from "@/src/config/mic";
+import { DISMISS_TRANSCRIPTS } from "@/src/config/mic";
 import { ERROR_MESSAGES, toUserMessage } from "@/src/utils/error";
 import { playMoneySound } from "@/src/utils/soundFeedback";
 import { capture as posthogCapture } from "@/src/utils/analytics";
@@ -148,9 +143,7 @@ const AppShell = () => {
   const [lastError, setLastError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const { pendingTransactions, addPending: addPendingTransaction, removePending: removePendingTransaction } = usePendingTransactions();
-  const lastAudioBlobRef = useRef<Blob | null>(null);
-  const setLastAudioBlob = useCallback((blob: Blob | null) => { lastAudioBlobRef.current = blob; }, []);
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isSyncOpen, setIsSyncOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -233,12 +226,9 @@ const AppShell = () => {
   const recurringQueueRef = useRef<Expense[]>([]);
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const processedBlobRef = useRef<Blob | null>(null);
   const processingRef = useRef(false);
   const receiptProcessingRef = useRef(false);
   const receiptInputRef = useRef<HTMLInputElement | null>(null);
-
-  const audioRecorder = useAudioRecorder();
 
   // ── Streaming STT hook (declared early; callback wired via ref to avoid ordering issues) ──
   const endOfSpeechHandlerRef = useRef<(transcript: string) => void>(() => { });
@@ -262,7 +252,6 @@ const AppShell = () => {
     setIsRecording(streamingSTT.isStreaming);
     if (streamingSTT.isStreaming) {
       setLastError(null);
-      setLastAudioBlob(null);
     }
   }, [streamingSTT.isStreaming, setIsRecording]);
 
@@ -314,23 +303,6 @@ const AppShell = () => {
       body.style.overflow = "";
     };
   }, [isHistoryOpen, isEditing]);
-
-  useEffect(() => {
-    if (audioRecorder.isRecording) return;
-    const blob = audioRecorder.audioBlob;
-    if (!blob || blob === processedBlobRef.current) return;
-    const validationError = getAudioValidationError(
-      blob,
-      audioRecorder.duration
-    );
-    if (validationError) {
-      setLastError(validationError);
-      return;
-    }
-    processedBlobRef.current = blob;
-    setLastAudioBlob(blob);
-    void processAudioBlob(blob);
-  }, [audioRecorder.audioBlob, audioRecorder.isRecording, audioRecorder.duration]);
 
   useEffect(() => {
     const shared = window.sessionStorage.getItem("kk_share_image");
@@ -567,51 +539,6 @@ const AppShell = () => {
     await streamingSTT.start();
     posthogCapture("recording_started", { streaming: true });
   }, [streamingSTT]);
-
-  const getAudioValidationError = useCallback((blob: Blob | null, durationMs: number) => {
-    if (!blob) return ERROR_MESSAGES.noAudioCaptured;
-    if (durationMs > 0 && durationMs < MIN_AUDIO_DURATION_MS) {
-      return ERROR_MESSAGES.recordingTooShort;
-    }
-    if (blob.size < MIN_AUDIO_SIZE_BYTES) {
-      return ERROR_MESSAGES.recordingTooShort;
-    }
-    return null;
-  }, []);
-
-  const processAudioBlob = useCallback(async (audioBlob: Blob) => {
-    // Prevent duplicate processing (race condition)
-    if (!startProcessing()) return;
-    setLastError(null);
-    const pendingId = addPendingTransaction(TRANSACTION_PENDING_LABEL);
-    try {
-      const { transcribeAudio } = await import("@/src/services/sarvam");
-      const result = await transcribeAudio(audioBlob);
-      const text = result.text;
-      const normalized = text.trim().toLowerCase();
-      if (DISMISS_TRANSCRIPTS.has(normalized)) {
-        stopProcessing();
-        return;
-      }
-      const expenses = await parseTranscript(text || "Auto 50");
-
-      if (expenses.length > 1) {
-        setBulkExpenses(expenses);
-      } else {
-        const expense = expenses[0];
-        if (expense) await saveSingleExpense(expense, "voice");
-      }
-    } catch (error) {
-      setLastError(toUserMessage(error, "unableToTranscribeAudio"));
-      posthogCapture("error_occurred", {
-        error_type: "transcription_failed",
-        error_message: toUserMessage(error, "unableToTranscribeAudio"),
-      });
-    } finally {
-      removePendingTransaction(pendingId);
-      stopProcessing();
-    }
-  }, [addPendingTransaction, parseTranscript, removePendingTransaction, saveSingleExpense, startProcessing, stopProcessing]);
 
   // ── Streaming STT (replaces batch transcribeAudio for voice input) ──
   const lastProcessedTranscriptRef = useRef("");

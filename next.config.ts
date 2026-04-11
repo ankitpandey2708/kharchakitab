@@ -1,12 +1,17 @@
 import type { NextConfig } from "next";
 
+const isProd = process.env.NODE_ENV === "production";
+
 const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ["framer-motion", "lucide-react", "@headlessui/react"],
   },
+  turbopack: {
+    root: __dirname,
+  },
   async headers() {
     return [
-      {
+      ...(isProd ? [{
         source: "/_next/static/:path*",
         headers: [
           {
@@ -14,7 +19,7 @@ const nextConfig: NextConfig = {
             value: "public, max-age=31536000, immutable",
           },
         ],
-      },
+      }] : []),
       {
         source: "/:path*",
         headers: [
