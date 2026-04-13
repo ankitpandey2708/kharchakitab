@@ -106,9 +106,10 @@ const RECURRING_TEMPLATES_BY_CATEGORY: Partial<Record<CategoryKey, TemplateEntry
   ],
 };
 
-export const RECURRING_TEMPLATES: RecurringTemplate[] = Object.entries(RECURRING_TEMPLATES_BY_CATEGORY).flatMap(
-  ([category, templates]) => templates!.map((t) => ({ ...t, category: category as CategoryKey }))
-);
+export const RECURRING_TEMPLATES: RecurringTemplate[] = Object.entries(RECURRING_TEMPLATES_BY_CATEGORY)
+  .sort(([a], [b]) => a.localeCompare(b))
+  .flatMap(([category, templates]) => templates!.map((t) => ({ ...t, category: category as CategoryKey })))
+  .sort((a, b) => a.name.localeCompare(b.name));
 
 export const calculateNextDueDate = (
   fromDate: number,
