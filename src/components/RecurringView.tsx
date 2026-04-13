@@ -796,7 +796,7 @@ export const RecurringView = React.memo(({
             transition={{ duration: 0.3 }}
             className="space-y-5"
           >
-            {Array.from(new Set(RECURRING_TEMPLATES.map((t) => t.category))).map((category) => {
+            {Array.from(new Set(RECURRING_TEMPLATES.map((t) => t.category))).sort().map((category) => {
               const visibleTemplates = RECURRING_TEMPLATES.filter(
                 (t) => t.category === category && !usedTemplateIds.has(t.id)
               );

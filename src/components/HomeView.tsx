@@ -90,6 +90,7 @@ export const HomeView = React.memo(({
   const [hasPairingGlobally, setHasPairingGlobally] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedMonthOffset, setSelectedMonthOffset] = useState(0);
+  const [hasEverHadTransactions, setHasEverHadTransactions] = useState(true);
 
   const selectedMonthRange = useMemo(() => {
     const now = new Date();
@@ -108,6 +109,10 @@ export const HomeView = React.memo(({
   useEffect(() => {
     onEmptyChange?.(isEmpty);
   }, [isEmpty, onEmptyChange]);
+
+  useEffect(() => {
+    fetchTransactions({ limit: 1 }).then((txs) => setHasEverHadTransactions(txs.length > 0));
+  }, []);
 
   const hasLoadedOnce = React.useRef(false);
   const {
@@ -491,7 +496,7 @@ export const HomeView = React.memo(({
     );
   }
 
-  if (selectedMonthOffset === 0 && transactions.length === 0 && pendingTransactions.length === 0) {
+  if (selectedMonthOffset === 0 && transactions.length === 0 && pendingTransactions.length === 0 && !hasEverHadTransactions) {
     return (
       <motion.div
         initial={{ opacity: 0, y: 20 }}

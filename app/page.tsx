@@ -44,7 +44,7 @@ import type { Expense } from "@/src/utils/schemas";
 import type { Transaction, Recurring_template } from "@/src/types";
 import { AlertCircle, X, Download, Users, Sparkles } from "lucide-react";
 import { prepareReceiptImage } from "@/src/utils/imageProcessing";
-import { DISMISS_TRANSCRIPTS } from "@/src/config/mic";
+
 import { ERROR_MESSAGES, toUserMessage } from "@/src/utils/error";
 import { playMoneySound } from "@/src/utils/soundFeedback";
 import { capture as posthogCapture } from "@/src/utils/analytics";
@@ -550,7 +550,7 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     if (trimmed === lastProcessedTranscriptRef.current) return;
     lastProcessedTranscriptRef.current = trimmed;
     const normalized = trimmed.toLowerCase();
-    if (DISMISS_TRANSCRIPTS.has(normalized)) return;
+    if (new Set(["no, i don't want it.", "okay.", "yes.", "okay, i will do it.", ""]).has(normalized)) return;
     if (!startProcessing()) return;
     setLastError(null);
     const pendingId = addPendingTransaction(TRANSACTION_PENDING_LABEL);

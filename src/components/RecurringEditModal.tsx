@@ -90,7 +90,7 @@ export const RecurringEditModal = React.memo(({
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const sortedCategoryOptions = useMemo(
-    () => [...CATEGORY_OPTIONS].sort((a, b) => a.label.localeCompare(b.label)),
+    () => [...CATEGORY_OPTIONS].sort((a, b) => a.key.localeCompare(b.key)),
     []
   );
 
@@ -331,7 +331,7 @@ export const RecurringEditModal = React.memo(({
                     <div className="relative mt-2">
                       <Listbox.Button className="kk-input kk-select flex w-full items-center justify-between pr-10 text-sm">
                         <span className="truncate">
-                          {sortedCategoryOptions.find((option) => option.key === category)?.label ?? "Select"}
+                          {sortedCategoryOptions.find((option) => option.key === category)?.key ?? "Select"}
                         </span>
                         <ChevronDown className="h-4 w-4 text-[var(--kk-ash)]" />
                       </Listbox.Button>
@@ -358,7 +358,7 @@ export const RecurringEditModal = React.memo(({
                               {({ selected }) => (
                                 <>
                                   <span className={`truncate ${selected ? "font-semibold text-[var(--kk-ink)]" : ""}`}>
-                                    {option.label}
+                                    {option.key}
                                   </span>
                                   {selected && <Check className="h-4 w-4 text-[var(--kk-ember)]" />}
                                 </>
@@ -465,7 +465,7 @@ export const RecurringEditModal = React.memo(({
                             }`}
                         >
                           <Icon className="h-3 w-3" />
-                          {option.label}
+                          {option.key}
                         </button>
                       );
                     })}

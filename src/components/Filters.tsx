@@ -137,7 +137,7 @@ export const HistoryFilters = memo(({
                                 className={`kk-chip kk-chip-filter whitespace-nowrap ${filter === option.key ? "kk-chip-active" : "kk-chip-muted"
                                     }`}
                             >
-                                {option.label}
+                                {option.key}
                             </button>
                         ))}
                     </div>

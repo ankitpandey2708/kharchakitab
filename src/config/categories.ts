@@ -18,21 +18,21 @@ import {
 } from "lucide-react";
 
 export const CATEGORY_OPTIONS = [
-  { key: "Food", label: "Food", icon: Utensils },
-  { key: "Travel", label: "Travel", icon: Car },
-  { key: "Fuel", label: "Fuel", icon: Fuel },
-  { key: "Shopping", label: "Shopping", icon: ShoppingBag },
-  { key: "Bills", label: "Bills", icon: ReceiptText },
-  { key: "Housing", label: "Housing", icon: Home },
-  { key: "Utilities", label: "Utilities", icon: Zap },
-  { key: "Subscriptions", label: "Subscriptions", icon: Tv },
-  { key: "Insurance", label: "Insurance", icon: Shield },
-  { key: "Financial", label: "Financial", icon: Landmark },
-  { key: "Home Services", label: "Home Services", icon: Sparkles },
-  { key: "Education", label: "Education", icon: GraduationCap },
-  { key: "Health", label: "Health", icon: HeartPulse },
-  { key: "Entertainment", label: "Entertainment", icon: Film },
-  { key: "Other", label: "Other", icon: Wallet },
+  { key: "Food", icon: Utensils },
+  { key: "Travel", icon: Car },
+  { key: "Fuel", icon: Fuel },
+  { key: "Shopping", icon: ShoppingBag },
+  { key: "Bills", icon: ReceiptText },
+  { key: "Housing", icon: Home },
+  { key: "Utilities", icon: Zap },
+  { key: "Subscriptions", icon: Tv },
+  { key: "Insurance", icon: Shield },
+  { key: "Financial", icon: Landmark },
+  { key: "Home Services", icon: Sparkles },
+  { key: "Education", icon: GraduationCap },
+  { key: "Health", icon: HeartPulse },
+  { key: "Entertainment", icon: Film },
+  { key: "Other", icon: Wallet },
 ] as const;
 
 export type CategoryKey = typeof CATEGORY_OPTIONS[number]["key"];
