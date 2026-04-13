@@ -41,7 +41,7 @@ import {
 import { RECURRING_TEMPLATES, type Frequency, type RecurringTemplate } from "@/src/config/recurring";
 import type { Expense } from "@/src/utils/schemas";
 import type { Transaction, Recurring_template } from "@/src/types";
-import { AlertCircle, X, Download, Users, Sparkles } from "lucide-react";
+import { AlertCircle, X, Download, Sparkles } from "lucide-react";
 import { prepareReceiptImage } from "@/src/utils/imageProcessing";
 
 import { ERROR_MESSAGES, toUserMessage } from "@/src/utils/error";
@@ -856,15 +856,6 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
             <div
               className="kk-header-actions flex items-center kk-header-fade-in kk-header-fade-in-delay"
             >
-              <button
-                type="button"
-                onClick={handleOpenSync}
-                aria-label="Household Sync"
-                className="kk-header-action-btn active:scale-[0.88] transition-transform"
-              >
-                <Users className="h-4 w-4" />
-              </button>
-              <div className="kk-header-action-divider" />
               <button
                 type="button"
                 onClick={() => setIsChatOpen(true)}

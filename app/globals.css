@@ -1419,10 +1419,10 @@ body {
   z-index: 40;
   display: flex;
   align-items: flex-end;
-  justify-content: center;
-  gap: 3rem;
-  height: 80px;
-  padding: 0 16px;
+  justify-content: space-between;
+  gap: clamp(0.25rem, 2vw, 1rem);
+  min-height: 80px;
+  padding: 0 clamp(8px, 3vw, 16px);
   padding-bottom: env(safe-area-inset-bottom, 8px);
   background: rgba(250, 248, 245, 0.95);
   border-top: 1px solid var(--kk-smoke);
@@ -1437,8 +1437,9 @@ body {
   justify-content: center;
   gap: 4px;
   flex: 1;
+  min-width: 0;
   max-width: 120px;
-  padding: 8px 12px 12px;
+  padding: 8px clamp(4px, 1.8vw, 12px) 12px;
   color: var(--kk-ash);
   background: transparent;
   border: none;
@@ -1464,10 +1465,11 @@ body {
 }
 
 .kk-tab-label {
-  font-size: 0.625rem;
+  font-size: clamp(0.55rem, 1.8vw, 0.625rem);
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: clamp(0.04em, 0.3vw, 0.08em);
+  white-space: nowrap;
 }
 
 .kk-center-fab-container {

@@ -46,13 +46,21 @@ const SettingRow = ({
   label,
   description,
   children,
+  stackOnMobile = false,
 }: {
   icon: React.ReactNode;
   label: string;
   description?: string;
   children: React.ReactNode;
+  stackOnMobile?: boolean;
 }) => (
-  <div className="flex items-center justify-between gap-3 rounded-[var(--kk-radius-md)] bg-white/80 px-4 py-3 shadow-sm">
+  <div
+    className={`rounded-[var(--kk-radius-md)] bg-white/80 px-4 py-3 shadow-sm ${
+      stackOnMobile
+        ? "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+        : "flex items-center justify-between gap-3"
+    }`}
+  >
     <div className="flex items-center gap-3 min-w-0">
       <div
         className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[var(--kk-cream)]"
@@ -69,7 +77,9 @@ const SettingRow = ({
         )}
       </div>
     </div>
-    <div className="flex-shrink-0">{children}</div>
+    <div className={stackOnMobile ? "w-full min-w-0 sm:w-auto sm:flex-shrink-0" : "flex-shrink-0"}>
+      {children}
+    </div>
   </div>
 );
 
@@ -154,9 +164,10 @@ const DeviceNameRow = React.memo(() => {
       icon={<Smartphone className="h-4 w-4" />}
       label="Your Name"
       description="Shown when you pair and sync across devices."
+      stackOnMobile
     >
       {isEditing ? (
-        <div className="flex items-center gap-2">
+        <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
           <input
             autoFocus
             value={draft}
@@ -165,7 +176,7 @@ const DeviceNameRow = React.memo(() => {
             onKeyDown={(event) => {
               if (event.key === "Enter") void save();
             }}
-            className="w-28 rounded-full bg-[var(--kk-paper)] px-3 py-1.5 text-sm font-semibold text-[var(--kk-ink)] focus:outline-none"
+            className="min-w-0 flex-1 rounded-full bg-[var(--kk-paper)] px-3 py-1.5 text-sm font-semibold text-[var(--kk-ink)] focus:outline-none sm:w-40 sm:flex-none"
           />
           <button
             type="button"
@@ -180,10 +191,10 @@ const DeviceNameRow = React.memo(() => {
         <button
           type="button"
           onClick={() => setIsEditing(true)}
-          className="flex max-w-[11rem] items-center gap-1.5 text-sm font-semibold text-[var(--kk-ink)]"
+          className="flex w-full min-w-0 items-center justify-between gap-2 rounded-full bg-[var(--kk-paper)] px-3 py-2 text-sm font-semibold text-[var(--kk-ink)] sm:max-w-[15rem]"
         >
-          <span className="truncate">{identity?.display_name || "You"}</span>
-          <Pencil className="h-3.5 w-3.5 text-[var(--kk-ash)]" />
+          <span className="min-w-0 truncate text-left">{identity?.display_name || "You"}</span>
+          <Pencil className="h-3.5 w-3.5 flex-shrink-0 text-[var(--kk-ash)]" />
         </button>
       )}
     </SettingRow>
@@ -201,13 +212,14 @@ export const ProfileView = React.memo(({ onOpenSync, onOpenNotifications }: Prof
   const [shareMessage, setShareMessage] = useState<string | null>(null);
 
   const handleShare = useCallback(async () => {
-    const shareText = `Track daily expenses with KharchaKitab. Fast Hinglish voice expense tracking on phone. ${SITE_URL}`;
+    const shareBlurb = "Track daily expenses with KharchaKitab. Fast Hinglish voice expense tracking on phone.";
+    const shareText = `${shareBlurb} ${SITE_URL}`;
 
     try {
       if (navigator.share) {
         await navigator.share({
           title: "KharchaKitab",
-          text: shareText,
+          text: shareBlurb,
           url: SITE_URL,
         });
         posthog.capture("profile_share_clicked", { method: "native_share" });
