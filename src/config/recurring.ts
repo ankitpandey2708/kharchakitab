@@ -66,18 +66,14 @@ const RECURRING_TEMPLATES_BY_CATEGORY: Partial<Record<CategoryKey, TemplateEntry
     { id: "vehicle-insurance", name: "Vehicle Insurance", suggestedFrequency: "yearly", icon: Car },
     { id: "home-insurance", name: "Home Insurance", suggestedFrequency: "yearly", icon: Home },
   ],
-  Entertainment: [
+  Subscriptions: [
+    { id: "gym", name: "Gym Membership", suggestedFrequency: "monthly", icon: Dumbbell },
+    { id: "newspaper", name: "Newspaper", suggestedFrequency: "monthly", icon: Newspaper },
     { id: "netflix", name: "Netflix", suggestedFrequency: "monthly", icon: Tv, suggestedAmount: 649 },
     { id: "spotify", name: "Spotify", suggestedFrequency: "monthly", icon: Music, suggestedAmount: 119 },
     { id: "amazon-prime", name: "Amazon Prime", suggestedFrequency: "yearly", icon: Film, suggestedAmount: 1499 },
     { id: "hotstar", name: "Disney+ Hotstar", suggestedFrequency: "yearly", icon: Tv, suggestedAmount: 899 },
     { id: "youtube-premium", name: "YouTube Premium", suggestedFrequency: "monthly", icon: Film, suggestedAmount: 129 },
-  ],
-  Health: [
-    { id: "gym", name: "Gym Membership", suggestedFrequency: "monthly", icon: Dumbbell },
-  ],
-  Subscriptions: [
-    { id: "newspaper", name: "Newspaper", suggestedFrequency: "monthly", icon: Newspaper },
   ],
   "Home Services": [
     { id: "cook", name: "Cook", suggestedFrequency: "monthly", icon: CookingPot },
@@ -85,9 +81,6 @@ const RECURRING_TEMPLATES_BY_CATEGORY: Partial<Record<CategoryKey, TemplateEntry
     { id: "driver", name: "Driver", suggestedFrequency: "monthly", icon: Car },
     { id: "milkman", name: "Milk", suggestedFrequency: "monthly", icon: Droplets },
     { id: "laundry", name: "Laundry / Dhobi", suggestedFrequency: "monthly", icon: Sparkles },
-  ],
-  Rent: [
-    { id: "rent", name: "Rent", suggestedFrequency: "monthly", icon: Building2 },
   ],
   Bills: [
     { id: "wifi", name: "WiFi / Broadband", suggestedFrequency: "monthly", icon: Wifi },
@@ -97,6 +90,7 @@ const RECURRING_TEMPLATES_BY_CATEGORY: Partial<Record<CategoryKey, TemplateEntry
     { id: "dth", name: "DTH / Cable TV", suggestedFrequency: "monthly", icon: Satellite },
     { id: "water", name: "Water Bill", suggestedFrequency: "monthly", icon: Droplets },
     { id: "vehicle-maintenance", name: "Vehicle Maintenance", suggestedFrequency: "yearly", icon: Car },
+    { id: "rent", name: "Rent", suggestedFrequency: "monthly", icon: Building2 },
   ],
   Financial: [
     { id: "home-loan-emi", name: "Home Loan EMI", suggestedFrequency: "monthly", icon: Home },

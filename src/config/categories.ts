@@ -4,6 +4,7 @@ import {
   Car,
   Fuel,
   ShoppingBag,
+  ShoppingCart,
   Tv,
   Shield,
   Landmark,
@@ -17,7 +18,9 @@ import {
 } from "lucide-react";
 
 export const CATEGORY_OPTIONS = [
-  { key: "Food", icon: Utensils },
+  { key: "Grocery", icon: ShoppingBag },
+  { key: "Online Ordering", icon: ShoppingCart },
+  { key: "Eating out", icon: Utensils },
   { key: "Travel", icon: Car },
   { key: "Office Commute", icon: Car },
   { key: "Fuel", icon: Fuel },
