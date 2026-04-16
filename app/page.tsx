@@ -41,7 +41,7 @@ import {
 import { RECURRING_TEMPLATES, type Frequency, type RecurringTemplate } from "@/src/config/recurring";
 import type { Expense } from "@/src/utils/schemas";
 import type { Transaction, Recurring_template } from "@/src/types";
-import { AlertCircle, X, Download, Sparkles, ChevronLeft } from "lucide-react";
+import { AlertCircle, X, Download, Sparkles } from "lucide-react";
 import { prepareReceiptImage } from "@/src/utils/imageProcessing";
 
 import { ERROR_MESSAGES, toUserMessage } from "@/src/utils/error";
