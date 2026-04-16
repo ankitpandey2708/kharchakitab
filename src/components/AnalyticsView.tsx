@@ -17,6 +17,7 @@ import {
 } from "@/src/db/db";
 import type { Transaction } from "@/src/types";
 import { useEscapeKey } from "@/src/hooks/useEscapeKey";
+import { useBackButton } from "@/src/hooks/useBackButton";
 import { FilterKey, getRangeForFilter, toDateInputValue } from "@/src/utils/dates";
 import { TransactionRow } from "@/src/components/TransactionRow";
 import { TransactionActionSheet } from "@/src/components/TransactionActionSheet";
@@ -583,6 +584,7 @@ export const AnalyticsView = React.memo(({
   }, [allocationMode, currentDeviceId, isOpen, ownerFilter, rangeTransactions]);
 
   useEscapeKey(isOpen && !isMobileSheetOpen, onClose);
+  useBackButton(isOpen && !isMobileSheetOpen, onClose);
 
   const filteredItems = useMemo(() => {
     // Exclude partner's private transactions — never visible to other devices

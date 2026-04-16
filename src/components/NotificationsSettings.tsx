@@ -9,8 +9,9 @@ import {
     AudioLines,
     Clock,
     Info,
-    ArrowLeft,
+    ChevronLeft,
 } from "lucide-react";
+import { useBackButton } from "@/src/hooks/useBackButton";
 import { DailyReminderToggle } from "@/src/components/DailyReminderToggle";
 import { RecurringAlertsToggle } from "@/src/components/RecurringAlertsToggle";
 import { MannKiBaatToggle } from "@/src/components/MannKiBaatToggle";
@@ -265,6 +266,8 @@ export const NotificationsSettings = React.memo(
     ({ isOpen, onClose }: NotificationsSettingsProps) => {
         const [masterEnabled, setMasterEnabled] = useState(() => getMasterEnabled());
 
+        useBackButton(isOpen, onClose);
+
         // Sync with external state
         useEffect(() => {
             const interval = setInterval(() => {
@@ -334,7 +337,7 @@ export const NotificationsSettings = React.memo(
                                         className="kk-icon-btn kk-icon-btn-lg"
                                         aria-label="Go back"
                                     >
-                                        <ArrowLeft className="h-5 w-5" />
+                                        <ChevronLeft className="h-5 w-5" />
                                     </button>
                                     <h1
                                         className="text-2xl font-semibold font-[family:var(--font-display)]"

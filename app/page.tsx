@@ -23,11 +23,11 @@ const RecordingStatus = dynamic(() => import("@/src/components/RecordingStatus")
 const AgentChat = dynamic(() => import("@/src/components/AgentChat").then(m => ({ default: m.AgentChat })), { ssr: false });
 const EditModal = dynamic(() => import("@/src/components/EditModal").then(m => ({ default: m.EditModal })), { ssr: false });
 const AnalyticsView = dynamic(() => import("@/src/components/AnalyticsView").then(m => ({ default: m.AnalyticsView })), { ssr: false });
-const SyncManager = dynamic(() => import("@/src/components/SyncManager").then(m => ({ default: m.SyncManager })), { ssr: false });
 const RecurringView = dynamic(() => import("@/src/components/RecurringView").then(m => ({ default: m.RecurringView })), { ssr: false });
 const RecurringEditModal = dynamic(() => import("@/src/components/RecurringEditModal").then(m => ({ default: m.RecurringEditModal })), { ssr: false });
 const NotificationsSettings = dynamic(() => import("@/src/components/NotificationsSettings").then(m => ({ default: m.NotificationsSettings })), { ssr: false });
 const BulkExpensePreview = dynamic(() => import("@/src/components/BulkExpensePreview").then(m => ({ default: m.BulkExpensePreview })), { ssr: false });
+const SyncOverlay = dynamic(() => import("@/src/components/SyncOverlay").then(m => ({ default: m.SyncOverlay })), { ssr: false });
 const ProfileView = dynamic(() => import("@/src/components/ProfileView").then(m => ({ default: m.ProfileView })), { ssr: false });
 import { useStreamingSTT } from "@/src/hooks/useStreamingSTT";
 import {
@@ -41,7 +41,7 @@ import {
 import { RECURRING_TEMPLATES, type Frequency, type RecurringTemplate } from "@/src/config/recurring";
 import type { Expense } from "@/src/utils/schemas";
 import type { Transaction, Recurring_template } from "@/src/types";
-import { AlertCircle, X, Download, Sparkles } from "lucide-react";
+import { AlertCircle, X, Download, Sparkles, ChevronLeft } from "lucide-react";
 import { prepareReceiptImage } from "@/src/utils/imageProcessing";
 
 import { ERROR_MESSAGES, toUserMessage } from "@/src/utils/error";
@@ -51,6 +51,7 @@ import { capture as posthogCapture } from "@/src/utils/analytics";
 import { useCurrency } from "@/src/hooks/useCurrency";
 import { usePwaInstall } from "@/src/hooks/usePwaInstall";
 import { useOnboardingTour } from "@/src/hooks/useOnboardingTour";
+import { useBackButton } from "@/src/hooks/useBackButton";
 // import { useStreak } from "@/src/hooks/useStreak";
 import { useRecording } from "@/src/context/AppContext";
 import { TRANSACTION_PENDING_LABEL } from "@/src/utils/transactions";
@@ -744,6 +745,8 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     setIsSyncOpen(false);
   }, []);
 
+  useBackButton(isSyncOpen, handleCloseSync);
+
   const handleTransactionDeleted = useCallback(
     (tx: Transaction) => {
       setDeletedTx(tx);
@@ -1000,25 +1003,11 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
       />
 
       {/* Sync Manager — full-screen overlay */}
-      {isSyncOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-[var(--kk-paper)] overflow-auto overscroll-contain kk-slide-in-right"
-        >
-          <div className="mx-auto h-full w-full max-w-4xl flex flex-col">
-            <header className="z-20 shrink-0 border-b border-[var(--kk-smoke)] bg-[var(--kk-paper)]/90 px-5 py-4 backdrop-blur-md">
-              <div className="flex items-center gap-3">
-                <button type="button" onClick={handleCloseSync} className="kk-icon-btn kk-icon-btn-lg">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
-                </button>
-                <div className="text-2xl font-semibold font-[family:var(--font-display)]">Household</div>
-              </div>
-            </header>
-            <div className="flex-1">
-              <SyncManager onSyncComplete={refreshTransactions} />
-            </div>
-          </div>
-        </div>
-      )}
+      <SyncOverlay
+        isOpen={isSyncOpen}
+        onClose={handleCloseSync}
+        onSyncComplete={refreshTransactions}
+      />
 
       {/* PWA Install Banner (C1) */}
       {showInstallBanner && (
