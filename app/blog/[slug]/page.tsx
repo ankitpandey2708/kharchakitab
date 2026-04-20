@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { compile, run } from "@mdx-js/mdx";
+import remarkGfm from "remark-gfm";
 import * as runtime from "react/jsx-runtime";
 import { getAllPosts, getPostBySlug } from "@/src/lib/blog";
 import { mdxComponents } from "@/src/components/blog/MdxComponents";
@@ -39,7 +40,7 @@ export default async function BlogPostPage({ params }: Props) {
   const post = getPostBySlug(slug);
   if (!post) notFound();
 
-  const compiled = await compile(post.content, { outputFormat: "function-body" });
+  const compiled = await compile(post.content, { outputFormat: "function-body", remarkPlugins: [remarkGfm] });
   const { default: MdxContent } = await run(String(compiled), {
     ...runtime,
     baseUrl: import.meta.url,
