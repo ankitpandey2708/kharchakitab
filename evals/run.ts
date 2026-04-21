@@ -14,6 +14,12 @@ import { replyRegexScorer } from './scorers/reply-regex'
 import { budgetScorer } from './scorers/budget'
 import type { EvalCase, ScoreResult } from './scorers/types'
 
+// ── Trace sampling config (L4) ──
+const SAMPLE_RATE = 0.05
+const LOOKBACK_DAYS = 7
+const TRACE_TOKEN_BUDGET = 2000
+const TRACE_LATENCY_BUDGET_MS = 15000
+
 const SCORERS = [
   toolSelectionScorer,
   noHallucinatedNumbersScorer,
@@ -81,15 +87,74 @@ async function runCase(c: EvalCase) {
 }
 
 function fmtRow(id: string, scores: ScoreResult[]) {
-  const cells = scores
-    .map(s => `${s.pass ? '✓' : '✗'} ${s.name}`)
-    .join('  ')
+  const cells = scores.map(s => `${s.pass ? '✓' : '✗'} ${s.name}`).join('  ')
   return `${id.padEnd(32)}  ${cells}`
 }
 
+// ── L4: trace sampling ──
+
+async function fetchTraceEvents(): Promise<any[]> {
+  const key = process.env.NEXT_PUBLIC_POSTHOG_KEY
+  const host = process.env.NEXT_PUBLIC_POSTHOG_HOST ?? 'https://us.i.posthog.com'
+  if (!key) throw new Error('NEXT_PUBLIC_POSTHOG_KEY not set')
+  const after = new Date(Date.now() - LOOKBACK_DAYS * 86400000).toISOString()
+  const res = await fetch(`${host}/api/event/?event=agent_completion&after=${after}&limit=500`, {
+    headers: { Authorization: `Bearer ${key}` },
+  })
+  if (!res.ok) throw new Error(`PostHog API ${res.status}: ${await res.text()}`)
+  const data = await res.json() as any
+  return data.results ?? []
+}
+
+async function runTrace() {
+  const events = await fetchTraceEvents()
+  const sampled = events.filter(() => Math.random() < SAMPLE_RATE)
+
+  if (sampled.length === 0) {
+    console.log('L4: no events sampled (no production traffic yet or PostHog disabled locally).')
+    return true
+  }
+
+  console.log(`\nL4 trace sampling: ${sampled.length}/${events.length} events sampled\n`)
+  let failures = 0
+
+  for (const e of sampled) {
+    const props = e.properties ?? {}
+    const fakeCase: EvalCase = {
+      id: e.uuid ?? 'trace',
+      messages: [{ role: 'user', content: props.user_message ?? '' }],
+      snapshot: { expenses: [] },
+    }
+    const toolCalls = (props.tools_called ?? []).map((t: string) => ({ toolName: t, input: {} }))
+    const replyText: string = props.reply ?? ''
+
+    const scores: ScoreResult[] = [
+      noHallucinatedNumbersScorer({ case: fakeCase, replyText, toolCalls, toolResults: [], pendingAction: null }),
+      writePhrasingScorer({ case: fakeCase, replyText, toolCalls, toolResults: [], pendingAction: null }),
+      { name: 'token-budget', pass: (props.total_tokens ?? 0) <= TRACE_TOKEN_BUDGET, detail: `tokens=${props.total_tokens ?? 0} limit=${TRACE_TOKEN_BUDGET}` },
+      { name: 'latency-budget', pass: (props.latency_ms ?? 0) <= TRACE_LATENCY_BUDGET_MS, detail: `latency=${props.latency_ms ?? 0}ms limit=${TRACE_LATENCY_BUDGET_MS}ms` },
+    ]
+
+    const failed = scores.filter(s => !s.pass)
+    if (failed.length > 0) {
+      failures++
+      console.log(`FAIL [${e.uuid?.slice(0, 8)}] "${replyText.slice(0, 60)}..."`)
+      for (const s of failed) console.log(`  ↳ ${s.name}: ${s.detail}`)
+    }
+  }
+
+  console.log(`L4: ${failures} failure(s) in ${sampled.length} sampled traces`)
+  return failures === 0
+}
+
+// ── Main ──
+
 async function main() {
-  const datasetArg = process.argv[2] ?? 'evals/datasets/agent.jsonl'
-  const filterId = process.argv[3]
+  const args = process.argv.slice(2)
+  const traceMode = args.includes('--trace')
+  const datasetArg = args.find(a => !a.startsWith('--')) ?? 'evals/datasets/agent.jsonl'
+  const filterId = args.find(a => !a.startsWith('--') && a !== datasetArg)
+
   const cases = loadDataset(resolve(process.cwd(), datasetArg)).filter(
     c => !filterId || c.id === filterId
   )
@@ -128,7 +193,10 @@ async function main() {
     }
   }
 
-  process.exit(passed === total ? 0 : 1)
+  let traceOk = true
+  if (traceMode) traceOk = await runTrace()
+
+  process.exit(passed === total && traceOk ? 0 : 1)
 }
 
 main().catch(e => {

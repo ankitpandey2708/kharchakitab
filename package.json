@@ -10,6 +10,7 @@
     "lint": "eslint",
     "knip": "knip",
     "evals": "tsx evals/run.ts",
+    "evals:judge": "tsx evals/run-judge.ts",
     "remotion:preview": "remotion preview remotion/index.ts",
     "remotion:render": "remotion render remotion/index.ts LaunchVideo out/launch-video.mp4"
   },

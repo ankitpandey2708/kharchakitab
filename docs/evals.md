@@ -1,54 +1,90 @@
 # Eval Setup — Kharchakitab
 
-**Date:** 2026-04-20
-**Scope:** All AI-powered flows
-**Operational docs:** [`evals/README.md`](../evals/README.md) (how to run, dataset format, scorers)
-
-**Sequencing principle:** finish one flow end-to-end before starting the next. Don't half-build evals across multiple surfaces in parallel — it spreads attention thin and nothing ships to a usable state.
-
----
-
 ## Flow order
 
-1. **Text agent** (`/api/agent`) — in progress, L1 done
-2. **Voice loop** (STT → VAD → agent → TTS) — not started
+1. **Text agent** (`/api/agent`) — ✅ complete (exit criteria met: L1+L2+L4+L5 green)
+2. **Voice loop** (STT → VAD → agent → TTS) — current focus (Batch 2)
 3. **Receipt parser** (`/api/receipt`) — not started, gated on labeled data
 
 ---
 
-## The 5-layer eval model (2026 standard)
+## Running evals
 
-Every eval we build belongs to exactly one layer. Used as a checklist per flow.
+Requires `GEMINI_API_KEY` and `GEMINI_MODEL` in `.env`.
+
+```bash
+npm run evals                                      # L1 + L5, text agent (default)
+npm run evals -- evals/datasets/voice.jsonl        # voice
+npm run evals -- evals/datasets/receipts.jsonl     # receipts
+npm run evals -- evals/datasets/agent.jsonl <id>   # one case by id
+npm run evals -- --trace                           # L4: same scorers on live PostHog traffic
+EVAL_VERBOSE=1 npm run evals                       # dump replies + tool calls (L3 manual review)
+npm run evals:judge                                # L2 pairwise judge
+```
+
+Exit code 0 iff every case passes every scorer.
+
+### Adding a case
+
+1. Append a JSONL line to the relevant `evals/datasets/*.jsonl`.
+2. Run `npm run evals -- evals/datasets/agent.jsonl your-new-id` to verify.
+3. If it passes, commit. If the model is wrong, fix the prompt or tool — not the expectation.
+
+### Dataset field reference
+
+```json
+{
+  "id": "unique-slug",
+  "tags": ["tool-selection"],
+  "snapshot": {
+    "monthlyBudget": 20000,
+    "expenses": [{"daysAgo": 1, "amount": 450, "item": "Zomato", "category": "food"}],
+    "recurring": [{"item": "Netflix", "amount": 649, "category": "entertainment", "frequency": "monthly", "dueInDays": 3}]
+  },
+  "messages": [{"role": "user", "content": "am I on track?"}],
+  "expectedTools": ["get_budget", "get_summary"],
+  "expectedPendingAction": {"tool": "set_budget", "monthly_limit_inr": 25000},
+  "replyMustMatch": "outside|not available"
+}
+```
+
+`daysAgo` / `dueInDays` are relative to now — no frozen-time hacks needed. Only include the `expected*` fields relevant to your case; omit the rest.
+
+---
+
+## The eval model (2026 standard)
+
+4 distinct layers. L4 is not new scoring logic — it's L1+L5 re-run on live traffic instead of seed cases.
 
 | # | Layer | What it is | Runs when | Primary owner |
 |---|---|---|---|---|
-| 1 | **Deterministic scorers** | Regex, set-ops, schema checks, pure-function I/O | Every PR, <1s | Eng |
-| 2 | **LLM-as-judge** | Pairwise/rubric grading by a stronger model | Pre-release | **PM** writes rubric, eng wires runner |
-| 3 | **Human review** | Labeled gold set, manual spot-checks, vibe checks | Weekly / on drift | **PM** |
-| 4 | **Production trace sampling** | Run L1–L2 on live traffic; the raw material for error analysis | Continuous | **PM** triages, eng wires sampling |
-| 5 | **Operational SLOs** | Latency, cost, token budgets | Continuous | Eng |
+| 1 | **Deterministic scorers** | Regex, set-ops, schema checks, pure-function I/O | Every PR (`npm run evals`) | Eng |
+| 2 | **LLM-as-judge** | Pairwise/rubric grading by a stronger model | Pre-release (`npm run evals:judge`) | **PM** writes rubric, eng wires runner |
+| 3 | **Human review** | Manual spot-checks, vibe checks | Weekly / on drift (`EVAL_VERBOSE=1 npm run evals`) | **PM** |
+| 4 | **Production trace sampling** | L1 + L5 scorers re-run on live traffic — same scorers, real user inputs | Weekly cron (`npm run evals -- --trace`) | **PM** triages, eng wires sampling |
+| 5 | **Operational SLOs** | Latency, cost, token budgets — asserted inside the L1 runner and trace runner | Every PR + weekly cron | Eng |
 
-**PM workflow across layers.** The 2026 expectation (Husain, Shankar et al.) is that PMs own the *error-analysis loop*: sample ~100 production traces from L4, cluster failures into categories, turn any category >5% into a new L1 scorer or L2 rubric item. L1 and L5 are eng-owned; everything in between is PM-led.
+**PM workflow across layers.** The 2026 expectation ([Hamel Husain](https://hamel.dev/blog/posts/evals/), [Shreya Shankar](https://www.sh-reya.com/blog/ai-engineering-gap/)) is that PMs own the *error-analysis loop*: seed evals run in CI on every PR; trace sampling runs async on a cron or weekly; PM reviews trace failures, clusters them, and turns any category >5% into a new L1 scorer or L2 rubric item. L1 and L5 are eng-owned; everything in between is PM-led.
 
 > **Vocabulary note.** Some teams call L1 "unit tests" and reserve "evals" for L2/L3. The major 2026 frameworks (Vercel AI SDK, Braintrust, Inspect AI, Langfuse, LangSmith) all bundle deterministic scorers under "evals" — that inclusive definition is what this doc uses.
 
 ---
 
-## Flow 1 — Text agent (`/api/agent`)
+## Flow 1 — Text agent (`/api/agent`) ✅ Complete
 
-**Exit criteria:** L1 + L2 + L4 + L5 green. L3 optional, on-demand.
+**Exit criteria:** L1 + L2 + L4 + L5 green. L3 optional, on-demand. **All met.**
 
 | Layer | Status | Notes |
 |---|---|---|
 | L1 Deterministic | ✅ done | 5 scorers, 10 seed cases, 10/10 passing on gemma-4-31b-it |
-| L2 LLM-judge | ❌ | Tone, Hinglish naturalness, helpfulness — pairwise judge |
+| L2 LLM-judge | ✅ done | Pairwise judge via OpenRouter (`openrouter/free`); rubric at `evals/judges/tone.md`; 2 win / 8 tie / 0 loss on 10 cases |
 | L3 Human | ❌ | Multi-turn gold set, adversarial set — build only if L2 proves insufficient |
-| L4 Trace sampling | ❌ | PostHog `$ai_generation` events → run L1 scorers on 1–5% of live traffic |
+| L4 Trace sampling | ✅ done | L1 + L5 scorers re-run on live production traffic (same scorers, real user inputs). `agent_completion` events emitted from route → `npm run evals -- --trace` samples 5% of last 7 days |
 | L5 SLOs | ✅ done | `budget` scorer asserts `maxTokens` + `maxLatencyMs` per case — limits set in JSONL when needed |
 
 ### What's built (L1)
 
-Located in `evals/`. Prod and evals share `SYSTEM_PROMPT` via `src/lib/agent/config.ts` so they can't drift. Runner: `npm run evals` (L1 + L5 when budgets land; L2/L3/L4 are separate concerns that need a judge model, human eyeballs, or live traffic respectively).
+Located in `evals/`. Prod and evals share `SYSTEM_PROMPT` via `src/lib/agent/config.ts` so they can't drift. Commands: `npm run evals` (L1 + L5 on seed cases), `npm run evals -- --trace` (L1 + L5 on live traffic = L4), `npm run evals:judge` (L2 pairwise judge). L3 is manual — read outputs via `EVAL_VERBOSE=1 npm run evals`.
 
 **Dataset ownership.** Each flow has its own JSONL file (`evals/datasets/agent.jsonl`, `voice.jsonl`, `receipts.jsonl`). Eng creates the file and writes the first ~20 seed cases by hand. PM grows it over time: once L4 trace sampling is set up, real user queries flow from PostHog → PM reviews candidates → picks interesting/edge-case ones → appends to the JSONL. The file starts engineer-written and becomes PM-grown.
 
@@ -64,15 +100,17 @@ The scorer table below doubles as the **failure taxonomy** for this flow — eac
 
 **Not yet covered** (open for error-analysis to add): tone/Hinglish naturalness (L2), multi-turn coherence, adversarial/injection resistance.
 
-### What's left in Flow 1
+### Remaining open items (cross-cutting, non-blocking)
 
-1. ~~**CI gate**~~ — **skipped.** Would require maintaining secrets in both GitHub and Vercel. `npm run evals` is a manual pre-merge check instead — run locally before pushing.
-2. **L2 tone judge** — pairwise judge using Gemini 2.5 Pro. Rubric lives at `evals/judges/tone.md` (PM-owned, versioned in git) and covers tone + Hinglish naturalness + helpfulness.
-3. **L5 budgets** — assert each case stays under token and latency thresholds in the runner.
-4. **L4 trace sampling + error-analysis loop** — PostHog `$ai_generation` sample → async L1 scorer run → weekly PM review session: read ~100 sampled traces, cluster failures, promote any >5% category into a new L1 scorer or L2 rubric item.
-5. **Dataset pipeline** — PostHog traces → dedupe → label → append `evals/datasets/agent.jsonl`. Turns real user queries into cases. Feeds #4.
-6. **Vibe-check mode** — `npm run evals -- --sample N` dumps N random outputs for a human skim, independent of pass/fail. Cheap tool for PM spot reads before releases.
-7. **L3 (optional)** — multi-turn + adversarial gold set, only if L2 misses something important.
+Exit criteria are met. The items below are plumbing that improves ongoing quality but doesn't block moving to Batch 2.
+
+1. ~~**CI gate**~~ — **skipped.** Would require maintaining secrets in both GitHub and Vercel. `npm run evals` is a manual pre-merge check instead.
+2. ~~**L2 tone judge**~~ — ✅ done. Rubric at `evals/judges/tone.md`; results 2 win / 8 tie / 0 loss.
+3. ~~**L5 budgets**~~ — ✅ done. `budget` scorer asserts `maxTokens` + `maxLatencyMs` per case.
+4. ~~**L4 trace sampling**~~ — ✅ done. `npm run evals -- --trace` samples 5% of last 7 days.
+5. **Dataset pipeline** — PostHog traces → dedupe → label → append `evals/datasets/agent.jsonl`. PM curates, eng scripts. Tracked in cross-cutting table.
+6. **Vibe-check mode** — `npm run evals -- --sample N` dumps N random outputs for a human skim, independent of pass/fail. Tracked in cross-cutting table.
+7. **L3 (optional, deprioritized)** — L2 results (0 loss) don't justify the effort yet. Revisit if L2 surfaces systematic gaps.
 
 ---
 
@@ -127,7 +165,7 @@ Not tied to a flow, but unlocked progressively as flows land.
 | CI gate (GitHub Action on `npm run evals`) | ❌ | Eng | Flow 1 |
 | Regression history (per-case pass/fail over time) | ❌ | Eng | Flow 1 |
 | Dataset pipeline (PostHog traces → dedupe → label → JSONL) | ❌ | PM curates, eng scripts | Flow 1 (reused by Flow 3 trace sampling) |
-| Judge rubric files (`evals/judges/*.md`, versioned in git) | ❌ | **PM** | Flow 1 L2 work |
+| Judge rubric files (`evals/judges/*.md`, versioned in git) | ✅ `tone.md` done | **PM** | Flow 1 L2 work |
 | Failure taxonomy (per-flow list of mistake categories) | ⚠️ implicit in scorer tables | PM | Flow 1 (make explicit), grows per flow |
 | Error-analysis cadence (weekly trace review) | ❌ | **PM** | Flow 1 L4 |
 | Vibe-check mode in runner (`--sample N`) | ❌ | Eng | Flow 1 |
@@ -138,20 +176,20 @@ Not tied to a flow, but unlocked progressively as flows land.
 
 Three batches, done strictly in order. Each item is tagged with the eval layer it fills (L1–L5) and the owner. Don't skip ahead — Batch 1 builds plumbing (CI, judge runner, dataset pipeline, trace sampling, vibe-check) that Batches 2 and 3 reuse.
 
-### Batch 1 — Text agent (current focus)
+### Batch 1 — Text agent ✅ Complete
 
-L1 scorers already exist. This batch makes them useful day-to-day and fills the missing layers.
+Exit criteria met. Items 4 and 6 continue in parallel with Batch 2.
 
 | # | Item | Layer | Owner |
 |---|---|---|---|
-| ~~1~~ | ~~Wire `npm run evals` into CI~~ — skipped, dual secret maintenance cost too high. Run manually pre-merge instead. | — | — |
-| 2 | Add token + latency budgets per case in the runner | L5 | Eng |
-| 3 | Pairwise "taste" judge (tone, Hinglish, helpfulness); rubric at `evals/judges/tone.md` | L2 | PM writes rubric, Eng wires |
+| ~~1~~ | ~~Wire `npm run evals` into CI~~ — skipped, dual secret maintenance cost too high. | — | — |
+| ~~2~~ | ~~Add token + latency budgets per case in the runner~~ — ✅ done | L5 | Eng |
+| ~~3~~ | ~~Pairwise "taste" judge; rubric at `evals/judges/tone.md`~~ — ✅ done | L2 | PM + Eng |
 | 4 | Dataset pipeline: PostHog traces → dedupe → append to `agent.jsonl` | plumbing | PM curates, Eng scripts |
-| 5 | Sample 1–5% of production, run scorers async, 30 min/week PM error-analysis review | L4 | PM |
+| ~~5~~ | ~~Sample 1–5% of production, run scorers async, weekly PM error-analysis review~~ — ✅ done | L4 | PM |
 | 6 | `npm run evals -- --sample N` for human spot-reads (no pass/fail) | L3-lite | Eng |
 
-**Stop here until all six are green.** Don't start voice or receipts.
+**Batch 1 exit criteria met.** Items 4 and 6 are tracked in the cross-cutting table and can run in parallel with Batch 2. Start Batch 2 now.
 
 ### Batch 2 — Voice loop
 

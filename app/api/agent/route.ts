@@ -2,15 +2,45 @@ import { generateText, streamText, stepCountIs } from 'ai'
 import { createAgentTools } from '@/src/lib/agent/tools'
 import { SYSTEM_PROMPT, resolveModelId, getGoogleProvider } from '@/src/lib/agent/config'
 import type { DataSnapshot, PendingWriteAction } from '@/src/lib/agent/types'
+import { PostHog } from 'posthog-node'
 
 const google = getGoogleProvider()
 const MODEL_ID = resolveModelId()
 
 console.log('[agent] route loaded, MODEL_ID:', MODEL_ID)
 
+function captureCompletion(props: {
+  userMessage: string
+  reply: string
+  toolsCalled: string[]
+  totalTokens: number
+  latencyMs: number
+}) {
+  if (process.env.NEXT_PUBLIC_POSTHOG_ENABLED !== 'true') return
+  const client = new PostHog(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
+    host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+    flushAt: 1,
+    flushInterval: 0,
+  })
+  client.capture({
+    distinctId: 'server',
+    event: 'agent_completion',
+    properties: {
+      user_message: props.userMessage,
+      reply: props.reply,
+      tools_called: props.toolsCalled,
+      total_tokens: props.totalTokens,
+      latency_ms: props.latencyMs,
+      model: MODEL_ID,
+    },
+  })
+  client.shutdown()
+}
+
 export async function POST(request: Request) {
   console.log('[agent] POST called, using model:', MODEL_ID)
   console.time('agent:total-roundtrip')
+  const t0 = Date.now()
 
   try {
     const { messages, snapshot, stream: wantStream }: {
@@ -65,6 +95,14 @@ export async function POST(request: Request) {
             }
 
             const response = await streamResult.response
+            const usage = await streamResult.usage
+            captureCompletion({
+              userMessage: messages.at(-1)?.content ?? '',
+              reply: (await streamResult.text),
+              toolsCalled: steps.flatMap(s => s.toolCalls.map(tc => tc.toolName)),
+              totalTokens: usage.totalTokens ?? 0,
+              latencyMs: Date.now() - t0,
+            })
             send({ type: 'response_messages', messages: response.messages })
             if (pendingAction) {
               send({ type: 'pending_action', action: pendingAction })
@@ -111,7 +149,15 @@ export async function POST(request: Request) {
       }
     }
 
-    console.log('agent:steps', result.steps.length, 'tools-called:', result.steps.flatMap(s => s.toolCalls.map(tc => tc.toolName)))
+    const toolsCalled = result.steps.flatMap(s => s.toolCalls.map(tc => tc.toolName))
+    console.log('agent:steps', result.steps.length, 'tools-called:', toolsCalled)
+    captureCompletion({
+      userMessage: messages.at(-1)?.content ?? '',
+      reply: result.text,
+      toolsCalled,
+      totalTokens: result.usage.totalTokens ?? 0,
+      latencyMs: Date.now() - t0,
+    })
     console.timeEnd('agent:total-roundtrip')
 
     return Response.json({
