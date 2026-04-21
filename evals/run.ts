@@ -53,7 +53,7 @@ async function runCase(c: EvalCase) {
     temperature: 0,
   })
   const latencyMs = Date.now() - start
-  const totalTokens = result.usage.totalTokens
+  const totalTokens = result.usage.totalTokens ?? 0
 
   const toolCalls = result.steps.flatMap(s =>
     s.toolCalls.map(tc => ({ toolName: tc.toolName, input: tc.input }))
