@@ -1,33 +1,36 @@
-# Agent Evals
+# Agent Evals — Quickref
 
-Deterministic evals for the `/api/agent` financial assistant.
+Strategy, layer model, priority order, and decisions: [`docs/evals.md`](../docs/evals.md).
 
 ## Run
 
 ```bash
-npm run evals                                     # all cases
-npm run evals -- evals/datasets/agent.jsonl id    # one case by id
-EVAL_VERBOSE=1 npm run evals                      # dump replies + tool calls
+npm run evals                                      # text agent (default)
+npm run evals -- evals/datasets/voice.jsonl        # voice
+npm run evals -- evals/datasets/receipts.jsonl     # receipts
+npm run evals -- evals/datasets/agent.jsonl id     # one case by id
+EVAL_VERBOSE=1 npm run evals                       # dump replies + tool calls
 ```
 
-Requires `GEMINI_API_KEY` and `GEMINI_MODEL` in `.env` (same vars the app uses).
-Exit code is 0 iff every case passes every scorer.
+Requires `GEMINI_API_KEY` and `GEMINI_MODEL` in `.env`. Exit code 0 iff every case passes every scorer.
 
-## Scorers
+## Scorers (L1 — text agent)
 
-| name | what it checks |
+| Scorer | Checks |
 |---|---|
-| `tool-selection` | exact set of `expectedTools` were called (no missing, no extras) |
-| `no-hallucinated-numbers` | every `₹N` / `Rs N` / `INR N` in the reply appears in tool-call inputs or results |
-| `write-phrasing` | if `set_budget` was called, reply asks for confirmation and does NOT claim the budget was already set |
-| `pending-action` | emitted `pendingAction` matches `expectedPendingAction` (tool + amount) |
-| `reply-regex` | reply matches `replyMustMatch` (case-insensitive) — used for refusal/out-of-window cases |
+| `tool-selection` | Exact set of `expectedTools` were called (no missing, no extras) |
+| `no-hallucinated-numbers` | Every ₹/Rs/INR amount in reply appears in tool-call inputs or results |
+| `write-phrasing` | If `set_budget` called: reply asks confirm, does NOT claim budget was set |
+| `pending-action` | Emitted `pendingAction` matches `expectedPendingAction` (tool + amount) |
+| `reply-regex` | Reply matches `replyMustMatch` — used for refusal/out-of-window cases |
 
-All scorers are deterministic (regex / set-ops). No LLM judge in this tier.
+## Adding a case
 
-## Dataset format (`datasets/agent.jsonl`)
+1. Append a JSONL line to the relevant `datasets/*.jsonl`.
+2. Run `npm run evals -- evals/datasets/agent.jsonl your-new-id` to verify.
+3. If it passes, commit. If the model is wrong, fix the prompt or tool — not the expectation.
 
-One JSON object per line:
+## Dataset field reference
 
 ```json
 {
@@ -36,24 +39,13 @@ One JSON object per line:
   "snapshot": {
     "monthlyBudget": 20000,
     "expenses": [{"daysAgo": 1, "amount": 450, "item": "Zomato", "category": "food"}],
-    "recurring": [{"item":"Netflix","amount":649,"category":"entertainment","frequency":"monthly","dueInDays":3}]
+    "recurring": [{"item": "Netflix", "amount": 649, "category": "entertainment", "frequency": "monthly", "dueInDays": 3}]
   },
   "messages": [{"role": "user", "content": "am I on track?"}],
   "expectedTools": ["get_budget", "get_summary"],
-  "expectedPendingAction": {"tool":"set_budget","monthly_limit_inr":25000},
+  "expectedPendingAction": {"tool": "set_budget", "monthly_limit_inr": 25000},
   "replyMustMatch": "outside|not available"
 }
 ```
 
-Timestamps in fixtures are **relative to now** (`daysAgo`, `dueInDays`) so cases stay current as the calendar advances — no frozen-time hacks needed.
-
-## Adding cases
-
-1. Append a JSONL line to `datasets/agent.jsonl`.
-2. Run `npm run evals -- evals/datasets/agent.jsonl your-new-id` to verify.
-3. If it passes, commit. If the model is wrong, fix the prompt or tool — not the expectation.
-
-## Next tiers (not yet built)
-
-- **LLM-judge** for tone/helpfulness (pairwise, Gemini 2.5 Pro as judge).
-- **PostHog trace sampling** to run these scorers on 1–5% of production turns.
+`daysAgo` / `dueInDays` are relative to now — no frozen-time hacks needed. Only include the `expected*` fields relevant to your case; omit the rest.

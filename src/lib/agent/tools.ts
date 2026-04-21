@@ -103,7 +103,8 @@ export function createAgentTools(snapshot: DataSnapshot) {
         }
 
         const total = results.length
-        return { expenses: results.slice(0, 50), total_count: total }
+        const total_amount = Math.round(results.reduce((s, e) => s + e.amount, 0))
+        return { expenses: results.slice(0, 50), total_count: total, total_amount }
       },
     } satisfies Tool,
 

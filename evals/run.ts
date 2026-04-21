@@ -11,6 +11,7 @@ import { noHallucinatedNumbersScorer } from './scorers/no-hallucinated-numbers'
 import { writePhrasingScorer } from './scorers/write-phrasing'
 import { pendingActionScorer } from './scorers/pending-action'
 import { replyRegexScorer } from './scorers/reply-regex'
+import { budgetScorer } from './scorers/budget'
 import type { EvalCase, ScoreResult } from './scorers/types'
 
 const SCORERS = [
@@ -42,6 +43,7 @@ async function runCase(c: EvalCase) {
   const snapshot = buildSnapshot(c.snapshot)
   const tools = createAgentTools(snapshot)
 
+  const start = Date.now()
   const result = await generateText({
     model: google(modelId),
     system: SYSTEM_PROMPT,
@@ -50,6 +52,8 @@ async function runCase(c: EvalCase) {
     stopWhen: stepCountIs(5),
     temperature: 0,
   })
+  const latencyMs = Date.now() - start
+  const totalTokens = result.usage.totalTokens
 
   const toolCalls = result.steps.flatMap(s =>
     s.toolCalls.map(tc => ({ toolName: tc.toolName, input: tc.input }))
@@ -69,9 +73,10 @@ async function runCase(c: EvalCase) {
     }
   }
 
-  const scores = SCORERS.map(s =>
-    s({ case: c, replyText: result.text, toolCalls, toolResults, pendingAction })
-  )
+  const scores = [
+    ...SCORERS.map(s => s({ case: c, replyText: result.text, toolCalls, toolResults, pendingAction })),
+    budgetScorer({ case: c, totalTokens, latencyMs }),
+  ]
   return { reply: result.text, toolCalls, scores }
 }
 

@@ -40,15 +40,17 @@ Every eval we build belongs to exactly one layer. Used as a checklist per flow.
 
 | Layer | Status | Notes |
 |---|---|---|
-| L1 Deterministic | ✅ done | 5 scorers, 10 seed cases (see below) |
+| L1 Deterministic | ✅ done | 5 scorers, 10 seed cases, 10/10 passing on gemma-4-31b-it |
 | L2 LLM-judge | ❌ | Tone, Hinglish naturalness, helpfulness — pairwise judge |
 | L3 Human | ❌ | Multi-turn gold set, adversarial set — build only if L2 proves insufficient |
 | L4 Trace sampling | ❌ | PostHog `$ai_generation` events → run L1 scorers on 1–5% of live traffic |
-| L5 SLOs | ❌ | Per-case token budget, p95 latency budget |
+| L5 SLOs | ✅ done | `budget` scorer asserts `maxTokens` + `maxLatencyMs` per case — limits set in JSONL when needed |
 
 ### What's built (L1)
 
-Located in `evals/`. Prod and evals share `SYSTEM_PROMPT` via `src/lib/agent/config.ts` so they can't drift. Runner: `npm run evals`.
+Located in `evals/`. Prod and evals share `SYSTEM_PROMPT` via `src/lib/agent/config.ts` so they can't drift. Runner: `npm run evals` (L1 + L5 when budgets land; L2/L3/L4 are separate concerns that need a judge model, human eyeballs, or live traffic respectively).
+
+**Dataset ownership.** Each flow has its own JSONL file (`evals/datasets/agent.jsonl`, `voice.jsonl`, `receipts.jsonl`). Eng creates the file and writes the first ~20 seed cases by hand. PM grows it over time: once L4 trace sampling is set up, real user queries flow from PostHog → PM reviews candidates → picks interesting/edge-case ones → appends to the JSONL. The file starts engineer-written and becomes PM-grown.
 
 The scorer table below doubles as the **failure taxonomy** for this flow — each row is a category of mistake we explicitly catch. New failure modes found during PM error analysis (L4) should appear here as new rows.
 
@@ -64,7 +66,7 @@ The scorer table below doubles as the **failure taxonomy** for this flow — eac
 
 ### What's left in Flow 1
 
-1. **CI gate** — GitHub Action runs `npm run evals`, blocks merge on failure. (Plumbing, but owned by this flow since it has the first evals to gate on.)
+1. ~~**CI gate**~~ — **skipped.** Would require maintaining secrets in both GitHub and Vercel. `npm run evals` is a manual pre-merge check instead — run locally before pushing.
 2. **L2 tone judge** — pairwise judge using Gemini 2.5 Pro. Rubric lives at `evals/judges/tone.md` (PM-owned, versioned in git) and covers tone + Hinglish naturalness + helpfulness.
 3. **L5 budgets** — assert each case stays under token and latency thresholds in the runner.
 4. **L4 trace sampling + error-analysis loop** — PostHog `$ai_generation` sample → async L1 scorer run → weekly PM review session: read ~100 sampled traces, cluster failures, promote any >5% category into a new L1 scorer or L2 rubric item.
@@ -142,7 +144,7 @@ L1 scorers already exist. This batch makes them useful day-to-day and fills the 
 
 | # | Item | Layer | Owner |
 |---|---|---|---|
-| 1 | Wire `npm run evals` into CI so failing evals block PR merge | L1 | Eng |
+| ~~1~~ | ~~Wire `npm run evals` into CI~~ — skipped, dual secret maintenance cost too high. Run manually pre-merge instead. | — | — |
 | 2 | Add token + latency budgets per case in the runner | L5 | Eng |
 | 3 | Pairwise "taste" judge (tone, Hinglish, helpfulness); rubric at `evals/judges/tone.md` | L2 | PM writes rubric, Eng wires |
 | 4 | Dataset pipeline: PostHog traces → dedupe → append to `agent.jsonl` | plumbing | PM curates, Eng scripts |

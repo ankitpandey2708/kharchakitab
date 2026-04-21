@@ -13,6 +13,8 @@ export interface EvalCase {
   expectedTools?: string[]
   expectedPendingAction?: { tool: 'set_budget'; monthly_limit_inr: number }
   replyMustMatch?: string
+  maxTokens?: number
+  maxLatencyMs?: number
 }
 
 export interface ScorerInput {

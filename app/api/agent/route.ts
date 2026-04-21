@@ -6,7 +6,10 @@ import type { DataSnapshot, PendingWriteAction } from '@/src/lib/agent/types'
 const google = getGoogleProvider()
 const MODEL_ID = resolveModelId()
 
+console.log('[agent] route loaded, MODEL_ID:', MODEL_ID)
+
 export async function POST(request: Request) {
+  console.log('[agent] POST called, using model:', MODEL_ID)
   console.time('agent:total-roundtrip')
 
   try {
@@ -48,6 +51,7 @@ export async function POST(request: Request) {
             // After streaming is done, check for pending actions and send response messages
             let pendingAction: PendingWriteAction | null = null
             const steps = await streamResult.steps
+            console.log('[agent] stream steps:', steps.length, 'tools-called:', steps.flatMap(s => s.toolCalls.map(tc => tc.toolName)))
             for (const step of steps) {
               for (const tr of step.toolResults) {
                 const output = tr.output as Record<string, unknown> | undefined
