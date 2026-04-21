@@ -94,9 +94,9 @@ function fmtRow(id: string, scores: ScoreResult[]) {
 // ── L4: trace sampling ──
 
 async function fetchTraceEvents(): Promise<any[]> {
-  const key = process.env.NEXT_PUBLIC_POSTHOG_KEY
+  const key = process.env.POSTHOG_PERSONAL_API_KEY
   const host = process.env.NEXT_PUBLIC_POSTHOG_HOST ?? 'https://us.i.posthog.com'
-  if (!key) throw new Error('NEXT_PUBLIC_POSTHOG_KEY not set')
+  if (!key) throw new Error('POSTHOG_PERSONAL_API_KEY not set')
   const after = new Date(Date.now() - LOOKBACK_DAYS * 86400000).toISOString()
   const res = await fetch(`${host}/api/event/?event=agent_completion&after=${after}&limit=500`, {
     headers: { Authorization: `Bearer ${key}` },
@@ -151,9 +151,15 @@ async function runTrace() {
 
 async function main() {
   const args = process.argv.slice(2)
-  const traceMode = args.includes('--trace')
+  const traceOnly = args.includes('--trace')
   const datasetArg = args.find(a => !a.startsWith('--')) ?? 'evals/datasets/agent.jsonl'
   const filterId = args.find(a => !a.startsWith('--') && a !== datasetArg)
+
+  if (traceOnly) {
+    const ok = await runTrace()
+    process.exitCode = ok ? 0 : 1
+    return
+  }
 
   const cases = loadDataset(resolve(process.cwd(), datasetArg)).filter(
     c => !filterId || c.id === filterId
@@ -193,13 +199,10 @@ async function main() {
     }
   }
 
-  let traceOk = true
-  if (traceMode) traceOk = await runTrace()
-
-  process.exit(passed === total && traceOk ? 0 : 1)
+  process.exitCode = passed === total ? 0 : 1
 }
 
 main().catch(e => {
   console.error(e)
-  process.exit(2)
+  process.exitCode = 2
 })

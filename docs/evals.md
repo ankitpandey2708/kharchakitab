@@ -13,13 +13,11 @@
 Requires `GEMINI_API_KEY` and `GEMINI_MODEL` in `.env`.
 
 ```bash
-npm run evals                                      # L1 + L5, text agent (default)
-npm run evals -- evals/datasets/voice.jsonl        # voice
-npm run evals -- evals/datasets/receipts.jsonl     # receipts
-npm run evals -- evals/datasets/agent.jsonl <id>   # one case by id
-npm run evals -- --trace                           # L4: same scorers on live PostHog traffic
-EVAL_VERBOSE=1 npm run evals                       # dump replies + tool calls (L3 manual review)
-npm run evals:judge                                # L2 pairwise judge
+npm run evals                        # L1+L5 on seed cases (text agent)
+npm run evals:prod                   # L4 only: scores live PostHog traces, no model inference
+npm run evals -- <dataset> <id>      # single case, e.g. evals/datasets/agent.jsonl out-of-window
+EVAL_VERBOSE=1 npm run evals         # dump replies + tool calls (L3 manual review)
+npm run evals:judge                  # L2 pairwise judge
 ```
 
 Exit code 0 iff every case passes every scorer.
