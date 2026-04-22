@@ -573,13 +573,13 @@ export function AgentChat({ open, onClose }: AgentChatProps) {
                 </motion.div>
               )}
 
-              {/* Confirmation card */}
+              {/* Confirmation Action Sheet */}
               {pendingAction && (
                 <motion.div
-                  initial={{ opacity: 0, y: 12 }}
+                  className="kk-chat-confirm-sheet"
+                  initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.25 }}
-                  className="kk-chat-confirm"
+                  transition={{ duration: 0.35, ease: [0.34, 1.56, 0.64, 1] }}
                   role="alertdialog"
                   aria-modal="true"
                   aria-labelledby="confirm-label"
@@ -588,31 +588,43 @@ export function AgentChat({ open, onClose }: AgentChatProps) {
                     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" })
                   }}
                 >
-                  <p id="confirm-label" className="kk-chat-confirm-label">Confirm Action</p>
-                  <p id="confirm-text" className="kk-chat-confirm-text">
-                    Set monthly budget to{" "}
-                    <span className="kk-chat-confirm-amount">
+                  {/* Mobile handle bar */}
+                  <div className="kk-chat-confirm-handle" />
+                  
+                  <div className="kk-chat-confirm">
+                    {/* Warning icon */}
+                    <div className="kk-chat-confirm-icon">
+                      <Sparkles className="w-5 h-5" strokeWidth={2.5} aria-hidden="true" />
+                    </div>
+                    
+                    <p id="confirm-label" className="kk-chat-confirm-label">Confirm Action</p>
+                    <p id="confirm-text" className="kk-chat-confirm-text">
+                      Set monthly budget to
+                    </p>
+                    <div className="kk-chat-confirm-amount" aria-label={`₹${pendingAction.params.monthly_limit_inr.toLocaleString("en-IN")}`}>
                       ₹{pendingAction.params.monthly_limit_inr.toLocaleString("en-IN")}
-                    </span>
-                    ?
-                  </p>
-                  <div className="kk-chat-confirm-actions">
-                    <button
-                      onClick={() => handleConfirm(true)}
-                      className="kk-chat-confirm-yes"
-                      aria-label="Confirm setting monthly budget"
-                    >
-                      <Check className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-                      <span>Confirm</span>
-                    </button>
-                    <button
-                      onClick={() => handleConfirm(false)}
-                      className="kk-chat-confirm-no"
-                      aria-label="Decline budget change"
-                    >
-                      <XIcon className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-                      <span>Decline</span>
-                    </button>
+                    </div>
+                    
+                    <div className="kk-chat-confirm-actions">
+                      <button
+                        onClick={() => handleConfirm(true)}
+                        className="kk-chat-confirm-yes"
+                        aria-label="Confirm setting monthly budget"
+                      >
+                        <span className="kk-btn-icon">
+                          <Check className="w-4 h-4" aria-hidden="true" />
+                        </span>
+                        <span>Confirm</span>
+                      </button>
+                      <button
+                        onClick={() => handleConfirm(false)}
+                        className="kk-chat-confirm-no"
+                        aria-label="Decline budget change"
+                      >
+                        <XIcon className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+                        <span>Decline</span>
+                      </button>
+                    </div>
                   </div>
                 </motion.div>
               )}

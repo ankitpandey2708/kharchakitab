@@ -2414,71 +2414,133 @@ div.kk-driver-theme .driver-popover-arrow {
   }
 }
 
-/* ── Confirmation card ── */
-.kk-chat-confirm {
+/* ── Confirmation Action Sheet ── */
+.kk-chat-confirm-sheet {
   position: relative;
-  border-radius: var(--kk-radius-md);
-  border: 1px solid var(--kk-smoke-heavy);
-  background: rgba(255, 255, 255, 0.95);
-  padding: clamp(14px, 4vw, 20px) clamp(12px, 4vw, 18px);
-  overflow: hidden;
-  box-shadow: var(--kk-shadow-md);
-  margin-bottom: 8px;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
 }
 
+/* Handle bar at top - mobile affordance, hidden on desktop */
+.kk-chat-confirm-handle {
+  width: 40px;
+  height: 4px;
+  background: var(--kk-smoke-heavy);
+  border-radius: 2px;
+  margin: 0 auto 16px;
+}
+
+@media (min-width: 640px) {
+  .kk-chat-confirm-handle {
+    display: none;
+  }
+}
+
+/* Main confirmation card - elevated treatment */
+.kk-chat-confirm {
+  position: relative;
+  border-radius: var(--kk-radius-lg);
+  border: 1px solid var(--kk-smoke);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(250, 248, 245, 0.95) 100%);
+  padding: 20px 18px;
+  overflow: hidden;
+  box-shadow: var(--kk-shadow-lg), 0 0 0 1px rgba(255, 107, 53, 0.06);
+  margin-bottom: 12px;
+  animation: kk-confirm-appear 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes kk-confirm-appear {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Ember glow accent bar */
 .kk-chat-confirm::before {
   content: "";
   position: absolute;
   left: 0;
   top: 0;
   bottom: 0;
-  width: 3px;
+  width: 4px;
   background: linear-gradient(180deg, var(--kk-ember), var(--kk-saffron));
-  border-radius: 0 2px 2px 0;
+}
+
+/* Warning icon with pulse animation */
+.kk-chat-confirm-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255, 107, 53, 0.12) 0%, rgba(255, 107, 53, 0.08) 100%);
+  color: var(--kk-ember);
+  margin-bottom: 14px;
+  animation: kk-icon-pulse 2s ease-in-out infinite;
+}
+
+@keyframes kk-icon-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(255, 107, 53, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(255, 107, 53, 0);
+  }
 }
 
 .kk-chat-confirm-label {
-  font-size: clamp(0.625rem, 2vw, 0.6875rem);
-  font-weight: 600;
+  font-size: 0.6875rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   color: var(--kk-ember);
-  margin-bottom: clamp(4px, 1.5vw, 6px);
+  margin-bottom: 6px;
 }
 
 .kk-chat-confirm-text {
-  font-size: clamp(0.875rem, 3vw, 0.9375rem);
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--kk-ink);
-  margin-bottom: clamp(12px, 4vw, 18px);
-  line-height: 1.5;
+  margin-bottom: 16px;
+  line-height: 1.55;
   font-variant-numeric: tabular-nums;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  hyphens: auto;
 }
 
 .kk-chat-confirm-amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-family: var(--font-mono), monospace;
+  font-size: 1.125rem;
+  font-weight: 700;
   color: var(--kk-ember);
-  word-break: break-all;
-  display: inline-block;
+  background: linear-gradient(135deg, rgba(255, 107, 53, 0.08) 0%, rgba(247, 201, 72, 0.08) 100%);
+  padding: 4px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 107, 53, 0.15);
+  margin: 2px 0;
 }
 
+/* Actions container - full width on mobile */
 .kk-chat-confirm-actions {
   display: flex;
-  flex-direction: row;
-  gap: clamp(8px, 2.5vw, 12px);
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
 }
 
-/* Stack buttons vertically only on very small screens */
-@media (max-width: 320px) {
+/* Tablet+: side by side */
+@media (min-width: 400px) {
   .kk-chat-confirm-actions {
-    flex-direction: column;
+    flex-direction: row;
+    gap: 12px;
   }
 }
 
@@ -2488,70 +2550,90 @@ div.kk-driver-theme .driver-popover-arrow {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: clamp(4px, 1.5vw, 6px);
-  padding: clamp(10px, 3vw, 12px) clamp(12px, 3vw, 16px);
-  border-radius: var(--kk-radius-sm);
-  font-weight: 600;
-  font-size: clamp(0.75rem, 2.5vw, 0.8125rem);
+  gap: 8px;
+  padding: 14px 20px;
+  border-radius: 14px;
+  font-weight: 700;
+  font-size: 0.875rem;
   cursor: pointer;
-  min-height: 44px;
-  min-width: 44px;
+  min-height: 50px;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
-  transition: transform var(--kk-duration-fast) var(--kk-ease-out),
-    box-shadow var(--kk-duration-fast) var(--kk-ease-out);
-  white-space: nowrap;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+  will-change: transform;
+  position: relative;
+  overflow: hidden;
 }
 
 .kk-chat-confirm-yes {
   border: none;
   background: linear-gradient(135deg, var(--kk-ember) 0%, var(--kk-ember-deep) 100%);
   color: white;
-  box-shadow: 0 2px 8px rgba(255, 107, 53, 0.2);
+  box-shadow: 0 4px 14px rgba(255, 107, 53, 0.35);
+}
+
+.kk-chat-confirm-yes::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 50%);
+  pointer-events: none;
 }
 
 .kk-chat-confirm-yes:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
 }
 
 .kk-chat-confirm-yes:active {
-  transform: scale(0.96);
+  transform: scale(0.97);
+  box-shadow: 0 2px 8px rgba(255, 107, 53, 0.25);
+}
+
+.kk-chat-confirm-yes .kk-btn-icon {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .kk-chat-confirm-no {
-  border: 1px solid var(--kk-smoke-heavy);
-  background: rgba(255, 255, 255, 0.5);
+  border: 1.5px solid var(--kk-smoke-heavy);
+  background: rgba(255, 255, 255, 0.9);
   color: var(--kk-ash);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
 }
 
 .kk-chat-confirm-no:hover {
-  border-color: var(--kk-ink);
+  border-color: var(--kk-smoke);
   color: var(--kk-ink);
-  background: rgba(255, 255, 255, 0.8);
-  transform: translateY(-2px);
+  background: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
 }
 
 .kk-chat-confirm-no:active {
-  transform: scale(0.96);
+  transform: scale(0.97);
+  background: var(--kk-cream);
 }
 
 /* Reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
-
+  .kk-chat-confirm,
   .kk-chat-confirm-yes,
   .kk-chat-confirm-no {
     transition: none;
+    animation: none;
   }
 
   .kk-chat-confirm-yes:hover,
   .kk-chat-confirm-no:hover {
-    transform: none;
-  }
-
-  .kk-chat-confirm-yes:active,
-  .kk-chat-confirm-no:active {
     transform: none;
   }
 }
@@ -2564,7 +2646,7 @@ div.kk-driver-theme .driver-popover-arrow {
   }
 
   .kk-chat-confirm-yes {
-    outline: 2px solid transparent;
+    outline: 3px solid white;
     outline-offset: 2px;
   }
 
@@ -2574,31 +2656,34 @@ div.kk-driver-theme .driver-popover-arrow {
   }
 }
 
-/* Dark mode support (if needed in future) */
+/* Dark mode support */
 @media (prefers-color-scheme: dark) {
   .kk-chat-confirm {
-    background: rgba(30, 30, 30, 0.95);
-    border-color: rgba(255, 255, 255, 0.15);
+    background: linear-gradient(135deg, rgba(30, 30, 30, 0.98) 0%, rgba(26, 26, 26, 0.95) 100%);
+    border-color: rgba(255, 255, 255, 0.1);
   }
 
   .kk-chat-confirm-text {
     color: var(--kk-paper);
   }
 
+  .kk-chat-confirm-amount {
+    background: linear-gradient(135deg, rgba(255, 107, 53, 0.15) 0%, rgba(247, 201, 72, 0.15) 100%);
+    border-color: rgba(255, 107, 53, 0.25);
+  }
+
   .kk-chat-confirm-no {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
     color: rgba(255, 255, 255, 0.7);
   }
 
   .kk-chat-confirm-no:hover {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.25);
     color: var(--kk-paper);
   }
-}
-
-/* ── Input row ── */
+}/* ── Input row ── */
 .kk-chat-input-row {
   display: flex;
   align-items: center;
