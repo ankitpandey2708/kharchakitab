@@ -1,8 +1,10 @@
 import "dotenv/config";
 import { createServer, IncomingMessage } from "http";
 import { WebSocketServer, WebSocket } from "ws";
+import { run as runPreflight } from "./scripts/preflight-render";
 
 const PORT = process.env.PORT || 7071;
+
 const PRESENCE_TTL_MS = 60 * 1000; // 60 seconds for presence
 const PAIRING_TTL_MS = 5 * 60 * 1000; // S6.T6: 5 minutes for pairing sessions
 
@@ -481,6 +483,11 @@ wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
   });
 });
 
-server.listen(PORT, () => {
-
+runPreflight().then(() => {
+  server.listen(PORT, () => {
+    console.log(`[Startup] Server listening on port ${PORT}`);
+  });
+}).catch((err: Error) => {
+  console.error(`[Startup] Aborting — ${err.message}`);
+  process.exit(1);
 });

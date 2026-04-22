@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "concurrently \"npm run server\" \"next dev\"",
+    "prebuild": "tsx scripts/preflight-vercel.ts",
     "build": "next build",
     "start": "next start",
     "server": "tsx server.ts",
