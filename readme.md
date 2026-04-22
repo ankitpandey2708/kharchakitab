@@ -50,16 +50,26 @@
     ```
 
 3.  **Set up Environment Variables:**
-    Create a `.env.local` file in the root directory and populate it with your keys:
+    Create `.env.local` (local) and set the same vars in your deployment platforms:
 
-    ```env
-    GEMINI_API_KEY = ""
-    GEMINI_MODEL="models/gemini-3.1-flash-lite-preview,models/gemma-3-27b-it"
-    
-    SARVAM_KEY = ""
-    SARVAM_MODEL="saaras:v3"
-
-    ```
+    | Variable | Vercel | Render | Notes |
+    |---|:---:|:---:|---|
+    | `GEMINI_API_KEY` | ✅ | — | Required |
+    | `GEMINI_MODEL` | ✅ | — | Default: `gemini-3.1-flash-lite-preview,gemma-3-27b-it` |
+    | `SARVAM_KEY` | ✅ | ✅ | **Both** — Vercel for REST, Render for WebSocket STT proxy |
+    | `SARVAM_MODEL` | ✅ | — | Default: `saaras:v3` |
+    | `SARVAM_TTS_MODEL` | ✅ | — | Default: `bulbul:v3` |
+    | `OPENROUTER_API_KEY` | ✅ | — | Optional — Gemini fallback |
+    | `OPENROUTER_MODEL` | ✅ | — | Default: `openrouter/free` |
+    | `NEXT_PUBLIC_SIGNALING_URL` | ✅ | — | Set to your Render WebSocket URL in prod |
+    | `NEXT_PUBLIC_TURN_USERNAME` | ✅ | — | Optional — WebRTC across networks |
+    | `NEXT_PUBLIC_TURN_CREDENTIAL` | ✅ | — | Optional — WebRTC across networks |
+    | `NEXT_PUBLIC_POSTHOG_ENABLED` | ✅ | — | Default: `false` |
+    | `NEXT_PUBLIC_POSTHOG_KEY` | ✅ | — | Optional |
+    | `NEXT_PUBLIC_POSTHOG_HOST` | ✅ | — | Default: `https://us.i.posthog.com` |
+    | `UPSTASH_REDIS_REST_URL` | ✅ | — | Optional — rate limiting |
+    | `UPSTASH_REDIS_REST_TOKEN` | ✅ | — | Optional — rate limiting |
+    | `PORT` | — | ✅ | Default: `7071` |
 
 4.  **Run the development server:**
     ```bash

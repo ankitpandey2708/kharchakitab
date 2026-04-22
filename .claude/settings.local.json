@@ -1,11 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(xargs grep:*)",
-      "Bash(npm run:*)",
-      "Bash(tasklist /FI \"IMAGENAME eq node.exe\" /FO TABLE)",
-      "Bash(npx tsc:*)",
-      "Bash(node:*)"
+      "Bash(npm run *)",
+      "Bash(EVAL_VERBOSE=1 npm run evals:judge)",
+      "WebSearch",
+      "WebFetch(domain:research.nvidia.com)",
+      "WebFetch(domain:arxiv.org)",
+      "WebFetch(domain:openrouter.ai)",
+      "WebFetch(domain:sdk.vercel.ai)",
+      "WebFetch(domain:ai-sdk.dev)",
+      "Skill(gsd-update)"
     ]
   }
 }
