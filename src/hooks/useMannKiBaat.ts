@@ -155,8 +155,8 @@ export const useMannKiBaat = () => {
         console.log("[MannKiBaat] gemini result:", JSON.stringify(result));
       } catch (err) {
         console.log("[MannKiBaat] gemini failed, using fallback:", err);
-        // Fallback — NOT cached, so next online open retries Gemini
         const fallback = getFallbackMessage(yesterdayStats, messageType);
+        cacheSet(fallback);
         setMessage(fallback);
         posthog.capture("mann_ki_baat_shown", { type: messageType, source: "fallback" });
         return;
