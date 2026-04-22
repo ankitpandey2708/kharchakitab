@@ -1,0 +1,13 @@
+{
+  "concurrency": 5,
+  "keys": [
+    {
+      "envVar": "GEMINI_API_KEY",
+      "provider": "gemini"
+    },
+    {
+      "envVar": "SARVAM_KEY",
+      "provider": "sarvam"
+    }
+  ]
+}
