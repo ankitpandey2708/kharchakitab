@@ -4,8 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "concurrently \"npm run server\" \"next dev\"",
-    "prebuild": "tsx scripts/preflight-vercel.ts",
-    "build": "next build",
+    "build": "envguard validate && next build",
     "start": "next start",
     "server": "tsx server.ts",
     "lint": "eslint",
@@ -18,6 +17,7 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.53",
+    "@ankitpandey2708/envguard": "^0.1.8",
     "@fingerprintjs/fingerprintjs": "^5.1.0",
     "@headlessui/react": "^2.2.9",
     "@mdx-js/mdx": "^3.1.0",
