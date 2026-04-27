@@ -6,6 +6,8 @@
   "ignore": [
     "public/sw.js",
     "content/blog/**",
-    "public/worklets/stt-processor.js"
-  ]
+    "public/worklets/stt-processor.js",
+    "worker/**"
+  ],
+  "ignoreBinaries": ["wrangler"]
 }

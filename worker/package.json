@@ -1,0 +1,15 @@
+{
+  "name": "kharchakitab-signaling-worker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250525.0",
+    "typescript": "^5.0.0",
+    "wrangler": "^4.85.0"
+  }
+}

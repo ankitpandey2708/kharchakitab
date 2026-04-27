@@ -41,3 +41,11 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# claude code local settings (machine-specific permissions)
+.claude
+
+# workers
+worker/.wrangler
+
+worker/.dev.vars
+worker/node_modules
