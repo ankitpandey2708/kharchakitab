@@ -9,8 +9,6 @@ import { FilterKey, getRangeForFilter, toDateInputValue } from "@/src/utils/date
 
 const FILTER_OPTIONS = [
     { key: "today", label: "Today" },
-    { key: "last7", label: "7 days" },
-    { key: "last30", label: "30 days" },
     { key: "month", label: "This mo." },
     { key: "lastMonth", label: "Last mo." },
     { key: "custom", label: "Custom" },

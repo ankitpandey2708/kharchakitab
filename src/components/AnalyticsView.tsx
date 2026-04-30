@@ -668,8 +668,6 @@ export const AnalyticsView = React.memo(({
       return `${customStart}_to_${customEnd}`;
     }
     if (filter === "today") return "today";
-    if (filter === "last7") return "last_7_days";
-    if (filter === "last30") return "last_30_days";
     if (filter === "month") return "this_month";
     if (filter === "lastMonth") return "last_month";
     return "custom";
@@ -1093,14 +1091,6 @@ export const AnalyticsView = React.memo(({
                             <span className="text-[var(--kk-ash)] opacity-40">·</span>
                             <span className="text-[var(--kk-ash)]">
                               Yest. <span className="text-[var(--kk-ink)] font-medium"><span className="kk-currency">{currencySymbol}</span>{formatCurrency(Math.round(pacingData.totalPrev))}</span>
-                            </span>
-                          </>
-                        )}
-                        {(filter === "last7" || filter === "last30") && pacingData.totalPrev > 0 && (
-                          <>
-                            <span className="text-[var(--kk-ash)] opacity-40">·</span>
-                            <span className="text-[var(--kk-ash)]">
-                              Prev <span className="text-[var(--kk-ink)] font-medium"><span className="kk-currency">{currencySymbol}</span>{formatCurrency(Math.round(pacingData.totalPrev))}</span>
                             </span>
                           </>
                         )}

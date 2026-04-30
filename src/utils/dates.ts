@@ -1,5 +1,5 @@
 type DateRange = { start: number; end: number };
-export type FilterKey = "today" | "last7" | "last30" | "month" | "lastMonth" | "custom";
+export type FilterKey = "today" | "month" | "lastMonth" | "custom";
 
 const getTodayRange = (now = new Date()) => {
   const start = new Date(now);
@@ -30,14 +30,6 @@ export const getRangeForFilter = (
     const today = getTodayRange(now);
     start.setTime(today.start);
     end.setTime(today.end);
-  } else if (filter === "last7") {
-    start.setDate(start.getDate() - 6);
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
-  } else if (filter === "last30") {
-    start.setDate(start.getDate() - 29);
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
   } else if (filter === "month") {
     start.setDate(1);
     start.setHours(0, 0, 0, 0);
