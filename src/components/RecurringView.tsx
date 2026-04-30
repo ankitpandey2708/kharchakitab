@@ -1,10 +1,6 @@
-// PERF-VIRTUAL: Added virtualization for large recurring templates list
-// PERF-COMPUTE: Added useMemo for heavy array operations
-
 "use client";
 
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -30,7 +26,7 @@ import {
   isDueSoon,
   type RecurringTemplate,
 } from "@/src/config/recurring";
-import type { CategoryKey } from "@/src/config/categories";
+import { CATEGORY_LIST, type CategoryKey } from "@/src/config/categories";
 import {
   getRecurringTemplates,
   deleteRecurringTemplate,
@@ -54,17 +50,6 @@ interface RecurringViewProps {
   onMobileSheetChange?: (isOpen: boolean) => void;
 }
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.08,
-      delayChildren: 0.1,
-    },
-  },
-};
-
 const cardVariants = {
   hidden: { opacity: 0, y: 20, scale: 0.95 },
   visible: {
@@ -84,6 +69,8 @@ const cardVariants = {
     transition: { duration: 0.2 },
   },
 };
+
+const AMORTIZE_PERIODS: Record<string, number> = { monthly: 1, quarterly: 3, yearly: 12 };
 
 const formatDueDate = (timestamp: number): string => {
   const date = new Date(timestamp);
@@ -109,7 +96,6 @@ const formatDueDate = (timestamp: number): string => {
   })}`;
 };
 
-// Get urgency level for visual treatment
 const getUrgencyLevel = (dueAt: number, reminderDays: number): "urgent" | "soon" | "relaxed" => {
   const now = Date.now();
   const daysUntilDue = Math.ceil((dueAt - now) / (1000 * 60 * 60 * 24));
@@ -119,7 +105,6 @@ const getUrgencyLevel = (dueAt: number, reminderDays: number): "urgent" | "soon"
   return "relaxed";
 };
 
-// Calculate monthly commitment
 const calculateMonthlyTotal = (templates: Recurring_template[]): number => {
   return templates.reduce((total, t) => {
     if (t.recurring_amortize && t.recurring_frequency !== "monthly") {
@@ -208,6 +193,9 @@ export const RecurringView = React.memo(({
   const [templates, setTemplates] = useState<Recurring_template[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<Set<CategoryKey>>(
     new Set(["Entertainment"])
+  );
+  const [expandedManageGroups, setExpandedManageGroups] = useState<Set<string>>(
+    () => new Set(CATEGORY_LIST)
   );
   const [isLoading, setIsLoading] = useState(true);
   const [actionSheetTemplate, setActionSheetTemplate] = useState<Recurring_template | null>(null);
@@ -332,32 +320,38 @@ export const RecurringView = React.memo(({
     return sorted;
   }, [dueSoonTemplateIds, filteredTemplates]);
 
-  // PERF-VIRTUAL: Ref for virtualized list container
-  const virtualListRef = useRef<HTMLDivElement | null>(null);
-
-  // PERF-VIRTUAL: Virtualizer for large lists (>50 items)
-  const virtualizer = useVirtualizer({
-    count: mergedTemplates.length > 50 ? mergedTemplates.length : 0,
-    getScrollElement: () => virtualListRef.current,
-    estimateSize: () => 88, // Approximate card height
-    overscan: 5,
-    enabled: mergedTemplates.length > 50,
-  });
-
-  const virtualItems = virtualizer.getVirtualItems();
-
-
-  const toggleGroup = (group: CategoryKey) => {
-    setExpandedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(group)) {
-        next.delete(group);
-      } else {
-        next.add(group);
+  const groupedManageTemplates = useMemo(() => {
+    const byCategory = new Map<string, Recurring_template[]>();
+    for (const t of mergedTemplates) {
+      const cat = t.category || "Other";
+      const arr = byCategory.get(cat) ?? [];
+      arr.push(t);
+      byCategory.set(cat, arr);
+    }
+    const groups: { category: string; templates: Recurring_template[] }[] = [];
+    for (const cat of CATEGORY_LIST) {
+      const templates = byCategory.get(cat);
+      if (templates?.length) {
+        groups.push({ category: cat, templates });
+        byCategory.delete(cat);
       }
+    }
+    for (const [cat, templates] of byCategory) {
+      groups.push({ category: cat, templates });
+    }
+    return groups;
+  }, [mergedTemplates]);
+
+
+  const makeToggle = (setter: React.Dispatch<React.SetStateAction<Set<string>>>) =>
+    (group: string) => setter((prev) => {
+      const next = new Set(prev);
+      next.has(group) ? next.delete(group) : next.add(group);
       return next;
     });
-  };
+
+  const toggleManageGroup = makeToggle(setExpandedManageGroups);
+  const toggleGroup = makeToggle(setExpandedGroups as React.Dispatch<React.SetStateAction<Set<string>>>);
 
   const handleDelete = async (template: Recurring_template) => {
     await deleteRecurringTemplate(template._id);
@@ -386,8 +380,7 @@ export const RecurringView = React.memo(({
     const urgency = getUrgencyLevel(dueAt, reminderDays);
     const dueLabel = formatDueDate(dueAt);
 
-    const amortizePeriods: Record<string, number> = { monthly: 1, quarterly: 3, yearly: 12 };
-    const periods = amortizePeriods[template.recurring_frequency] ?? 1;
+    const periods = AMORTIZE_PERIODS[template.recurring_frequency] ?? 1;
     const amortizedAmount = template.recurring_amortize && periods > 1
       ? Math.floor((template.amount / periods) * 100) / 100
       : null;
@@ -428,10 +421,6 @@ export const RecurringView = React.memo(({
               {template.item}
             </div>
             <div className="mt-1.5 flex flex-wrap items-center gap-2 gap-y-1 text-xs">
-              {/* <span className="inline-flex items-center gap-1 rounded-full bg-[var(--kk-cream)] px-2.5 py-1 font-medium text-[var(--kk-ash)]">
-                <Clock className="h-3 w-3" />
-                {FREQUENCY_LABEL_MAP[template.recurring_frequency]}
-              </span> */}
               {showDueBadge ? (
                 <span
                   className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold whitespace-nowrap ${urgency === "urgent"
@@ -718,49 +707,52 @@ export const RecurringView = React.memo(({
             )}
           </div>
 
-          {mergedTemplates.length > 50 ? (
-            // PERF-VIRTUAL: Virtualized list for large datasets (>50 items)
-            <div ref={virtualListRef} className="relative" style={{ height: `${virtualizer.getTotalSize()}px` }}>
-              {virtualItems.map((virtualItem) => {
-                const template = mergedTemplates[virtualItem.index];
-                if (!template) return null;
-                const isEnded = recurringFilter === "ended" || (recurringFilter === "all" && now > template.recurring_end_date);
-                return (
-                  <div
-                    key={template._id}
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      width: "100%",
-                      transform: `translateY(${virtualItem.start}px)`,
-                      height: `${virtualItem.size}px`,
-                    }}
+          <div className="space-y-3">
+            {groupedManageTemplates.map(({ category, templates: groupTemplates }) => {
+              const isOpen = expandedManageGroups.has(category);
+              return (
+                <div key={category} className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => toggleManageGroup(category)}
+                    className="flex w-full items-center justify-between rounded-xl border border-[var(--kk-smoke)] bg-white/80 px-4 py-3 text-left transition-colors transition-shadow hover:border-[var(--kk-ember)]/30 hover:shadow-sm transform-gpu"
                   >
-                    {renderCard(template, recurringFilter !== "ended", isEnded)}
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            // Standard list for small datasets (<=50 items)
-            <motion.div
-              variants={containerVariants}
-              initial={false}
-              animate="visible"
-              className="grid gap-4"
-            >
-              <AnimatePresence mode="popLayout">
-                {mergedTemplates.map((template) =>
-                  renderCard(
-                    template,
-                    recurringFilter !== "ended",
-                    recurringFilter === "ended" || (recurringFilter === "all" && now > template.recurring_end_date)
-                  )
-                )}
-              </AnimatePresence>
-            </motion.div>
-          )}
+                    <div className="flex items-center gap-2">
+                      <CategoryIcon category={category as CategoryKey} className="h-4 w-4 text-[var(--kk-ash)]" />
+                      <span className="text-sm font-semibold text-[var(--kk-ink)]">{category}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-[var(--kk-cream)] px-2 py-0.5 text-xs font-bold text-[var(--kk-ash)]">
+                        {groupTemplates.length}
+                      </span>
+                      <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                        <ChevronDown className="h-4 w-4 text-[var(--kk-ash)]" />
+                      </motion.div>
+                    </div>
+                  </button>
+                  <AnimatePresence>
+                    {isOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.25 }}
+                        className="grid gap-3 overflow-hidden"
+                      >
+                        {groupTemplates.map((template) =>
+                          renderCard(
+                            template,
+                            recurringFilter !== "ended",
+                            recurringFilter === "ended" || (recurringFilter === "all" && now > template.recurring_end_date)
+                          )
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            })}
+          </div>
         </motion.section>
       )}
       {mergedTemplates.length > 0 && (
@@ -847,7 +839,6 @@ export const RecurringView = React.memo(({
           </motion.div>
         </motion.section>
 
-        {/* OPTION B — Standalone "Add custom" button below all groups */}
         <motion.button
           type="button"
           whileHover={{ scale: 1.01 }}

@@ -9,6 +9,7 @@ import type {
   TransactionVersion,
 } from "@/src/types";
 import { normalizeAmount } from "@/src/utils/money";
+import { CATEGORY_LIST } from "@/src/config/categories";
 import { getFingerprintData, deriveDeviceName } from "@/src/utils/deviceIdentity";
 
 interface QuickLogDB {
@@ -987,11 +988,7 @@ export interface ImportResult {
   errors: { row: number; reason: string }[];
 }
 
-const VALID_CATEGORIES = new Set([
-  "Food", "Travel", "Fuel", "Shopping", "Bills", "Housing",
-  "Utilities", "Subscriptions", "Insurance", "Financial",
-  "Home Services", "Education", "Health", "Entertainment", "Other",
-]);
+const VALID_CATEGORIES: Set<string> = new Set(CATEGORY_LIST);
 
 const VALID_PAYMENT_METHODS = new Set(["cash", "upi", "card", "unknown"]);
 
