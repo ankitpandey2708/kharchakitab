@@ -2,7 +2,9 @@ import { createFeatureToggle, getMasterEnabled, postToSW, registerPeriodicSync, 
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-const mannKiBaatToggle = createFeatureToggle("kk_mann_ki_baat_enabled", true);
+import { LS } from "@/src/config/storageKeys";
+
+const mannKiBaatToggle = createFeatureToggle(LS.MANN_KI_BAAT_ENABLED, true);
 export const getMannKiBaatEnabled = mannKiBaatToggle.get;
 export const setMannKiBaatEnabled = mannKiBaatToggle.set;
 
@@ -13,7 +15,7 @@ const alreadyGeneratedToday = () => {
   const d = new Date();
   const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-  const cached = window.localStorage.getItem("kk_mannKiBaat");
+  const cached = window.localStorage.getItem(LS.MANN_KI_BAAT);
   if (!cached) return false;
   try {
     return JSON.parse(cached).date === today;

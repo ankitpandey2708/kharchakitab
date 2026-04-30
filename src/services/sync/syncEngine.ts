@@ -12,6 +12,7 @@ import {
   updateTransaction,
 } from "@/src/db/db";
 import { syncEvents } from "./syncEvents";
+import { LS } from "@/src/config/storageKeys";
 
 const CHUNK_SIZE = 200; // Max transactions per chunk — with gzip compression, ~80 KB encrypted per chunk
 
@@ -128,7 +129,7 @@ export const buildSyncPayload = async (
   if (chunkIndex === 0) {
     try {
       const stored = typeof window !== "undefined"
-        ? window.localStorage.getItem("kk_budgets_household")
+        ? window.localStorage.getItem(LS.BUDGETS_HOUSEHOLD)
         : null;
       if (stored) {
         const parsed = JSON.parse(stored) as HouseholdBudgets;
@@ -254,7 +255,7 @@ export const applySyncPayload = async (
   if (payload.household_budgets && (!payload.chunk_info || payload.chunk_info.current === 1)) {
     try {
       const stored = typeof window !== "undefined"
-        ? window.localStorage.getItem("kk_budgets_household")
+        ? window.localStorage.getItem(LS.BUDGETS_HOUSEHOLD)
         : null;
       const local: HouseholdBudgets = stored ? JSON.parse(stored) : {};
       let changed = false;
@@ -271,7 +272,7 @@ export const applySyncPayload = async (
         }
       }
       if (changed && typeof window !== "undefined") {
-        window.localStorage.setItem("kk_budgets_household", JSON.stringify(local));
+        window.localStorage.setItem(LS.BUDGETS_HOUSEHOLD, JSON.stringify(local));
       }
     } catch {
       // Budget merge failed — not critical, skip

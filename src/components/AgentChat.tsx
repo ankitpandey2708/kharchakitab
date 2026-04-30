@@ -8,6 +8,7 @@ import { RecordingPill } from "@/src/components/RecordingPill"
 import { buildSnapshot } from "@/src/lib/agent/snapshot"
 import { useStreamingSTT } from "@/src/hooks/useStreamingSTT"
 import type { PendingWriteAction, DataSnapshot } from "@/src/lib/agent/types"
+import { LS } from "@/src/config/storageKeys"
 
 interface DisplayMessage {
   role: "user" | "assistant"
@@ -428,15 +429,15 @@ export function AgentChat({ open, onClose }: AgentChatProps) {
         const amount = pendingAction.params.monthly_limit_inr
 
         if (snapshot.isHousehold) {
-          const stored = JSON.parse(localStorage.getItem("kk_budgets_household") || "{}")
+          const stored = JSON.parse(localStorage.getItem(LS.BUDGETS_HOUSEHOLD) || "{}")
           stored[mk] = { amount, updated_at: Date.now(), set_by: snapshot.deviceId }
-          localStorage.setItem("kk_budgets_household", JSON.stringify(stored))
-          window.dispatchEvent(new StorageEvent("storage", { key: "kk_budgets_household" }))
+          localStorage.setItem(LS.BUDGETS_HOUSEHOLD, JSON.stringify(stored))
+          window.dispatchEvent(new StorageEvent("storage", { key: LS.BUDGETS_HOUSEHOLD }))
         } else {
-          const stored = JSON.parse(localStorage.getItem("kk_budgets") || "{}")
+          const stored = JSON.parse(localStorage.getItem(LS.BUDGETS) || "{}")
           stored[mk] = amount
-          localStorage.setItem("kk_budgets", JSON.stringify(stored))
-          window.dispatchEvent(new StorageEvent("storage", { key: "kk_budgets" }))
+          localStorage.setItem(LS.BUDGETS, JSON.stringify(stored))
+          window.dispatchEvent(new StorageEvent("storage", { key: LS.BUDGETS }))
         }
       }
 

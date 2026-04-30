@@ -41,7 +41,9 @@ const TOOLTIP_CONFIG: Record<TooltipId, DriveStep> = {
     },
 };
 
-const STORAGE_KEY = "kk_seen_tips";
+import { LS } from "@/src/config/storageKeys";
+
+const STORAGE_KEY = LS.SEEN_TIPS;
 
 // In-memory cache to avoid repeated localStorage reads + JSON.parse
 let seenTipsCache: TooltipId[] | null = null;

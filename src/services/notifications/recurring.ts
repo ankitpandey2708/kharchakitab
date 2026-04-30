@@ -9,8 +9,10 @@ import {
   postToSW,
 } from "./core";
 
-const ALERTS_LAST_SYNC_KEY = "kk_alerts_last_sync_at";
-const ALERTS_HASH_KEY = "kk_alerts_queue_hash";
+import { LS } from "@/src/config/storageKeys";
+
+const ALERTS_LAST_SYNC_KEY = LS.ALERTS_LAST_SYNC_AT;
+const ALERTS_HASH_KEY = LS.ALERTS_QUEUE_HASH;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const DEFAULT_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 

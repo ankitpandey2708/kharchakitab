@@ -11,8 +11,7 @@ import {
   type MannKiBaatMessage,
 } from "@/src/utils/mannKiBaat";
 import posthog from "posthog-js";
-
-const CACHE_KEY = "kk_mannKiBaat";
+import { LS } from "@/src/config/storageKeys";
 const todayDate = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -28,7 +27,7 @@ export const useMannKiBaat = () => {
     if (!getMannKiBaatEnabled()) return;
 
     const today = todayDate();
-    const cached = localStorage.getItem(CACHE_KEY);
+    const cached = localStorage.getItem(LS.MANN_KI_BAAT);
     if (cached) {
       try {
         const data = JSON.parse(cached) as MannKiBaatMessage & { date?: string };
@@ -39,9 +38,9 @@ export const useMannKiBaat = () => {
           return;
         }
         // Stale (different day) — remove and regenerate
-        localStorage.removeItem(CACHE_KEY);
+        localStorage.removeItem(LS.MANN_KI_BAAT);
       } catch {
-        localStorage.removeItem(CACHE_KEY);
+        localStorage.removeItem(LS.MANN_KI_BAAT);
       }
     }
 
@@ -59,7 +58,7 @@ export const useMannKiBaat = () => {
   useEffect(() => {
     const handleVisible = () => {
       if (document.visibilityState !== "visible") return;
-      const cached = localStorage.getItem(CACHE_KEY);
+      const cached = localStorage.getItem(LS.MANN_KI_BAAT);
       if (cached) {
         try {
           const data = JSON.parse(cached);
@@ -77,7 +76,7 @@ export const useMannKiBaat = () => {
   }, [tryLoad]);
 
   const cacheSet = (msg: MannKiBaatMessage) => {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ ...msg, date: todayDate() }));
+    localStorage.setItem(LS.MANN_KI_BAAT, JSON.stringify({ ...msg, date: todayDate() }));
   };
 
   const generate = async () => {
@@ -180,12 +179,12 @@ export const useMannKiBaat = () => {
   };
 
   const dismiss = useCallback(() => {
-    const cached = localStorage.getItem(CACHE_KEY);
+    const cached = localStorage.getItem(LS.MANN_KI_BAAT);
     if (cached) {
       try {
         const data = JSON.parse(cached);
         data.dismissed = true;
-        localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+        localStorage.setItem(LS.MANN_KI_BAAT, JSON.stringify(data));
       } catch {
         // ignore
       }

@@ -13,7 +13,7 @@ interface ItemBreakdown {
   category: CategoryKey;
 }
 
-export interface DayStats {
+interface DayStats {
   totalSpend: number;
   txCount: number;
   categories: Partial<Record<CategoryKey, { total: number; count: number }>>;
@@ -34,7 +34,7 @@ interface RecentContext {
   streakDaysBelowAvg: number;
 }
 
-export type MessageType = "roast" | "pattern" | "praise" | "warning" | "streak";
+type MessageType = "roast" | "pattern" | "praise" | "warning" | "streak";
 
 export interface MannKiBaatMessage {
   message: string;

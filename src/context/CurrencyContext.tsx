@@ -6,12 +6,11 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import type { CurrencyCode } from "@/src/utils/money";
 import { detectCurrency } from "@/src/utils/money";
 import { ERROR_MESSAGES } from "@/src/utils/error";
-
-const CURRENCY_STORAGE_KEY = "kk-currency";
+import { LS } from "@/src/config/storageKeys";
 
 const getInitialCurrency = (): CurrencyCode => {
     if (typeof window === "undefined") return "INR";
-    const stored = localStorage.getItem(CURRENCY_STORAGE_KEY);
+    const stored = localStorage.getItem(LS.CURRENCY);
     if (stored === "INR" || stored === "USD") return stored;
     return detectCurrency();
 };
@@ -28,13 +27,13 @@ export const CurrencyProvider = ({ children }: { children: React.ReactNode }) =>
 
     const setCurrency = useCallback((code: CurrencyCode) => {
         setCurrencyState(code);
-        localStorage.setItem(CURRENCY_STORAGE_KEY, code);
+        localStorage.setItem(LS.CURRENCY, code);
     }, []);
 
     // Persist initial auto-detected value
     useEffect(() => {
-        if (!localStorage.getItem(CURRENCY_STORAGE_KEY)) {
-            localStorage.setItem(CURRENCY_STORAGE_KEY, currency);
+        if (!localStorage.getItem(LS.CURRENCY)) {
+            localStorage.setItem(LS.CURRENCY, currency);
         }
     }, [currency]);
 

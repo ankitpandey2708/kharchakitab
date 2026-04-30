@@ -56,7 +56,6 @@ import { useBackButton } from "@/src/hooks/useBackButton";
 import { useRecording } from "@/src/context/AppContext";
 import { TRANSACTION_PENDING_LABEL } from "@/src/utils/transactions";
 import { usePendingTransactions } from "@/src/hooks/usePendingTransactions";
-import { useVercelMigration } from "@/src/hooks/useVercelMigration";
 
 type TransactionInput = Omit<Transaction, "id">;
 
@@ -115,9 +114,6 @@ const AppShell = () => {
   const { canPrompt: canInstall, promptInstall, dismiss: dismissInstall } = usePwaInstall();
   const { showTooltip, showTooltipsInOrder } = useOnboardingTour();
   // const { count: streakCount, broke: streakBroke, lostCount: streakLostCount, recordActivity: recordStreak } = useStreak();
-
-  // One-time migration from vercel.app to custom domain
-  useVercelMigration();
 
   // Initialize presence at app level for discoverability
   useSignaling();

@@ -1,9 +1,11 @@
 import { createFeatureToggle, getMasterEnabled, postToSW, registerPeriodicSync, unregisterPeriodicSync } from "./core";
 
-const LAST_SCHEDULED_KEY = "kk_daily_reminder_scheduled";
+import { LS } from "@/src/config/storageKeys";
+
+const LAST_SCHEDULED_KEY = LS.DAILY_REMINDER_SCHEDULED;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-const dailyToggle = createFeatureToggle("kk_daily_reminder", true);
+const dailyToggle = createFeatureToggle(LS.DAILY_REMINDER_ENABLED, true);
 export const getDailyReminderEnabled = dailyToggle.get;
 export const setDailyReminderEnabled = dailyToggle.set;
 

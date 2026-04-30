@@ -1,4 +1,6 @@
-const MASTER_KEY = "kk_notifications_master";
+import { LS } from "@/src/config/storageKeys";
+
+const MASTER_KEY = LS.NOTIFICATIONS_MASTER;
 
 interface AlertsEnvironment {
   isSupported: boolean;
@@ -123,7 +125,7 @@ export const createFeatureToggle = (
 });
 
 // Pre-built toggles for existing features
-const recurringToggle = createFeatureToggle("kk_alerts_enabled", true);
+const recurringToggle = createFeatureToggle(LS.ALERTS_ENABLED, true);
 export const getAlertsEnabled = recurringToggle.get;
 export const setAlertsEnabled = recurringToggle.set;
 

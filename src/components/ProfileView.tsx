@@ -14,6 +14,7 @@ import {
   Volume2,
 } from "lucide-react";
 import posthog from "posthog-js";
+import { BackupSettings } from "@/src/components/BackupSettings";
 import { CurrencyToggle } from "@/src/components/CurrencyToggle";
 import { SoundToggle } from "@/src/components/SoundToggle";
 import { getDeviceIdentity, getPairings, setDeviceDisplayName } from "@/src/db/db";
@@ -298,6 +299,11 @@ export const ProfileView = React.memo(({ onOpenSync, onOpenNotifications }: Prof
               <SoundToggle />
             </SettingRow>
           </div>
+
+          <SectionDivider />
+
+          <SectionHeader>Data</SectionHeader>
+          <BackupSettings />
 
           <SectionDivider />
 

@@ -2,6 +2,7 @@
 
 import React, { useCallback, useState } from "react";
 import { motion } from "framer-motion";
+import { LS } from "@/src/config/storageKeys";
 
 const OPTIONS = [
   { value: "true", label: "On" },
@@ -11,13 +12,13 @@ const OPTIONS = [
 export const SoundToggle = React.memo(() => {
   const [enabled, setEnabled] = useState(() => {
     if (typeof window === "undefined") return true;
-    return localStorage.getItem("kk_sound_enabled") !== "false";
+    return localStorage.getItem(LS.SOUND_ENABLED) !== "false";
   });
 
   const toggle = useCallback((value: string) => {
     const on = value === "true";
     setEnabled(on);
-    localStorage.setItem("kk_sound_enabled", String(on));
+    localStorage.setItem(LS.SOUND_ENABLED, String(on));
   }, []);
 
   return (

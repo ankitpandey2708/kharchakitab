@@ -72,6 +72,15 @@ interface QuickLogDB {
 
 export const DB_NAME = "QuickLogDB";
 export const DB_VERSION = 5; // Incremented for recurring_alerts store
+export const DB_STORES = [
+  "transactions",
+  "transaction_versions",
+  "device_identity",
+  "pairings",
+  "sync_state",
+  "recurring_templates",
+  "recurring_alerts",
+] as const satisfies readonly (keyof QuickLogDB)[];
 const MAX_CACHE_ENTRIES = 50;
 const queryCache = new Map<string, Transaction[]>();
 const cacheRanges = new Map<string, { start: number; end: number } | null>();

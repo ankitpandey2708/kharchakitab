@@ -92,7 +92,7 @@ export interface SyncState {
   last_outgoing_snapshot_at?: number | null;
 }
 
-export interface HouseholdBudgetEntry {
+interface HouseholdBudgetEntry {
   amount: number;       // 0 = soft-deleted (no budget)
   updated_at: number;   // unix ms — last-write-wins conflict resolution
   set_by: string;       // device_id of who set it

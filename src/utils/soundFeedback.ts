@@ -1,4 +1,5 @@
 import type { CurrencyCode } from "@/src/utils/money";
+import { LS } from "@/src/config/storageKeys";
 
 const SOUND_FILES: Record<number, string> = {
   1: "/sounds/coin.mp3",
@@ -34,7 +35,7 @@ export const playMoneySound = (
   currency: CurrencyCode,
 ): void => {
   if (typeof window === "undefined") return;
-  if (localStorage.getItem("kk_sound_enabled") === "false") return;
+  if (localStorage.getItem(LS.SOUND_ENABLED) === "false") return;
 
   try {
     const tier = getTier(amount, currency);

@@ -3,9 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { HouseholdBudgets } from "@/src/types";
 import { syncEvents } from "@/src/services/sync/syncEvents";
-
-const KK_BUDGETS_PERSONAL = "kk_budgets";
-const KK_BUDGETS_HOUSEHOLD = "kk_budgets_household";
+import { LS } from "@/src/config/storageKeys";
 
 interface BudgetCardProps {
     currencySymbol: string;
@@ -130,7 +128,7 @@ export const BudgetCard = React.memo(({
     // ── Load from localStorage ────────────────────────────────
     useEffect(() => {
         try {
-            const storedPersonal = window.localStorage.getItem(KK_BUDGETS_PERSONAL);
+            const storedPersonal = window.localStorage.getItem(LS.BUDGETS);
             if (storedPersonal) {
                 const parsed = JSON.parse(storedPersonal);
                 setPersonalBudgets(typeof parsed === "object" && parsed !== null ? parsed : {});
@@ -138,7 +136,7 @@ export const BudgetCard = React.memo(({
         } catch { setPersonalBudgets({}); }
 
         try {
-            const storedHousehold = window.localStorage.getItem(KK_BUDGETS_HOUSEHOLD);
+            const storedHousehold = window.localStorage.getItem(LS.BUDGETS_HOUSEHOLD);
             if (storedHousehold) {
                 const parsed = JSON.parse(storedHousehold);
                 setHouseholdBudgets(typeof parsed === "object" && parsed !== null ? parsed : {});
@@ -150,7 +148,7 @@ export const BudgetCard = React.memo(({
     useEffect(() => {
         const reload = () => {
             try {
-                const stored = window.localStorage.getItem(KK_BUDGETS_HOUSEHOLD);
+                const stored = window.localStorage.getItem(LS.BUDGETS_HOUSEHOLD);
                 const parsed = stored ? JSON.parse(stored) : {};
                 setHouseholdBudgets(typeof parsed === "object" && parsed !== null ? parsed : {});
             } catch { /* ignore */ }
@@ -179,7 +177,7 @@ export const BudgetCard = React.memo(({
             setPersonalBudgets((prev) => {
                 if (prev[selectedMonthKey]) return prev; // already set, skip
                 const next = { ...prev, [selectedMonthKey]: householdAmount };
-                window.localStorage.setItem(KK_BUDGETS_PERSONAL, JSON.stringify(next));
+                window.localStorage.setItem(LS.BUDGETS, JSON.stringify(next));
                 return next;
             });
         }
@@ -270,7 +268,7 @@ export const BudgetCard = React.memo(({
             } else {
                 next[selectedMonthKey] = { amount: parsed, updated_at: Date.now(), set_by: deviceId ?? "" };
             }
-            window.localStorage.setItem(KK_BUDGETS_HOUSEHOLD, JSON.stringify(next));
+            window.localStorage.setItem(LS.BUDGETS_HOUSEHOLD, JSON.stringify(next));
             return next;
         });
         setEditTarget(null);
@@ -283,7 +281,7 @@ export const BudgetCard = React.memo(({
             const next = { ...prev };
             if (parsed === 0) delete next[selectedMonthKey];
             else next[selectedMonthKey] = parsed;
-            window.localStorage.setItem(KK_BUDGETS_PERSONAL, JSON.stringify(next));
+            window.localStorage.setItem(LS.BUDGETS, JSON.stringify(next));
             return next;
         });
         setEditTarget(null);

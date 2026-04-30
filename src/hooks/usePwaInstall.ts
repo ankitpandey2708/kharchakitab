@@ -7,7 +7,9 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-const DISMISS_KEY = "kk_install_dismissed";
+import { LS } from "@/src/config/storageKeys";
+
+const DISMISS_KEY = LS.INSTALL_DISMISSED;
 
 export function usePwaInstall() {
   const deferredPrompt = useRef<BeforeInstallPromptEvent | null>(null);

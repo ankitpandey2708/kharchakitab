@@ -1,5 +1,6 @@
 import { fetchTransactions, getRecurringTemplates, getDeviceIdentity, getPairings } from '@/src/db/db'
 import type { DataSnapshot } from './types'
+import { LS } from '@/src/config/storageKeys'
 
 export async function buildSnapshot(): Promise<DataSnapshot> {
   console.time('agent:buildSnapshot')
@@ -27,10 +28,10 @@ export async function buildSnapshot(): Promise<DataSnapshot> {
   }))
 
   const personalBudgets: Record<string, number> = JSON.parse(
-    localStorage.getItem('kk_budgets') || '{}'
+    localStorage.getItem(LS.BUDGETS) || '{}'
   )
   const householdBudgets: Record<string, { amount: number; updated_at: number; set_by: string }> = JSON.parse(
-    localStorage.getItem('kk_budgets_household') || '{}'
+    localStorage.getItem(LS.BUDGETS_HOUSEHOLD) || '{}'
   )
 
   const recurring = templates.map(t => ({
