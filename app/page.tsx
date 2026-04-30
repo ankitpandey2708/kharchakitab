@@ -404,9 +404,14 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   }, []);
 
   const parseTranscript = useCallback(async (text: string) => {
-    const trimmed = text.trim();
-    const { parseWithGeminiFlash } = await import("@/src/services/gemini");
-    return await parseWithGeminiFlash(trimmed, currency);
+    const response = await fetch("/api/parse", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: text.trim(), currency }),
+    });
+    const data = (await response.json()) as { data?: unknown; error?: string };
+    if (!response.ok) throw new Error(data.error ?? ERROR_MESSAGES.geminiFlashRequestFailed);
+    return (data.data ?? []) as Expense[];
   }, [currency]);
 
   const saveSingleExpense = useCallback(async (expense: Expense, inputMethod: string) => {

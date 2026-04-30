@@ -302,7 +302,7 @@ export const fetchMannKiBaatMessage = async (
   ctx: RecentContext,
   type: MessageType
 ): Promise<{ message: string; type: MessageType; emoji: string }> => {
-  const res = await fetch("/api/gemini", {
+  const res = await fetch("/api/parse", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
