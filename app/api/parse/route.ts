@@ -3,6 +3,7 @@ import { getPostHogClient } from "@/src/lib/posthog-server";
 import { getMannKiBaatPrompt, MANN_KI_BAAT_TYPE_INSTRUCTIONS, getSystemPrompt } from "@/src/utils/prompts";
 import { formatDateYMD } from "@/src/utils/dates";
 import { ExpenseArraySchema } from "@/src/utils/schemas";
+import type { CurrencyCode } from "@/src/utils/money";
 
 type TierOutcome = "success" | "timeout" | "rate_limit" | "schema_fail" | "transport_error" | "truncation" | "cancelled";
 
@@ -303,7 +304,7 @@ function accept(
 
 export async function POST(request: NextRequest) {
   const reqStart = Date.now();
-  const body = (await request.json()) as { text?: string; type?: string; messageType?: string; currency?: string };
+  const body = (await request.json()) as { text?: string; type?: string; messageType?: string; currency?: CurrencyCode };
   const text = body.text?.trim();
   const requestType = body.type || "expense";
   if (!text) {
