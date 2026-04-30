@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 
 type AIResult = { text: string } | { error: string };
 
-const GEMINI_MODELS = (process.env.GEMINI_MODEL || "models/gemini-3.1-flash-lite-preview,models/gemma-3-27b-it")
+const GEMINI_MODELS = (process.env.GEMINI_MODEL || "")
   .split(",").map((m) => m.trim()).filter(Boolean);
 
 async function callGemini(prompt: string, base64: string, mimeType: string, model: string): Promise<AIResult> {
