@@ -16,6 +16,8 @@ import { SignalingProvider, useSignaling } from "@/src/context/SignalingContext"
 import type { TabType } from "@/src/components/BottomTabBar";
 
 const BottomTabBar = dynamic(() => import("@/src/components/BottomTabBar").then(m => ({ default: m.BottomTabBar })), { ssr: false });
+const UnifiedInputPill = dynamic(() => import("@/src/components/UnifiedInputPill").then(m => ({ default: m.UnifiedInputPill })), { ssr: false });
+
 // const StreakBadge = dynamic(() => import("@/src/components/StreakBadge").then(m => ({ default: m.StreakBadge })), { ssr: false });
 
 const HomeView = dynamic(() => import("@/src/components/HomeView").then(m => ({ default: m.HomeView })), { ssr: false });
@@ -924,9 +926,8 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
         <>
           <AgentChat open={isChatOpen} onClose={() => setIsChatOpen(false)} />
           {/* <AgentFab /> */}
-          <BottomTabBar
+          <UnifiedInputPill
             activeTab={activeTab}
-            onTabChange={handleTabChange}
             isRecording={isRecording}
             isSpeaking={streamingSTT.isUserSpeaking}
             isProcessing={isProcessing}
@@ -935,6 +936,10 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
             onTextSubmit={processTextInput}
             transcriptFeedback={transcriptFeedback ? { ...transcriptFeedback, currencySymbol } : null}
             onUndoTranscript={handleUndoTranscript}
+          />
+          <BottomTabBar
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
           />
         </>
       )}

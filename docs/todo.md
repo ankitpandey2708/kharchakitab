@@ -20,34 +20,3 @@ End of month/week shareable story-format cards with stats and a vibe-based headl
 
 # todo
 1. Replace "Who owes whom" with a dynamic pie chart showing contribution vs. agreed-upon household ratio.
-2. Evaluate **Silero VAD** for better noise handling in high-ambient environments (replaces heuristic RMS).
-3. Research **Sarvam Edge** or streaming architecture to reduce network-induced STT latency.
-4. Consider **Deepgram Flux** for context-aware end-of-turn detection if moving to a streaming pipeline.
-
-
-
-*******
-await new Promise(r => indexedDB.open("QuickLogDB").onsuccess = e => e.target.result.transaction("transactions").objectStore("transactions").getAll().onsuccess = ev => r(ev.target.result.sort((a, b) => a.timestamp - b.timestamp).map(tx => ({...tx, timestamp: new Date(tx.timestamp).toLocaleDateString("en-IN", {day: "2-digit", month: "short", year: "numeric"})}))));
-
-*******
-iOS User Setup (send this to any iOS user)
-
-PART 1 — Install the app (do this first, takes 30 seconds)
-1. Open this link in Safari (not Chrome, not Instagram — must be Safari).
-2. Tap the Share button (box with arrow icon) at the bottom of Safari.
-3. Scroll down → tap “Add to Home Screen” → tap “Add”.
-4. Close Safari. Open KharchaKitab from your home screen icon.
-5. When asked about notifications → tap Allow (needed for payment reminders).
-    - If you tapped Don’t Allow: Settings → KharchaKitab → Notifications → Allow.
-
-PART 2 — Set up receipt scanning via share sheet (optional but useful)
-1. Open the Shortcuts app → tap + to create a new shortcut.
-2. Tap Add Action → search “Receive Images” → add it.
-    - Tap the action’s settings (i) and enable “Show in Share Sheet”.
-3. Tap Add Action → search “Get Contents of URL” → add it.
-    - URL: https://kharchakitab.vercel.app/api/share/submit
-    - Add a field: image = Shortcut Input
-4. Tap Add Action → search “Open URLs” → add it.
-    - Input should be the result from “Get Contents of URL”.
-5. Name the shortcut: KharchaKitab Share → tap Done.
-- Now: open any photo/receipt → Share → KharchaKitab Share → app opens with receipt loaded.
