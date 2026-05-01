@@ -1,4 +1,13 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
+import { createOpenAI } from '@ai-sdk/openai'
+import type { LanguageModel } from 'ai'
+import { geminiKey } from '@/src/lib/providers/circuit-breaker'
+
+interface AgentProvider {
+  key: string
+  label: string
+  model: LanguageModel
+}
 
 export const SYSTEM_PROMPT = `You are Kharchakitab's financial assistant. You help users understand their spending and manage their budget.
 
@@ -26,4 +35,28 @@ export function resolveModelId(): string {
 
 export function getGoogleProvider() {
   return createGoogleGenerativeAI({ apiKey: process.env.GEMINI_API_KEY })
+}
+
+export function resolveProviders(): AgentProvider[] {
+  const providers: AgentProvider[] = []
+
+  // Gemini models as fallback
+  const google = getGoogleProvider()
+  const geminiModels = (process.env.GEMINI_MODEL || '').split(',').map(s => s.trim()).filter(Boolean)
+  for (const m of geminiModels) {
+    const modelId = m.replace(/^models\//, '')
+    providers.push({ key: geminiKey(m), label: modelId, model: google(modelId) as LanguageModel })
+  }
+
+  // OpenRouter first (parity with /api/parse which uses OR as primary)
+  if (process.env.OPENROUTER_API_KEY) {
+    const orModel = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini'
+    const openrouter = createOpenAI({
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey: process.env.OPENROUTER_API_KEY,
+    })
+    providers.push({ key: 'openrouter', label: `openrouter/${orModel}`, model: openrouter(orModel) as LanguageModel })
+  }
+
+  return providers
 }

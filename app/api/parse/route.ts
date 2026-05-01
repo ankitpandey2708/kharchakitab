@@ -4,6 +4,9 @@ import { getMannKiBaatPrompt, MANN_KI_BAAT_TYPE_INSTRUCTIONS, getSystemPrompt } 
 import { formatDateYMD } from "@/src/utils/dates";
 import { ExpenseArraySchema } from "@/src/utils/schemas";
 import type { CurrencyCode } from "@/src/utils/money";
+import { isOnCooldown, setCooldown, geminiKey, extractRateLimit } from "@/src/lib/providers/circuit-breaker";
+import { generateText } from "ai";
+import { createOpenAI } from "@ai-sdk/openai";
 
 type TierOutcome = "success" | "timeout" | "rate_limit" | "schema_fail" | "transport_error" | "truncation" | "cancelled";
 
@@ -21,18 +24,6 @@ const HEDGE_DELAY_MS = 700;
 
 const GEMINI_MODELS = (process.env.GEMINI_MODEL || "")
   .split(",").map((m) => m.trim()).filter(Boolean);
-
-// In-memory per-model circuit breaker for 429s
-const rateLimitCooldown = new Map<string, number>();
-
-function isOnCooldown(key: string): boolean {
-  const expires = rateLimitCooldown.get(key);
-  return expires !== undefined && Date.now() < expires;
-}
-
-function setCooldown(key: string, retryAfterSec?: number) {
-  rateLimitCooldown.set(key, Date.now() + (retryAfterSec ?? 60) * 1000);
-}
 
 function modelLabel(model: string): string {
   return model.split("/").pop()!;
@@ -133,7 +124,7 @@ async function callGemini(
       const msg = errBody?.error?.message ?? `Gemini error ${response.status}`;
       if (response.status === 429) {
         const retryAfter = parseInt(response.headers.get("retry-after") ?? "", 10);
-        setCooldown(model, isNaN(retryAfter) ? 60 : retryAfter);
+        setCooldown(geminiKey(model), isNaN(retryAfter) ? 60 : retryAfter);
         console.log(`[AI] gemini: rate_limit model=${model} — ${msg}`);
         return { outcome: "rate_limit", latency_ms, error: msg };
       }
@@ -186,71 +177,44 @@ async function callOpenRouter(text: string, temperature: number, cancelSignal?: 
   const model = process.env.OPENROUTER_MODEL || "openrouter/free";
   const timeoutCtrl = new AbortController();
   const timer = setTimeout(() => timeoutCtrl.abort(), 10000);
-  const signal = mergeSignals(timeoutCtrl.signal, cancelSignal);
+  const abortSignal = mergeSignals(timeoutCtrl.signal, cancelSignal);
   const t0 = Date.now();
 
   console.log(`[AI] openrouter: sending request (model=${model}, temp=${temperature}, timeout=10000ms)`);
 
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      signal,
-      body: JSON.stringify({
-        model,
-        messages: [{ role: "user", content: text }],
-        temperature,
-        max_tokens: 1024,
-        response_format: { type: "json_object" },
-      }),
+    const openrouter = createOpenAI({ baseURL: "https://openrouter.ai/api/v1", apiKey });
+    const result = await generateText({
+      model: openrouter(model),
+      prompt: text,
+      temperature,
+      maxOutputTokens: 1024,
+      abortSignal,
     });
 
     const latency_ms = Date.now() - t0;
-    const resolvedModel = response.headers.get("x-model-id") ?? response.headers.get("openrouter-model") ?? "unknown";
-    const queueTime = response.headers.get("x-queue-time");
-    const genTime = response.headers.get("x-generation-time");
-    const rateLimit = response.headers.get("x-ratelimit-remaining-requests");
+    const truncated = result.finishReason === "length";
+    const output_tokens = result.usage?.outputTokens;
 
-    console.log(`[AI] openrouter: status=${response.status} ttfb=${latency_ms}ms model=${resolvedModel} queue=${queueTime}ms gen=${genTime}ms rl_remaining=${rateLimit}`);
+    console.log(`[AI] openrouter: success total=${latency_ms}ms finishReason=${result.finishReason} tokens=${output_tokens}`);
 
-    if (!response.ok) {
-      const errBody = (await response.json().catch(() => null)) as { error?: { message?: string; code?: number } } | null;
-      const msg = errBody?.error?.message ?? `OpenRouter error ${response.status}`;
-      if (response.status === 429) {
-        const retryAfter = parseInt(response.headers.get("retry-after") ?? "", 10);
-        setCooldown("openrouter", isNaN(retryAfter) ? 60 : retryAfter);
-        console.log(`[AI] openrouter: rate_limit — ${msg}`);
-        return { outcome: "rate_limit", latency_ms, error: msg };
-      }
-      console.log(`[AI] openrouter: FAILED status=${response.status} after ${latency_ms}ms — ${msg}`);
-      return { outcome: "transport_error", latency_ms, error: msg };
-    }
-
-    const data = (await response.json()) as {
-      model?: string;
-      choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
-      usage?: { completion_tokens?: number };
-    };
-
-    const latency_total = Date.now() - t0;
-    const finishReason = data.choices?.[0]?.finish_reason;
-    const output_tokens = data.usage?.completion_tokens;
-    const truncated = finishReason === "length";
-
-    console.log(`[AI] openrouter: success model=${data.model ?? resolvedModel} total=${latency_total}ms finishReason=${finishReason} tokens=${output_tokens}`);
-
-    const out = data.choices?.[0]?.message?.content;
-    if (!out) return { outcome: "transport_error", latency_ms: latency_total, output_tokens, error: "Empty response from OpenRouter." };
-
-    return { outcome: truncated ? "truncation" : "success", latency_ms: latency_total, output_tokens, truncated, text: out };
+    if (!result.text) return { outcome: "transport_error", latency_ms, output_tokens, error: "Empty response from OpenRouter." };
+    return { outcome: truncated ? "truncation" : "success", latency_ms, output_tokens, truncated, text: result.text };
   } catch (e) {
     const latency_ms = Date.now() - t0;
     if (e instanceof Error && e.name === "AbortError") {
+      if (cancelSignal?.aborted) {
+        console.log(`[AI] openrouter: cancelled after ${latency_ms}ms`);
+        return { outcome: "cancelled", latency_ms };
+      }
       console.log(`[AI] openrouter: timeout after ${latency_ms}ms`);
       return { outcome: "timeout", latency_ms, error: "Timeout after 10000ms" };
+    }
+    const { isRateLimit, retryAfterSec } = extractRateLimit(e);
+    if (isRateLimit) {
+      setCooldown("openrouter", retryAfterSec);
+      console.log(`[AI] openrouter: rate_limit — ${e instanceof Error ? e.message : e}`);
+      return { outcome: "rate_limit", latency_ms, error: e instanceof Error ? e.message : "Rate limited" };
     }
     console.log(`[AI] openrouter: exception after ${latency_ms}ms — ${e instanceof Error ? e.message : e}`);
     return { outcome: "transport_error", latency_ms, error: e instanceof Error ? e.message : "Network error reaching OpenRouter." };
@@ -355,7 +319,7 @@ export async function POST(request: NextRequest) {
       console.log(`[AI] hedge: openrouter slow after ${HEDGE_DELAY_MS}ms, firing gemini in parallel`);
 
       const orTier = nextTier();
-      const activeGemini = ([model1, model2].filter((m) => m && !isOnCooldown(m))) as string[];
+      const activeGemini = ([model1, model2].filter((m) => m && !isOnCooldown(geminiKey(m)))) as string[];
       const geminiCtrls = activeGemini.map(() => new AbortController());
       const geminiTiers = activeGemini.map(() => nextTier());
       const geminiPromises = activeGemini.map((m, i) =>
@@ -401,7 +365,7 @@ export async function POST(request: NextRequest) {
   // --- Gemini sequential fallback (OR on cooldown, or OR fast-failed before hedge fired) ---
   if (finalParsed === null) {
     for (const m of ([model1, model2].filter(Boolean)) as string[]) {
-      if (isOnCooldown(m)) {
+      if (isOnCooldown(geminiKey(m))) {
         const t = nextTier();
         telemetry[`${t}_outcome`] = "rate_limit_cooldown";
         telemetry[`${t}_latency_ms`] = 0;
