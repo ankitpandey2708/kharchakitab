@@ -22,3 +22,20 @@ export interface SwiggyActiveOrder {
   status: SwiggyOrderStatus;  // TODO: verify field name and values
   placed_at: number;          // unix ms — TODO: verify field name and format
 }
+
+type SwiggyInstamartOrderStatus =
+  | "placed"
+  | "packed"
+  | "out_for_delivery"
+  | "delivered"
+  | "cancelled"; // TODO: verify exact status strings from Swiggy Instamart
+
+export interface SwiggyInstamartOrder {
+  order_id: string;           // TODO: verify field name
+  store_name: string;         // TODO: verify field name (brand/dark-store name)
+  items_display: string;      // TODO: verify field name
+  total_amount: number;       // TODO: verify field name
+  payment_method: "upi" | "card" | "cash" | "wallet"; // TODO: verify values
+  status: SwiggyInstamartOrderStatus; // TODO: verify field name and values
+  placed_at: number;          // unix ms — TODO: verify field name and format
+}

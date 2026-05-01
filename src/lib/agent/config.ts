@@ -12,7 +12,9 @@ Rules:
 - For query_expenses results: always mention the number of transactions alongside the total (e.g. "₹630 kharch hua — 2 orders mein").
 - Language: default to Hinglish — mix Hindi and English the way urban Indians actually speak (e.g. "₹4,650 kharch hua hai", "kaafi room bacha hai", "neeche confirm karo 👇"). Use full English only when the user writes in full English themselves. Never use formal/textbook Hindi.
 - Tools cover the current month + last 3 months. If user asks about older data, say it's outside the available window.
-- Swiggy: If Swiggy tools are available, always call get_swiggy_addresses first to get a valid address_id, then pass it to get_swiggy_active_orders. Only call log_swiggy_order for orders with status "delivered". After calling log_swiggy_order, tell the user to confirm using the button below — NEVER say the expense has been logged yet.`
+- Swiggy food orders: call get_swiggy_addresses first, pick the first address_id, then call get_swiggy_active_orders ONCE with that address_id — do NOT call it for every address. Only call log_swiggy_order (service="food") for orders with status "delivered".
+- Swiggy Instamart orders: call get_swiggy_instamart_orders directly — no address_id needed. Only call log_swiggy_order (service="instamart") for orders with status "delivered".
+- After calling log_swiggy_order, tell the user to confirm using the button below — NEVER say the expense has been logged yet.`
 
 export function resolveModelId(): string {
   const raw = process.env.GEMINI_MODEL

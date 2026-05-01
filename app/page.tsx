@@ -924,7 +924,11 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
       {/* Bottom Tab Bar */}
       {!isTxnSheetOpen && (
         <>
-          <AgentChat open={isChatOpen} onClose={() => setIsChatOpen(false)} />
+          <AgentChat 
+            open={isChatOpen} 
+            onClose={() => setIsChatOpen(false)} 
+            onRefreshTransactions={refreshTransactions} 
+          />
           {/* <AgentFab /> */}
           <UnifiedInputPill
             activeTab={activeTab}

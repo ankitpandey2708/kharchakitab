@@ -31,12 +31,13 @@ const SUGGESTIONS = [
 interface AgentChatProps {
   open: boolean
   onClose: () => void
+  onRefreshTransactions?: () => void
 }
 
-export function AgentChat({ open, onClose }: AgentChatProps) {
+export function AgentChat({ open, onClose, onRefreshTransactions }: AgentChatProps) {
   const [messages, setMessages] = useState<any[]>([])
   const [displayMessages, setDisplayMessages] = useState<DisplayMessage[]>([])
-  const [pendingAction, setPendingAction] = useState<PendingWriteAction | null>(null)
+  const [pendingActions, setPendingActions] = useState<PendingWriteAction[]>([])
   const [loading, setLoading] = useState(false)
   const [input, setInput] = useState("")
 
@@ -76,7 +77,7 @@ export function AgentChat({ open, onClose }: AgentChatProps) {
       }
     }, 50)
     return () => clearTimeout(t)
-  }, [displayMessages, loading, pendingAction])
+  }, [displayMessages, loading, pendingActions])
 
   useEffect(() => {
     if (open) {
@@ -183,11 +184,11 @@ export function AgentChat({ open, onClose }: AgentChatProps) {
           snapshot,
         }),
       })
-      const { reply, responseMessages, pendingAction: pa } = await res.json()
+      const { reply, responseMessages, pendingActions: pas } = await res.json()
 
       setMessages(prev => [...prev, { role: "user", content: text }, ...responseMessages])
       setDisplayMessages(prev => [...prev, { role: "assistant", text: reply }])
-      setPendingAction(pa)
+      setPendingActions(pas ?? [])
     } catch {
       setDisplayMessages(prev => [...prev, { role: "assistant", text: "Something went wrong, try again." }])
     } finally {
@@ -234,7 +235,7 @@ export function AgentChat({ open, onClose }: AgentChatProps) {
         let fullText = ""
         let sentenceBuffer = ""
         let responseMessages: any[] = []
-        let pa: PendingWriteAction | null = null
+        let pa: PendingWriteAction[] = []
 
         // Reset TTS cancel flag for voice-initiated queries
         if (isVoice) {
@@ -306,8 +307,8 @@ export function AgentChat({ open, onClose }: AgentChatProps) {
                   }
                 } else if (parsed.type === "response_messages") {
                   responseMessages = parsed.messages
-                } else if (parsed.type === "pending_action") {
-                  pa = parsed.action
+                } else if (parsed.type === "pending_actions") {
+                  pa = parsed.actions
                 }
               } catch (e) {
                 console.warn("[AgentChat] Partial or malformed JSON in stream:", data)
@@ -332,13 +333,13 @@ export function AgentChat({ open, onClose }: AgentChatProps) {
         })
 
         setMessages(prev => [...prev, { role: "user", content: text }, ...responseMessages])
-        setPendingAction(pa)
+        setPendingActions(pa)
       } else {
         // Fallback: non-streaming JSON response (backward compat)
-        const { reply, responseMessages, pendingAction: pa } = await res.json()
+        const { reply, responseMessages, pendingActions: pas } = await res.json()
         setMessages(prev => [...prev, { role: "user", content: text }, ...responseMessages])
         setDisplayMessages(prev => [...prev, { role: "assistant", text: reply }])
-        setPendingAction(pa)
+        setPendingActions(pas ?? [])
       }
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
@@ -421,15 +422,16 @@ export function AgentChat({ open, onClose }: AgentChatProps) {
   }, [open, stopTTS, streamingSTT])
 
   async function handleConfirm(accepted: boolean) {
-    if (!pendingAction) return
+    const action = pendingActions[0]
+    if (!action) return
 
     if (accepted) {
-      if (pendingAction.tool === 'set_budget') {
+      if (action.tool === 'set_budget') {
         const snapshot = lastSnapshotRef.current
         if (snapshot) {
           const now = new Date()
           const mk = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
-          const amount = pendingAction.params.monthly_limit_inr
+          const amount = action.params.monthly_limit_inr
 
           if (snapshot.isHousehold) {
             const stored = JSON.parse(localStorage.getItem(LS.BUDGETS_HOUSEHOLD) || "{}")
@@ -443,29 +445,31 @@ export function AgentChat({ open, onClose }: AgentChatProps) {
             window.dispatchEvent(new StorageEvent("storage", { key: LS.BUDGETS }))
           }
         }
-        setPendingAction(null)
-        await sendSilent("User confirmed. Budget has been updated to ₹" + pendingAction.params.monthly_limit_inr + ".")
-      } else if (pendingAction.tool === 'log_swiggy_order') {
-        const { order_id, restaurant_name, amount, payment_method, items_display } = pendingAction.params
+        setPendingActions(prev => prev.slice(1))
+        onRefreshTransactions?.()
+        await sendSilent("User confirmed. Budget has been updated to ₹" + action.params.monthly_limit_inr + ".")
+      } else if (action.tool === 'log_swiggy_order') {
+        const { order_id, restaurant_name, amount, payment_method, items_display, service } = action.params
         await addTransaction({
           id: "",
           amount,
           item: `Swiggy: ${restaurant_name}`,
-          category: SERVICE_CATEGORY["food"],
+          category: SERVICE_CATEGORY[service ?? "food"],
           paymentMethod: payment_method === "card" ? "card" : payment_method === "cash" ? "cash" : "upi",
           timestamp: Date.now(),
         })
         const logged = new Set<string>(JSON.parse(localStorage.getItem("swiggy_logged_orders") ?? "[]"))
         logged.add(order_id)
         localStorage.setItem("swiggy_logged_orders", JSON.stringify([...logged]))
-        setPendingAction(null)
+        setPendingActions(prev => prev.slice(1))
+        onRefreshTransactions?.()
         await sendSilent(`User confirmed. Swiggy order from ${restaurant_name} (${items_display}) for ₹${amount} has been logged as an expense.`)
       }
     } else {
-      const declineMsg = pendingAction.tool === 'log_swiggy_order'
+      const declineMsg = action.tool === 'log_swiggy_order'
         ? "User declined logging the Swiggy order."
         : "User declined the budget change."
-      setPendingAction(null)
+      setPendingActions(prev => prev.slice(1))
       await sendSilent(declineMsg)
     }
   }
@@ -596,7 +600,7 @@ export function AgentChat({ open, onClose }: AgentChatProps) {
               )}
 
               {/* Confirmation Action Sheet */}
-              {pendingAction && (
+              {pendingActions.length > 0 && (
                 <motion.div
                   className="kk-chat-confirm-sheet"
                   initial={{ opacity: 0, y: 20 }}
@@ -610,28 +614,25 @@ export function AgentChat({ open, onClose }: AgentChatProps) {
                     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" })
                   }}
                 >
-                  {/* Mobile handle bar */}
-                  <div className="kk-chat-confirm-handle" />
-                  
                   <div className="kk-chat-confirm">
                     <div className="kk-chat-confirm-icon">
-                      {pendingAction.tool === 'log_swiggy_order'
+                      {pendingActions[0].tool === 'log_swiggy_order'
                         ? <ShoppingBag className="w-5 h-5" strokeWidth={2.5} aria-hidden="true" />
                         : <Sparkles className="w-5 h-5" strokeWidth={2.5} aria-hidden="true" />}
                     </div>
 
                     <p id="confirm-label" className="kk-chat-confirm-label">
-                      {pendingAction.tool === 'log_swiggy_order' ? 'Log Swiggy Order' : 'Confirm Action'}
+                      {pendingActions[0].tool === 'log_swiggy_order' ? 'Log Swiggy Order' : 'Confirm Action'}
                     </p>
                     <p id="confirm-text" className="kk-chat-confirm-text">
-                      {pendingAction.tool === 'log_swiggy_order'
-                        ? pendingAction.params.restaurant_name
+                      {pendingActions[0].tool === 'log_swiggy_order'
+                        ? pendingActions[0].params.restaurant_name
                         : 'Set monthly budget to'}
                     </p>
-                    <div className="kk-chat-confirm-amount" aria-label={`₹${(pendingAction.tool === 'log_swiggy_order' ? pendingAction.params.amount : pendingAction.params.monthly_limit_inr).toLocaleString("en-IN")}`}>
-                      ₹{(pendingAction.tool === 'log_swiggy_order' ? pendingAction.params.amount : pendingAction.params.monthly_limit_inr).toLocaleString("en-IN")}
+                    <div className="kk-chat-confirm-amount" aria-label={`₹${(pendingActions[0].tool === 'log_swiggy_order' ? pendingActions[0].params.amount : pendingActions[0].params.monthly_limit_inr).toLocaleString("en-IN")}`}>
+                      ₹{(pendingActions[0].tool === 'log_swiggy_order' ? pendingActions[0].params.amount : pendingActions[0].params.monthly_limit_inr).toLocaleString("en-IN")}
                     </div>
-                    
+
                     <div className="kk-chat-confirm-actions">
                       <button
                         onClick={() => handleConfirm(true)}

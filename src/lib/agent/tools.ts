@@ -2,7 +2,7 @@ import { zodSchema } from 'ai'
 import { z } from 'zod'
 import type { DataSnapshot } from './types'
 import type { Tool } from 'ai'
-import { fetchActiveOrders, fetchAddresses, isMockMode } from '@/src/lib/swiggy/client'
+import { fetchActiveOrders, fetchAddresses, fetchInstamartOrders, isMockMode } from '@/src/lib/swiggy/client'
 
 function monthKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
@@ -81,16 +81,26 @@ export function createAgentTools(snapshot: DataSnapshot, ctx: { swiggyToken?: st
       },
     } satisfies Tool,
 
+    get_swiggy_instamart_orders: {
+      description: 'Fetch the user\'s Swiggy Instamart grocery orders (past 15 days).',
+      inputSchema: zodSchema(z.object({})),
+      execute: async () => {
+        const orders = await fetchInstamartOrders(ctx.swiggyToken ?? 'mock')
+        return { orders }
+      },
+    } satisfies Tool,
+
     log_swiggy_order: {
       description: 'Log a Swiggy order as an expense. Only call for delivered orders. Returns pending_confirmation — the user must confirm in the UI. In your reply, tell the user to confirm using the button below.',
       inputSchema: zodSchema(z.object({
         order_id: z.string(),
-        restaurant_name: z.string(),
+        restaurant_name: z.string().describe('Restaurant name for food orders, store name for Instamart orders.'),
         amount: z.number(),
         payment_method: z.string().describe('upi, card, cash, or wallet'),
         items_display: z.string().describe('Short description of items ordered'),
+        service: z.enum(['food', 'instamart']).optional().describe('Source service — food (default) or instamart.'),
       })),
-      execute: async (input: { order_id: string; restaurant_name: string; amount: number; payment_method: string; items_display: string }) => {
+      execute: async (input: { order_id: string; restaurant_name: string; amount: number; payment_method: string; items_display: string; service?: 'food' | 'instamart' }) => {
         return {
           status: 'pending_swiggy_log' as const,
           order: input,

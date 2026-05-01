@@ -1,6 +1,6 @@
-import type { SwiggyAddress, SwiggyActiveOrder } from "./types";
+import type { SwiggyAddress, SwiggyActiveOrder, SwiggyInstamartOrder } from "./types";
 import type { CategoryKey } from "@/src/config/categories";
-import { SWIGGY_CLIENT_ID, SWIGGY_MCP_FOOD_URL } from "./oauth";
+import { SWIGGY_CLIENT_ID, SWIGGY_MCP_FOOD_URL, SWIGGY_MCP_INSTAMART_URL } from "./oauth";
 
 type SwiggyService = "food" | "instamart" | "dineout";
 
@@ -17,7 +17,6 @@ export const isMockMode = () =>
 
 const MOCK_ADDRESSES: SwiggyAddress[] = [
   { id: "addr_001", label: "Home", address: "Koramangala, Bengaluru" },
-  { id: "addr_002", label: "Work", address: "Indiranagar, Bengaluru" },
 ];
 
 function getMockOrderStatus(pollingStartMs: number): SwiggyActiveOrder["status"] {
@@ -45,10 +44,11 @@ function getMockActiveOrders(pollingStartMs: number): SwiggyActiveOrder[] {
 
 async function mcpCall<T>(
   token: string,
+  mcpUrl: string,
   toolName: string,
   args: Record<string, unknown> = {}
 ): Promise<T> {
-  const res = await fetch(SWIGGY_MCP_FOOD_URL, {
+  const res = await fetch(mcpUrl, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -85,6 +85,7 @@ export async function fetchAddresses(token: string): Promise<SwiggyAddress[]> {
   // TODO: verify response shape — assuming { data: { addresses: SwiggyAddress[] } }
   const res = await mcpCall<{ data?: { addresses?: SwiggyAddress[] } }>(
     token,
+    SWIGGY_MCP_FOOD_URL,
     "get_addresses"
   );
   return res.data?.addresses ?? [];
@@ -104,8 +105,38 @@ export async function fetchActiveOrders(
   // TODO: verify argument name — using "addressId" and "orderCount" per docs
   const res = await mcpCall<{ data?: { orders?: SwiggyActiveOrder[] } }>(
     token,
+    SWIGGY_MCP_FOOD_URL,
     "get_food_orders",
-    { addressId, orderCount: 20 }
+    { addressId }
+  );
+  return res.data?.orders ?? [];
+}
+
+const MOCK_INSTAMART_ORDERS: SwiggyInstamartOrder[] = [
+  {
+    order_id: "im_mock_001",
+    store_name: "Swiggy Instamart",
+    items_display: "Amul Milk 1L, Bread, Eggs (6pc)",
+    total_amount: 187,
+    payment_method: "upi",
+    status: "delivered",
+    placed_at: Date.now() - 2 * 60 * 60 * 1000,
+  },
+];
+
+export async function fetchInstamartOrders(
+  token: string
+): Promise<SwiggyInstamartOrder[]> {
+  if (isMockMode()) {
+    await new Promise((r) => setTimeout(r, 500));
+    return MOCK_INSTAMART_ORDERS;
+  }
+
+  // TODO: verify response shape — assuming { data: { orders: SwiggyInstamartOrder[] } }
+  const res = await mcpCall<{ data?: { orders?: SwiggyInstamartOrder[] } }>(
+    token,
+    SWIGGY_MCP_INSTAMART_URL,
+    "get_orders"
   );
   return res.data?.orders ?? [];
 }

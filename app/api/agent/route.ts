@@ -82,20 +82,20 @@ export async function POST(request: Request) {
             }
 
             // After streaming is done, check for pending actions and send response messages
-            let pendingAction: PendingWriteAction | null = null
+            const pendingActions: PendingWriteAction[] = []
             const steps = await streamResult.steps
             console.log('[agent] stream steps:', steps.length, 'tools-called:', steps.flatMap(s => s.toolCalls.map(tc => tc.toolName)))
             for (const step of steps) {
               for (const tr of step.toolResults) {
                 const output = tr.output as Record<string, unknown> | undefined
                 if (output?.status === 'pending_confirmation') {
-                  pendingAction = {
+                  pendingActions.push({
                     tool: 'set_budget',
                     params: { monthly_limit_inr: output.monthly_limit_inr as number },
-                  }
+                  })
                 } else if (output?.status === 'pending_swiggy_log') {
                   const o = output.order as Record<string, unknown>
-                  pendingAction = {
+                  pendingActions.push({
                     tool: 'log_swiggy_order',
                     params: {
                       order_id: o.order_id as string,
@@ -103,8 +103,9 @@ export async function POST(request: Request) {
                       amount: o.amount as number,
                       payment_method: o.payment_method as string,
                       items_display: o.items_display as string,
+                      service: (o.service as 'food' | 'instamart' | undefined) ?? 'food',
                     },
-                  }
+                  })
                 }
               }
             }
@@ -119,8 +120,8 @@ export async function POST(request: Request) {
               latencyMs: Date.now() - t0,
             })
             send({ type: 'response_messages', messages: response.messages })
-            if (pendingAction) {
-              send({ type: 'pending_action', action: pendingAction })
+            if (pendingActions.length > 0) {
+              send({ type: 'pending_actions', actions: pendingActions })
             }
             send({ type: 'done' })
           } catch (err) {
@@ -151,18 +152,18 @@ export async function POST(request: Request) {
       temperature: 0,
     })
 
-    let pendingAction: PendingWriteAction | null = null
+    const pendingActions: PendingWriteAction[] = []
     for (const step of result.steps) {
       for (const tr of step.toolResults) {
         const output = tr.output as Record<string, unknown> | undefined
         if (output?.status === 'pending_confirmation') {
-          pendingAction = {
+          pendingActions.push({
             tool: 'set_budget',
             params: { monthly_limit_inr: output.monthly_limit_inr as number },
-          }
+          })
         } else if (output?.status === 'pending_swiggy_log') {
           const o = output.order as Record<string, unknown>
-          pendingAction = {
+          pendingActions.push({
             tool: 'log_swiggy_order',
             params: {
               order_id: o.order_id as string,
@@ -170,8 +171,9 @@ export async function POST(request: Request) {
               amount: o.amount as number,
               payment_method: o.payment_method as string,
               items_display: o.items_display as string,
+              service: (o.service as 'food' | 'instamart' | undefined) ?? 'food',
             },
-          }
+          })
         }
       }
     }
@@ -190,7 +192,7 @@ export async function POST(request: Request) {
     return Response.json({
       reply: result.text,
       responseMessages: result.response.messages,
-      pendingAction,
+      pendingActions,
     })
   } catch (error) {
     console.error('agent:error', error)

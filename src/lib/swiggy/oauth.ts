@@ -19,3 +19,4 @@ export const SWIGGY_AUTH_URL = "https://mcp.swiggy.com/auth/authorize";
 export const SWIGGY_TOKEN_URL = "https://mcp.swiggy.com/auth/token";
 export const SWIGGY_LOGOUT_URL = "https://mcp.swiggy.com/auth/logout";
 export const SWIGGY_MCP_FOOD_URL = "https://mcp.swiggy.com/food";
+export const SWIGGY_MCP_INSTAMART_URL = "https://mcp.swiggy.com/im";

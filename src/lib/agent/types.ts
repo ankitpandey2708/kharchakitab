@@ -41,5 +41,6 @@ export type PendingWriteAction =
         amount: number
         payment_method: string
         items_display: string
+        service?: 'food' | 'instamart'
       }
     }
