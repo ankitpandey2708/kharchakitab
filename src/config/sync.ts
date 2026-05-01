@@ -1,5 +1,5 @@
 export const SIGNALING_URL =
-  process.env.NEXT_PUBLIC_SIGNALING_URL || "ws://localhost:7071";
+  process.env.NEXT_PUBLIC_SIGNALING_URL || "ws://127.0.0.1:7071";
 
 const TURN_USERNAME = process.env.NEXT_PUBLIC_TURN_USERNAME;
 const TURN_CREDENTIAL = process.env.NEXT_PUBLIC_TURN_CREDENTIAL;

@@ -31,8 +31,8 @@ export class SignalingClient {
         resolve();
       };
 
-      ws.onerror = (err) => {
-        console.error(`[Signaling] WebSocket error:`, err);
+      ws.onerror = () => {
+        console.log(`[Signaling] WebSocket connection failed (readyState: ${ws.readyState}), will retry...`);
         reject(new Error("WebSocket connection failed"));
       };
 
@@ -57,8 +57,8 @@ export class SignalingClient {
         }
       };
 
-      ws.onclose = () => {
-        console.log(`[Signaling] WebSocket closed`);
+      ws.onclose = (event) => {
+        console.log(`[Signaling] WebSocket closed. Code: ${event.code}, Reason: ${event.reason}, WasClean: ${event.wasClean}`);
         this.pending.clear();
         if (!this.intentionalClose) {
           // Emit disconnected so the UI can reflect the dropped state

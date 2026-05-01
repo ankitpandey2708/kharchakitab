@@ -24,6 +24,8 @@ export interface Env {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    console.log(`[Worker] Incoming request: ${request.method} ${request.url}`);
+    console.log(`[Worker] Upgrade header: ${request.headers.get("upgrade")}`);
     // Health check for uptime monitors
     if (request.headers.get("upgrade") !== "websocket") {
       return new Response("OK", { status: 200 });
@@ -31,7 +33,9 @@ export default {
     // Route all WebSocket connections to the single global DO instance
     const id = env.SIGNALING.idFromName("global");
     const stub = env.SIGNALING.get(id);
-    return stub.fetch(request);
+    const resp = await stub.fetch(request);
+    console.log(`[Worker] DO response status: ${resp.status}, hasWebSocket: ${!!resp.webSocket}`);
+    return resp;
   },
 };
 
@@ -72,12 +76,14 @@ export class SignalingDO {
   }
 
   async fetch(request: Request): Promise<Response> {
+    console.log(`[SignalingDO] Incoming request: ${request.method} ${request.url}`);
     if (request.headers.get("upgrade") !== "websocket") {
       return new Response("Expected WebSocket upgrade", { status: 426 });
     }
 
     const pair = new WebSocketPair();
-    const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
+    const client = pair[0];
+    const server = pair[1];
 
     // Hibernation API — DO sleeps when all connections are idle
     this.state.acceptWebSocket(server);
@@ -366,8 +372,9 @@ export class SignalingDO {
     }
   }
 
-  async webSocketClose(ws: WebSocket): Promise<void> {
+  async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean): Promise<void> {
     const att = ws.deserializeAttachment() as WsAttachment;
+    console.log(`[SignalingDO] WebSocket closed: conn_id=${att?.conn_id}, code=${code}, reason=${reason}, wasClean=${wasClean}`);
     const sarvam = this.sarvamProxies.get(att.conn_id);
     if (sarvam) {
       try { sarvam.close(); } catch { /* ignore */ }
@@ -375,8 +382,9 @@ export class SignalingDO {
     }
   }
 
-  async webSocketError(ws: WebSocket): Promise<void> {
-    await this.webSocketClose(ws);
+  async webSocketError(ws: WebSocket, error: any): Promise<void> {
+    console.error(`[SignalingDO] WebSocket error:`, error);
+    await this.webSocketClose(ws, 1011, "Internal Error", false);
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────

@@ -61,88 +61,89 @@ export const SignalingProvider = ({ children }: { children: React.ReactNode }) =
             return;
         }
         setError(null);
-        try {
-            console.log("[Signaling] Starting connection to:", SIGNALING_URL);
-            const identity = await getDeviceIdentity();
-            if (!identity) {
-                console.warn("[Signaling] No identity found, cannot connect");
+
+        const identity = await getDeviceIdentity();
+        if (!identity) {
+            console.warn("[Signaling] No identity found, cannot connect");
+            return;
+        }
+
+        const client = new SignalingClient(SIGNALING_URL);
+        // Store before awaiting so cleanup can always reach and disconnect it.
+        clientRef.current = client;
+
+        const joinPresenceLocal = () => {
+            client.send("presence:join", {
+                device_id: identity.device_id,
+                display_name: identity.display_name,
+            });
+        };
+
+        const startHeartbeat = () => {
+            if (intervalRef.current) window.clearInterval(intervalRef.current);
+            intervalRef.current = window.setInterval(() => {
+                if (client.isConnected()) {
+                    client.send("presence:ping", { device_id: identity.device_id });
+                }
+            }, 20000);
+        };
+
+        // REGISTER GLOBAL LISTENERS (Before connect)
+        client.on("pairing:request", async (payload) => {
+            const timestamp = new Date().toISOString();
+            console.log(`[${timestamp}] [Pairing] Received pairing:request:`, payload);
+            if (!payload) return;
+
+            const device = await getDeviceIdentity();
+            if (payload.to_device_id !== device?.device_id) {
+                console.log(`[${timestamp}] [Pairing] Request not for us. Target: ${payload.to_device_id}, Us: ${device?.device_id}`);
                 return;
             }
 
-            const client = new SignalingClient(SIGNALING_URL);
-
-            const joinPresenceLocal = () => {
-                client.send("presence:join", {
-                    device_id: identity.device_id,
-                    display_name: identity.display_name,
-                });
-            };
-
-            const startHeartbeat = () => {
-                if (intervalRef.current) window.clearInterval(intervalRef.current);
-                intervalRef.current = window.setInterval(() => {
-                    if (client.isConnected()) {
-                        client.send("presence:ping", { device_id: identity.device_id });
-                    }
-                }, 20000);
-            };
-
-            // REGISTER GLOBAL LISTENERS (Before connect)
-            client.on("pairing:request", async (payload) => {
-                const timestamp = new Date().toISOString();
-                console.log(`[${timestamp}] [Pairing] Received pairing:request:`, payload);
-                if (!payload) return;
-
-                const device = await getDeviceIdentity();
-                if (payload.to_device_id !== device?.device_id) {
-                    console.log(`[${timestamp}] [Pairing] Request not for us. Target: ${payload.to_device_id}, Us: ${device?.device_id}`);
-                    return;
-                }
-
-                console.log(`[${timestamp}] [Pairing] Request is for us! Display name: ${payload.from_display_name}`);
-                pairingRef.current.setIncomingPair({
-                    session_id: payload.session_id,
-                    from_device_id: payload.from_device_id,
-                    from_display_name: payload.from_display_name,
-                });
-
+            console.log(`[${timestamp}] [Pairing] Request is for us! Display name: ${payload.from_display_name}`);
+            pairingRef.current.setIncomingPair({
+                session_id: payload.session_id,
+                from_device_id: payload.from_device_id,
+                from_display_name: payload.from_display_name,
             });
 
-            client.on("pairing:cancel", (payload) => {
-                const timestamp = new Date().toISOString();
-                console.log(`[${timestamp}] [Pairing] Received pairing:cancel:`, payload);
-                pairingRef.current.setIncomingPair(null);
-            });
+        });
 
-            client.on("error", (payload) => {
-                console.error("[Signaling] Server error:", payload);
-                setError(payload?.message ?? "Signaling error");
-            });
+        client.on("pairing:cancel", (payload) => {
+            const timestamp = new Date().toISOString();
+            console.log(`[${timestamp}] [Pairing] Received pairing:cancel:`, payload);
+            pairingRef.current.setIncomingPair(null);
+        });
 
-            client.on("disconnected", () => {
-                console.log("[Signaling] Connection lost, waiting to reconnect...");
-                setIsConnected(false);
-            });
+        client.on("error", (payload) => {
+            console.error("[Signaling] Server error:", payload);
+            setError(payload?.message ?? "Signaling error");
+        });
 
-            client.on("reconnected", () => {
-                console.log("[Signaling] Reconnected, re-joining presence");
-                joinPresenceLocal();
-                startHeartbeat();
-                setIsConnected(true);
-                setError(null);
-            });
+        client.on("disconnected", () => {
+            console.log("[Signaling] Connection lost, waiting to reconnect...");
+            setIsConnected(false);
+        });
 
-            await client.connect();
-            clientRef.current = client;
-
+        client.on("reconnected", () => {
+            console.log("[Signaling] Reconnected, re-joining presence");
             joinPresenceLocal();
             startHeartbeat();
+            setIsConnected(true);
+            setError(null);
+        });
 
+        try {
+            console.log("[Signaling] Starting connection to:", SIGNALING_URL);
+            await client.connect();
+            joinPresenceLocal();
+            startHeartbeat();
             console.log("[Signaling] Connection successful, joined presence");
             setIsConnected(true);
-        } catch (err) {
-            console.error("[Signaling] Connection failed:", err);
-            setError(err instanceof Error ? err.message : "Failed to connect to signaling server");
+        } catch {
+            // Worker not ready yet — the client's internal reconnect loop will recover.
+            // onclose fires after onerror and scheduleReconnect handles retries.
+            console.log("[Signaling] Initial connect failed, will retry automatically...");
         }
     }, []);
 
