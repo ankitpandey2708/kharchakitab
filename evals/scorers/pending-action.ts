@@ -8,14 +8,13 @@ export function pendingActionScorer(input: ScorerInput): ScoreResult {
   if (!actual) {
     return { name: 'pending-action', pass: false, detail: `expected ${expected.tool}(${expected.monthly_limit_inr}) but none emitted` }
   }
-  const pass =
-    actual.tool === expected.tool &&
-    actual.params.monthly_limit_inr === expected.monthly_limit_inr
+  const actualAmount = actual.tool === 'set_budget' ? actual.params.monthly_limit_inr : undefined
+  const pass = actual.tool === expected.tool && actualAmount === expected.monthly_limit_inr
   return {
     name: 'pending-action',
     pass,
     detail: pass
-      ? `matched ${actual.tool}(${actual.params.monthly_limit_inr})`
-      : `got ${actual.tool}(${actual.params.monthly_limit_inr}), expected ${expected.tool}(${expected.monthly_limit_inr})`,
+      ? `matched ${actual.tool}(${actualAmount})`
+      : `got ${actual.tool}(${actualAmount}), expected ${expected.tool}(${expected.monthly_limit_inr})`,
   }
 }

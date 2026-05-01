@@ -1,4 +1,5 @@
 import { generateText, streamText, stepCountIs } from 'ai'
+import { cookies } from 'next/headers'
 import { createAgentTools } from '@/src/lib/agent/tools'
 import { SYSTEM_PROMPT, resolveModelId, getGoogleProvider } from '@/src/lib/agent/config'
 import type { DataSnapshot, PendingWriteAction } from '@/src/lib/agent/types'
@@ -49,7 +50,9 @@ export async function POST(request: Request) {
       stream?: boolean
     } = await request.json()
 
-    const tools = createAgentTools(snapshot)
+    const cookieStore = await cookies()
+    const swiggyToken = cookieStore.get('swiggy_access_token')?.value
+    const tools = createAgentTools(snapshot, { swiggyToken })
 
     // ── Streaming path ──
     if (wantStream) {
@@ -85,10 +88,22 @@ export async function POST(request: Request) {
             for (const step of steps) {
               for (const tr of step.toolResults) {
                 const output = tr.output as Record<string, unknown> | undefined
-                if (output && output.status === 'pending_confirmation') {
+                if (output?.status === 'pending_confirmation') {
                   pendingAction = {
                     tool: 'set_budget',
                     params: { monthly_limit_inr: output.monthly_limit_inr as number },
+                  }
+                } else if (output?.status === 'pending_swiggy_log') {
+                  const o = output.order as Record<string, unknown>
+                  pendingAction = {
+                    tool: 'log_swiggy_order',
+                    params: {
+                      order_id: o.order_id as string,
+                      restaurant_name: o.restaurant_name as string,
+                      amount: o.amount as number,
+                      payment_method: o.payment_method as string,
+                      items_display: o.items_display as string,
+                    },
                   }
                 }
               }
@@ -140,10 +155,22 @@ export async function POST(request: Request) {
     for (const step of result.steps) {
       for (const tr of step.toolResults) {
         const output = tr.output as Record<string, unknown> | undefined
-        if (output && output.status === 'pending_confirmation') {
+        if (output?.status === 'pending_confirmation') {
           pendingAction = {
             tool: 'set_budget',
             params: { monthly_limit_inr: output.monthly_limit_inr as number },
+          }
+        } else if (output?.status === 'pending_swiggy_log') {
+          const o = output.order as Record<string, unknown>
+          pendingAction = {
+            tool: 'log_swiggy_order',
+            params: {
+              order_id: o.order_id as string,
+              restaurant_name: o.restaurant_name as string,
+              amount: o.amount as number,
+              payment_method: o.payment_method as string,
+              items_display: o.items_display as string,
+            },
           }
         }
       }

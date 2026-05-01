@@ -28,9 +28,18 @@ export interface DataSnapshot {
   }>
 }
 
-export interface PendingWriteAction {
-  tool: 'set_budget'
-  params: {
-    monthly_limit_inr: number
-  }
-}
+export type PendingWriteAction =
+  | {
+      tool: 'set_budget'
+      params: { monthly_limit_inr: number }
+    }
+  | {
+      tool: 'log_swiggy_order'
+      params: {
+        order_id: string
+        restaurant_name: string
+        amount: number
+        payment_method: string
+        items_display: string
+      }
+    }

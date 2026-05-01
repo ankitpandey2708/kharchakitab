@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Bell,
   Check,
@@ -9,6 +9,7 @@ import {
   Coins,
   Pencil,
   Share2,
+  ShoppingBag,
   Smartphone,
   Users,
   Volume2,
@@ -204,6 +205,104 @@ const DeviceNameRow = React.memo(() => {
 
 DeviceNameRow.displayName = "DeviceNameRow";
 
+const SwiggyConnectRow = React.memo(() => {
+  const [isLinked, setIsLinked] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const popupRef = useRef<Window | null>(null);
+  const messageHandlerRef = useRef<((e: MessageEvent) => void) | null>(null);
+
+  useEffect(() => {
+    setIsLinked(localStorage.getItem("swiggy_linked") === "true");
+  }, []);
+
+  const cleanupPopup = useCallback(() => {
+    if (messageHandlerRef.current) {
+      window.removeEventListener("message", messageHandlerRef.current);
+      messageHandlerRef.current = null;
+    }
+    if (popupRef.current && !popupRef.current.closed) popupRef.current.close();
+    popupRef.current = null;
+  }, []);
+
+  const handleConnect = useCallback(() => {
+    setError(null);
+    setIsConnecting(true);
+    const popup = window.open("/api/swiggy/authorize", "swiggy_auth", "width=480,height=640,left=200,top=100");
+    if (!popup) {
+      setError("Popup blocked. Allow popups for this site.");
+      setIsConnecting(false);
+      return;
+    }
+    popupRef.current = popup;
+    const handler = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin) return;
+      if (e.data?.type === "SWIGGY_CONNECTED") {
+        cleanupPopup();
+        localStorage.setItem("swiggy_linked", "true");
+        setIsLinked(true);
+        setIsConnecting(false);
+      } else if (e.data?.type === "SWIGGY_ERROR") {
+        cleanupPopup();
+        setError(e.data.error ?? "Authentication failed");
+        setIsConnecting(false);
+      }
+    };
+    messageHandlerRef.current = handler;
+    window.addEventListener("message", handler);
+    const pollClosed = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(pollClosed);
+        if (messageHandlerRef.current) { cleanupPopup(); setIsConnecting(false); }
+      }
+    }, 500);
+  }, [cleanupPopup]);
+
+  const handleDisconnect = useCallback(async () => {
+    await fetch("/api/swiggy/disconnect", { method: "POST" });
+    localStorage.removeItem("swiggy_linked");
+    localStorage.removeItem("swiggy_address_id");
+    setIsLinked(false);
+  }, []);
+
+  return (
+    <div className="space-y-1.5">
+      {isLinked ? (
+        <SettingRow
+          icon={<ShoppingBag className="h-4 w-4" />}
+          label="Swiggy"
+          description="Connected — ask the assistant about your orders"
+        >
+          <button
+            type="button"
+            onClick={() => void handleDisconnect()}
+            className="text-xs text-[var(--kk-ash)] hover:text-[var(--kk-ink)] transition-colors"
+          >
+            Disconnect
+          </button>
+        </SettingRow>
+      ) : (
+        <ActionRow
+          icon={<ShoppingBag className="h-4 w-4" />}
+          label="Swiggy"
+          description={isConnecting ? "Waiting for login…" : "Connect to log deliveries via the assistant"}
+          onClick={isConnecting ? undefined : handleConnect}
+          trailing={
+            isConnecting
+              ? <span className="text-xs text-[var(--kk-ash)]">Connecting…</span>
+              : <ChevronRight className="h-4 w-4 text-[var(--kk-ash)]" />
+          }
+        />
+      )}
+      {error && (
+        <p className="px-1 text-xs text-[var(--kk-danger)]">{error}</p>
+      )}
+    </div>
+  );
+});
+
+SwiggyConnectRow.displayName = "SwiggyConnectRow";
+
 interface ProfileViewProps {
   onOpenSync: () => void;
   onOpenNotifications: () => void;
@@ -299,6 +398,11 @@ export const ProfileView = React.memo(({ onOpenSync, onOpenNotifications }: Prof
               <SoundToggle />
             </SettingRow>
           </div>
+
+          <SectionDivider />
+
+          <SectionHeader>Integrations</SectionHeader>
+          <SwiggyConnectRow />
 
           <SectionDivider />
 

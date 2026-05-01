@@ -3,8 +3,10 @@ console.log("[AgentChat] v2.1 Loaded")
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Send, Check, XIcon, Sparkles, Volume2 } from "lucide-react"
+import { X, Send, Check, XIcon, Sparkles, Volume2, ShoppingBag } from "lucide-react"
 import { RecordingPill } from "@/src/components/RecordingPill"
+import { addTransaction } from "@/src/db/db"
+import { SERVICE_CATEGORY } from "@/src/lib/swiggy/client"
 import { buildSnapshot } from "@/src/lib/agent/snapshot"
 import { useStreamingSTT } from "@/src/hooks/useStreamingSTT"
 import type { PendingWriteAction, DataSnapshot } from "@/src/lib/agent/types"
@@ -422,30 +424,49 @@ export function AgentChat({ open, onClose }: AgentChatProps) {
     if (!pendingAction) return
 
     if (accepted) {
-      const snapshot = lastSnapshotRef.current
-      if (snapshot) {
-        const now = new Date()
-        const mk = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
-        const amount = pendingAction.params.monthly_limit_inr
+      if (pendingAction.tool === 'set_budget') {
+        const snapshot = lastSnapshotRef.current
+        if (snapshot) {
+          const now = new Date()
+          const mk = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+          const amount = pendingAction.params.monthly_limit_inr
 
-        if (snapshot.isHousehold) {
-          const stored = JSON.parse(localStorage.getItem(LS.BUDGETS_HOUSEHOLD) || "{}")
-          stored[mk] = { amount, updated_at: Date.now(), set_by: snapshot.deviceId }
-          localStorage.setItem(LS.BUDGETS_HOUSEHOLD, JSON.stringify(stored))
-          window.dispatchEvent(new StorageEvent("storage", { key: LS.BUDGETS_HOUSEHOLD }))
-        } else {
-          const stored = JSON.parse(localStorage.getItem(LS.BUDGETS) || "{}")
-          stored[mk] = amount
-          localStorage.setItem(LS.BUDGETS, JSON.stringify(stored))
-          window.dispatchEvent(new StorageEvent("storage", { key: LS.BUDGETS }))
+          if (snapshot.isHousehold) {
+            const stored = JSON.parse(localStorage.getItem(LS.BUDGETS_HOUSEHOLD) || "{}")
+            stored[mk] = { amount, updated_at: Date.now(), set_by: snapshot.deviceId }
+            localStorage.setItem(LS.BUDGETS_HOUSEHOLD, JSON.stringify(stored))
+            window.dispatchEvent(new StorageEvent("storage", { key: LS.BUDGETS_HOUSEHOLD }))
+          } else {
+            const stored = JSON.parse(localStorage.getItem(LS.BUDGETS) || "{}")
+            stored[mk] = amount
+            localStorage.setItem(LS.BUDGETS, JSON.stringify(stored))
+            window.dispatchEvent(new StorageEvent("storage", { key: LS.BUDGETS }))
+          }
         }
+        setPendingAction(null)
+        await sendSilent("User confirmed. Budget has been updated to ₹" + pendingAction.params.monthly_limit_inr + ".")
+      } else if (pendingAction.tool === 'log_swiggy_order') {
+        const { order_id, restaurant_name, amount, payment_method, items_display } = pendingAction.params
+        await addTransaction({
+          id: "",
+          amount,
+          item: `Swiggy: ${restaurant_name}`,
+          category: SERVICE_CATEGORY["food"],
+          paymentMethod: payment_method === "card" ? "card" : payment_method === "cash" ? "cash" : "upi",
+          timestamp: Date.now(),
+        })
+        const logged = new Set<string>(JSON.parse(localStorage.getItem("swiggy_logged_orders") ?? "[]"))
+        logged.add(order_id)
+        localStorage.setItem("swiggy_logged_orders", JSON.stringify([...logged]))
+        setPendingAction(null)
+        await sendSilent(`User confirmed. Swiggy order from ${restaurant_name} (${items_display}) for ₹${amount} has been logged as an expense.`)
       }
-
-      setPendingAction(null)
-      await sendSilent("User confirmed. Budget has been updated to ₹" + pendingAction.params.monthly_limit_inr + ".")
     } else {
+      const declineMsg = pendingAction.tool === 'log_swiggy_order'
+        ? "User declined logging the Swiggy order."
+        : "User declined the budget change."
       setPendingAction(null)
-      await sendSilent("User declined the budget change.")
+      await sendSilent(declineMsg)
     }
   }
 
@@ -593,17 +614,22 @@ export function AgentChat({ open, onClose }: AgentChatProps) {
                   <div className="kk-chat-confirm-handle" />
                   
                   <div className="kk-chat-confirm">
-                    {/* Warning icon */}
                     <div className="kk-chat-confirm-icon">
-                      <Sparkles className="w-5 h-5" strokeWidth={2.5} aria-hidden="true" />
+                      {pendingAction.tool === 'log_swiggy_order'
+                        ? <ShoppingBag className="w-5 h-5" strokeWidth={2.5} aria-hidden="true" />
+                        : <Sparkles className="w-5 h-5" strokeWidth={2.5} aria-hidden="true" />}
                     </div>
-                    
-                    <p id="confirm-label" className="kk-chat-confirm-label">Confirm Action</p>
-                    <p id="confirm-text" className="kk-chat-confirm-text">
-                      Set monthly budget to
+
+                    <p id="confirm-label" className="kk-chat-confirm-label">
+                      {pendingAction.tool === 'log_swiggy_order' ? 'Log Swiggy Order' : 'Confirm Action'}
                     </p>
-                    <div className="kk-chat-confirm-amount" aria-label={`₹${pendingAction.params.monthly_limit_inr.toLocaleString("en-IN")}`}>
-                      ₹{pendingAction.params.monthly_limit_inr.toLocaleString("en-IN")}
+                    <p id="confirm-text" className="kk-chat-confirm-text">
+                      {pendingAction.tool === 'log_swiggy_order'
+                        ? pendingAction.params.restaurant_name
+                        : 'Set monthly budget to'}
+                    </p>
+                    <div className="kk-chat-confirm-amount" aria-label={`₹${(pendingAction.tool === 'log_swiggy_order' ? pendingAction.params.amount : pendingAction.params.monthly_limit_inr).toLocaleString("en-IN")}`}>
+                      ₹{(pendingAction.tool === 'log_swiggy_order' ? pendingAction.params.amount : pendingAction.params.monthly_limit_inr).toLocaleString("en-IN")}
                     </div>
                     
                     <div className="kk-chat-confirm-actions">

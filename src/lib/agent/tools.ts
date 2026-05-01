@@ -2,6 +2,7 @@ import { zodSchema } from 'ai'
 import { z } from 'zod'
 import type { DataSnapshot } from './types'
 import type { Tool } from 'ai'
+import { fetchActiveOrders, fetchAddresses, isMockMode } from '@/src/lib/swiggy/client'
 
 function monthKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
@@ -55,8 +56,49 @@ function filterByPeriod(expenses: DataSnapshot['expenses'], period: string) {
   return expenses.filter(e => e.timestamp >= startMs && e.timestamp <= endMs)
 }
 
-export function createAgentTools(snapshot: DataSnapshot) {
+export function createAgentTools(snapshot: DataSnapshot, ctx: { swiggyToken?: string } = {}) {
   let budgetRequested = false
+
+  const swiggyTools: Record<string, Tool> = (ctx.swiggyToken || isMockMode()) ? {
+    get_swiggy_addresses: {
+      description: 'Fetch the user\'s saved Swiggy delivery addresses. Call this first before get_swiggy_active_orders to obtain a valid address_id.',
+      inputSchema: zodSchema(z.object({})),
+      execute: async () => {
+        const addresses = await fetchAddresses(ctx.swiggyToken ?? 'mock')
+        return { addresses }
+      },
+    } satisfies Tool,
+
+    get_swiggy_active_orders: {
+      description: 'Fetch the user\'s active Swiggy food orders. Call get_swiggy_addresses first to get a valid address_id, then pass it here.',
+      inputSchema: zodSchema(z.object({
+        address_id: z.string().describe('Delivery address ID from get_swiggy_addresses.'),
+      })),
+      execute: async ({ address_id }: { address_id: string }) => {
+        const pollingStart = isMockMode() ? Date.now() - 15_000 : Date.now()
+        const orders = await fetchActiveOrders(ctx.swiggyToken ?? 'mock', address_id, pollingStart)
+        return { orders }
+      },
+    } satisfies Tool,
+
+    log_swiggy_order: {
+      description: 'Log a Swiggy order as an expense. Only call for delivered orders. Returns pending_confirmation — the user must confirm in the UI. In your reply, tell the user to confirm using the button below.',
+      inputSchema: zodSchema(z.object({
+        order_id: z.string(),
+        restaurant_name: z.string(),
+        amount: z.number(),
+        payment_method: z.string().describe('upi, card, cash, or wallet'),
+        items_display: z.string().describe('Short description of items ordered'),
+      })),
+      execute: async (input: { order_id: string; restaurant_name: string; amount: number; payment_method: string; items_display: string }) => {
+        return {
+          status: 'pending_swiggy_log' as const,
+          order: input,
+          message: 'Expense has NOT been logged yet. A confirmation card is shown in the UI. Tell the user to confirm using the button below. Do NOT say the expense has been logged.',
+        }
+      },
+    } satisfies Tool,
+  } : {}
 
   return {
     query_expenses: {
@@ -242,5 +284,6 @@ export function createAgentTools(snapshot: DataSnapshot) {
         }
       },
     } satisfies Tool,
+    ...swiggyTools,
   }
 }
