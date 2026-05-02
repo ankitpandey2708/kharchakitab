@@ -1,8 +1,7 @@
-# Voice Agent Optimization Roadmap
+# Voice Infrastructure — Behaviour & Roadmap
 
-**Date:** 2026-04-04
+**Date:** 2026-05-02
 **Reference:** [Sub-500ms Voice Agent](https://www.ntik.me/posts/voice-agent)
-**Scope:** `src/components/AgentChat.tsx` and supporting voice infrastructure
 
 ---
 
@@ -14,36 +13,28 @@
 | TTS pipelining | Sentence-level TTS dispatch while LLM still streams |
 | Barge-in | Cancels in-flight LLM + stops TTS on mic tap |
 | TTFT tracking | PostHog event `voice_query_ttft` |
-| Streaming STT | `useStreamingSTT` hook via Sarvam WebSocket (replaced batch upload) |
-| Server-side VAD | `END_SPEECH`/`START_SPEECH` events from Sarvam (replaced client-side silence timer) |
+| Streaming STT | `useStreamingSTT` hook via Sarvam WebSocket |
+| Server-side VAD | `END_SPEECH`/`START_SPEECH` events from Sarvam |
+| Mobile hold-to-record | Hold mic to record, release to send (desktop keeps tap-toggle + VAD) |
 
-**Estimated current voice loop latency:** ~1-1.5s end-to-end (down from ~2-3s before streaming STT)
+**Estimated voice loop latency:** ~1-1.5s end-to-end
 
 ---
 
-## P0 — Critical Path Optimizations (DONE)
+## P0 — Done
 
-### 1. Streaming STT (Replace Batch Transcription) — DONE
+### 1. Streaming STT
 
 **Implemented 2026-04-04.**
 
-Replaced batch `transcribeAudio()` upload with real-time WebSocket streaming via Sarvam's `wss://api.sarvam.ai/speech-to-text-translate/ws`.
+Real-time WebSocket streaming via Sarvam's `wss://api.sarvam.ai/speech-to-text-translate/ws`. Replaced batch upload — transcript is available the moment speech ends, zero upload/batch wait.
 
-**What was built:**
-- **`src/hooks/useStreamingSTT.ts`** — Shared hook that opens a WebSocket to Sarvam, streams mic audio as PCM16 base64 chunks every 250ms, receives partial transcripts, and emits VAD events via callbacks. Exposes `{ transcript, languageCode, isStreaming, isUserSpeaking, start(), stop(), flush() }`.
-- **`app/api/sarvam/token/route.ts`** — Rate-limited endpoint returning the Sarvam API key for client-side WebSocket auth (browser WS API doesn't support custom headers).
-- **`app/page.tsx`** — Expense logging wired to `useStreamingSTT`. On `END_SPEECH` → `parseTranscript()` → save. Manual stop triggers `flush()` + processes final transcript. Double-processing guard prevents both END_SPEECH and manual stop from firing.
-- **`src/components/AgentChat.tsx`** — Chat wired to `useStreamingSTT`. On `END_SPEECH` → `send(transcript, true)` to LLM with TTS pipelining. Manual stop flushes and sends.
-
-**Flow:**
-```
-BEFORE:  Record full audio → silence timer stops → upload blob → batch STT → wait → process
-AFTER:   Open WebSocket → stream audio live → Sarvam VAD detects END_SPEECH
-         → transcript already available → immediate processing (zero upload/batch wait)
-```
+**Files:**
+- **`src/hooks/useStreamingSTT.ts`** — Opens WebSocket to Sarvam, streams mic audio as PCM16 base64 chunks every 250ms, receives partial transcripts and VAD events. Exposes `{ transcript, languageCode, isStreaming, isUserSpeaking, start(), stop(), flush() }`.
+- **`app/api/sarvam/token/route.ts`** — Rate-limited endpoint returning the Sarvam API key (browser WS API can't send custom headers).
 
 **Sarvam WebSocket API details:**
-- **Auth:** `api_subscription_key` query param (fetched from `/api/sarvam/token`)
+- **Auth:** `api_subscription_key` query param
 - **Models:** `saaras:v3` (default), `saaras:v2.5`
 - **Audio input:** base64-encoded PCM16 chunks, 16kHz, sent every 250ms
 - **Modes:** `transcribe`, `translate`, `verbatim`, `translit`, `codemix`
@@ -52,106 +43,102 @@ AFTER:   Open WebSocket → stream audio live → Sarvam VAD detects END_SPEECH
 
 ---
 
-### 2. Semantic Turn Detection (Server-Side VAD) — DONE
+### 2. Server-Side VAD
 
-**Implemented 2026-04-04.** Ships as part of the same `useStreamingSTT` hook (same WebSocket connection).
+**Implemented 2026-04-04.** Ships in the same `useStreamingSTT` hook via `vad_signals=true`.
 
-Replaced client-side RMS silence timer (`useAudioRecorder`) with Sarvam's server-side VAD via `vad_signals=true&high_vad_sensitivity=true` query parameters.
+- **`END_SPEECH`** → triggers transcript processing on desktop; suppressed on mobile (hold-to-record handles submission)
+- **`START_SPEECH`** → triggers barge-in in AgentChat (cancel in-flight LLM + stop TTS)
 
-**What was built:**
-- **`END_SPEECH` event** → triggers transcript processing (expense save or LLM call)
-- **`START_SPEECH` event** → triggers barge-in in AgentChat (cancel in-flight LLM + stop TTS)
-- Old `useAudioRecorder` retained in codebase for non-STT uses but no longer wired into voice input paths
+**VAD sensitivity:** `high_vad_sensitivity` removed — Sarvam fires `END_SPEECH` after only 0.5s of silence with it enabled, too aggressive for natural speech pauses. Default uses 1s silence gap.
 
 ---
 
-## P1 — High-Impact Improvements
+### 3. Mobile Hold-to-Record
 
-### 3. TTS Connection Pre-warming
+**Implemented 2026-05-02.**
 
-**Problem:** Every `speakSentence()` call makes a fresh `fetch("/api/tts")` HTTP request. Each request cold-starts a new connection to the TTS backend.
+On mobile (`pointer: coarse`), the mic switches to WhatsApp-style hold-to-record. VAD `END_SPEECH` is suppressed — release is the sole submission trigger.
 
-**Article insight:** Fresh WebSocket connections to TTS add ~300ms. Pre-connected pools eliminate this.
+**Files:**
+- **`src/hooks/useIsMobile.ts`** — SSR-safe hook using `window.matchMedia("(pointer: coarse)")`.
+- **`src/components/UnifiedInputPill.tsx`** — `onPointerDown` starts recording + attaches one-shot `pointerup`/`pointercancel` listeners on `document` to stop. `preventDefault()` + `onContextMenu` block long-press context menu. `touch-action: none` prevents scroll interference.
+- **`src/components/RecordingPill.tsx`** — `holdMode` prop changes label to "release to send".
+- **`app/page.tsx`** — `endOfSpeechHandlerRef` returns early when `isMobile`; `onMicStart`/`onMicStop` passed separately to `UnifiedInputPill`.
 
-**Solution:**
-- Pre-warm TTS connection when the user taps the mic (not when the response arrives)
-- Consider a persistent WebSocket to the TTS API instead of per-sentence HTTP POSTs
-- At minimum, use HTTP/2 connection reuse + `keep-alive`
+**Why `document` listener instead of `setPointerCapture`:** The mic button unmounts when recording starts (AnimatePresence swaps it for RecordingPill), so `setPointerCapture` is unreliable on the original element.
 
-**Estimated savings:** 200-400ms
-**Effort:** Small
+**Flow:**
+```
+MOBILE:  pointerdown → start recording → "release to send"
+         pointerup anywhere → flush + process (VAD ignored)
 
----
-
-### 4. Chunked TTS Playback
-
-**Problem:** `speakSentence()` fetches the full sentence audio via `res.arrayBuffer()` before decoding and playing. For long sentences, the user waits for the entire sentence to synthesize.
-
-**Article insight:** Audio frames should forward to playback without buffering the full response.
-
-**Solution:**
-- Switch to chunked TTS streaming — stream audio chunks from `/api/tts` and decode/play incrementally
-- Use `ReadableStream` + `AudioWorklet` for gapless chunk playback
-- Turns "wait 800ms for sentence audio" into "hear first syllable in 200ms"
-
-**Estimated savings:** 300-600ms
-**Effort:** Medium
+DESKTOP: click → start → VAD END_SPEECH → stop + process
+         OR click again → manual stop + process
+```
 
 ---
 
-### 5. Clause-Level TTS Segmentation
+## P1 — High-Impact (Pending)
 
-**Problem:** Current regex `/[.!?।]\s*$/` waits for sentence-ending punctuation. LLM output like _"Your total spending is ₹12,450 across 23 transactions including groceries, transport, and dining"_ is one long sentence — TTS won't start until the period arrives.
+### 4. TTS Connection Pre-warming
 
-**Solution:**
-- Split on clauses, not just sentences (commas, conjunctions, ~60-80 char chunks)
-- Sliding window: if buffer exceeds N characters without a sentence end, flush at the last comma or natural break
+Every `speakSentence()` call cold-starts a new HTTP connection to the TTS backend (~300ms overhead).
 
-**Estimated savings:** 200-500ms
-**Effort:** Small
+- Pre-warm connection on mic tap, not when response arrives
+- Consider persistent WebSocket instead of per-sentence HTTP POSTs
 
----
-
-## P2 — Polish & Observability
-
-### 6. Faster Model for Voice Queries
-
-**Article insight:** TTFT dominates latency. Groq llama-3.3-70b delivers ~80ms TTFT vs GPT-4o-mini at 300ms+. _"TTFT accounts for more than half of total latency."_
-
-**Solution:**
-- For voice responses, route to a faster model (Groq or a smaller fine-tuned model)
-- Keep the heavier model for text chat where latency tolerance is higher
-- Add a `model` hint in the request body when `isVoice: true`
-
-**Estimated savings:** 200-400ms
-**Effort:** Small
+**Estimated savings:** 200-400ms | **Effort:** Small
 
 ---
 
-### 7. Geographic Co-location Audit
+### 5. Chunked TTS Playback
 
-**Article insight:** Moving to co-located infrastructure cut latency from 1.7s to 790ms.
+`speakSentence()` buffers the full `res.arrayBuffer()` before playing — user waits for entire sentence to synthesize.
 
-**Solution:**
-- Confirm Vercel deployment is on `bom1` (Mumbai) for Indian users
-- Ensure Sarvam TTS and LLM endpoints are in the same region
-- Measure per-hop latency using existing PostHog tracing
+- Stream audio chunks from `/api/tts`, decode/play incrementally via `ReadableStream` + `AudioWorklet`
 
-**Estimated savings:** 100-300ms
-**Effort:** Small
+**Estimated savings:** 300-600ms | **Effort:** Medium
 
 ---
 
-### 8. Latency Telemetry Dashboard
+### 6. Clause-Level TTS Segmentation
 
-We already track `voice_query_started`, `voice_query_ttft`, `voice_query_completed`, and `voice_query_barge_in` via PostHog.
+Current regex `/[.!?।]\s*$/` waits for sentence-ending punctuation. Long LLM sentences delay TTS start.
 
-**Missing metrics:**
-- **TTS time-to-first-byte** per sentence
-- **End-to-end voice latency:** time from user-stop-speaking → first audio heard (the article's key metric)
-- **Interruption success rate:** did barge-in actually stop audio within 200ms?
+- Split on clauses (commas, conjunctions, ~60-80 char chunks)
+- Flush at last comma/break if buffer exceeds N chars without sentence end
 
-**Solution:** Build a PostHog dashboard with these panels using existing MCP integration.
+**Estimated savings:** 200-500ms | **Effort:** Small
+
+---
+
+## P2 — Polish & Observability (Pending)
+
+### 7. Faster Model for Voice Queries
+
+TTFT dominates latency. Route voice queries to a faster model (Groq or smaller fine-tuned); keep heavier model for text chat.
+
+**Estimated savings:** 200-400ms | **Effort:** Small
+
+---
+
+### 8. Geographic Co-location Audit
+
+Confirm Vercel deployment is on `bom1` (Mumbai). Ensure Sarvam TTS and LLM endpoints are in the same region.
+
+**Estimated savings:** 100-300ms | **Effort:** Small
+
+---
+
+### 9. Latency Telemetry Dashboard
+
+Currently tracking: `voice_query_started`, `voice_query_ttft`, `voice_query_completed`, `voice_query_barge_in`.
+
+Missing:
+- TTS time-to-first-byte per sentence
+- End-to-end voice latency (user stops speaking → first audio heard)
+- Barge-in success rate
 
 **Effort:** Small
 
@@ -159,36 +146,16 @@ We already track `voice_query_started`, `voice_query_ttft`, `voice_query_complet
 
 ## Summary
 
-| Priority | Feature | Latency Savings | Effort | Status |
+| Priority | Feature | Savings | Effort | Status |
 |---|---|---|---|---|
-| **P0** | Streaming STT | 500-1500ms | Medium | **DONE** |
-| **P0** | Semantic turn detection (VAD) | Fewer false triggers | Medium | **DONE** |
-| **P1** | TTS connection pre-warming | 200-400ms | Small | Pending |
-| **P1** | Chunked TTS playback | 300-600ms | Medium | Pending |
-| **P1** | Clause-level TTS segmentation | 200-500ms | Small | Pending |
-| **P2** | Faster model for voice | 200-400ms | Small | Pending |
-| **P2** | Regional co-location | 100-300ms | Small | Pending |
-| **P2** | Latency telemetry dashboard | Observability | Small | Pending |
+| P0 | Streaming STT | 500-1500ms | Medium | **DONE** |
+| P0 | Server-side VAD | Fewer false triggers | Medium | **DONE** |
+| P0 | Mobile hold-to-record | Better UX | Small | **DONE** |
+| P1 | TTS connection pre-warming | 200-400ms | Small | Pending |
+| P1 | Chunked TTS playback | 300-600ms | Medium | Pending |
+| P1 | Clause-level TTS segmentation | 200-500ms | Small | Pending |
+| P2 | Faster model for voice | 200-400ms | Small | Pending |
+| P2 | Regional co-location | 100-300ms | Small | Pending |
+| P2 | Latency telemetry dashboard | Observability | Small | Pending |
 
-**Target:** Sub-800ms end-to-end voice loop (P0 + P1 combined). The article identifies this as the threshold where conversations feel natural.
-
----
-
-## Appendix A: Expense Logging Flow — DONE
-
-Both `page.tsx` and `AgentChat.tsx` now share the same `useStreamingSTT` hook.
-
-### Implemented architecture
-
-```
-useStreamingSTT (shared hook — src/hooks/useStreamingSTT.ts)
-├── Opens wss://api.sarvam.ai/speech-to-text-translate/ws
-├── Streams PCM16 audio chunks from mic every 250ms
-├── Receives partial transcripts + VAD events
-├── Exposes: { transcript, languageCode, isStreaming, isUserSpeaking, start(), stop(), flush() }
-│
-├── AgentChat: END_SPEECH → send to LLM, START_SPEECH → barge-in
-└── page.tsx:  END_SPEECH → parseTranscript(transcript) → save
-```
-
-The old `useAudioRecorder` + batch `transcribeAudio()` path is no longer wired into either voice flow. `useAudioRecorder` remains in the codebase for non-STT uses.
+**Target:** Sub-800ms end-to-end voice loop (P0 + P1 combined).

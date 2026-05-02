@@ -59,6 +59,7 @@ export function useStreamingSTT({
   const stopTimeoutRef = useRef<number | null>(null)
   const hasSpeechStartedRef = useRef(false)
   const pendingEndOfSpeechRef = useRef(false)
+  const serverClosedRef = useRef(false)
 
   // Keep callbacks in refs to avoid stale closures
   const onEndOfSpeechRef = useRef(onEndOfSpeech)
@@ -254,6 +255,7 @@ export function useStreamingSTT({
     transcriptRef.current = ""
     hasSpeechStartedRef.current = false
     pendingEndOfSpeechRef.current = false
+    serverClosedRef.current = false
 
     if (!navigator.mediaDevices?.getUserMedia) {
       setError("Audio recording is not supported on this device.")
@@ -292,7 +294,7 @@ export function useStreamingSTT({
 
           if (msg.type === "stt:closed") {
             console.log("[StreamingSTT] Sarvam proxy closed by server")
-            // Clear safety timeout and resolve if we're waiting for stop
+            serverClosedRef.current = true
             if (stopTimeoutRef.current) {
               clearTimeout(stopTimeoutRef.current)
               stopTimeoutRef.current = null
@@ -360,7 +362,7 @@ export function useStreamingSTT({
       }
 
       ws.onclose = (e) => {
-        if (!e.wasClean) {
+        if (!e.wasClean && !serverClosedRef.current) {
           setError(`Speech service connection failed (code: ${e.code})`)
         }
         if (stopResolveRef.current) {
