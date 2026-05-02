@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useIsMobile } from "@/src/hooks/useIsMobile";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mic, ArrowUp, Check, Keyboard } from "lucide-react";
 import { RecordingPill } from "@/src/components/RecordingPill";
@@ -23,6 +24,8 @@ interface UnifiedInputPillProps {
   isProcessing?: boolean;
   isEmpty?: boolean;
   onMicPress: () => void;
+  onMicStart?: () => void;
+  onMicStop?: () => void;
   onTextSubmit: (text: string) => void;
   transcriptFeedback?: TranscriptFeedback | null;
   onUndoTranscript?: () => void;
@@ -35,16 +38,19 @@ export const UnifiedInputPill = React.memo(({
   isProcessing,
   isEmpty,
   onMicPress,
+  onMicStart,
+  onMicStop,
   onTextSubmit,
   transcriptFeedback,
   onUndoTranscript,
 }: UnifiedInputPillProps) => {
+  const isMobile = useIsMobile();
   const [isExpanded, setIsExpanded] = useState(false);
   const [displayValue, setDisplayValue] = useState("");
   const [textValue, setTextValue] = useState("");
   const [hintIndex, setHintIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  
+
   // PERF-HANDLER: Debounce timeout ref for text input
   const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -95,6 +101,23 @@ export const UnifiedInputPill = React.memo(({
     onMicPress();
   };
 
+  // Hold-to-record for mobile: pointerdown starts, pointerup/cancel on document stops.
+  // We listen on document because the mic button unmounts (AnimatePresence swaps it for
+  // RecordingPill) the moment recording starts, so setPointerCapture won't help.
+  const handleMicPointerDown = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+    if (!isMobile) return;
+    e.preventDefault(); // blocks long-press context menu
+    if (navigator.vibrate) navigator.vibrate(50);
+    onMicStart?.();
+    const onRelease = () => {
+      onMicStop?.();
+      document.removeEventListener("pointerup", onRelease);
+      document.removeEventListener("pointercancel", onRelease);
+    };
+    document.addEventListener("pointerup", onRelease);
+    document.addEventListener("pointercancel", onRelease);
+  }, [isMobile, onMicStart, onMicStop]);
+
   const handleSubmit = useCallback(() => {
     const trimmed = displayValue.trim();
     if (!trimmed) return;
@@ -142,6 +165,7 @@ export const UnifiedInputPill = React.memo(({
             isRecording={pillState === "recording"}
             isSpeaking={pillState === "recording" && isSpeaking}
             isProcessing={pillState === "processing"}
+            holdMode={isMobile}
             onStopRecording={handleMicToggle}
           />
         )}
@@ -267,9 +291,12 @@ export const UnifiedInputPill = React.memo(({
             <span className={`relative flex-shrink-0${isEmpty ? " kk-mic-ring" : ""}`}>
               <button
                 type="button"
-                onClick={handleMicToggle}
+                onClick={isMobile ? undefined : handleMicToggle}
+                onPointerDown={isMobile ? handleMicPointerDown : undefined}
+                onContextMenu={isMobile ? (e) => e.preventDefault() : undefined}
                 aria-label="Start recording"
                 className="relative z-10 flex items-center justify-center w-8 h-8 rounded-full bg-[var(--kk-ember)] text-white"
+                style={isMobile ? { touchAction: "none" } : undefined}
               >
                 <Mic className="h-4 w-4" strokeWidth={2.5} />
               </button>

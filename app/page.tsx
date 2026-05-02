@@ -32,6 +32,7 @@ const BulkExpensePreview = dynamic(() => import("@/src/components/BulkExpensePre
 const SyncOverlay = dynamic(() => import("@/src/components/SyncOverlay").then(m => ({ default: m.SyncOverlay })), { ssr: false });
 const ProfileView = dynamic(() => import("@/src/components/ProfileView").then(m => ({ default: m.ProfileView })), { ssr: false });
 import { useStreamingSTT } from "@/src/hooks/useStreamingSTT";
+import { useIsMobile } from "@/src/hooks/useIsMobile";
 import {
   addTransaction,
   deleteTransaction,
@@ -109,6 +110,7 @@ const dataUrlToBlob = (dataUrl: string): Blob => {
 
 const AppShell = () => {
   // Use specific contexts instead of monolithic useAppContext
+  const isMobile = useIsMobile();
   const { isRecording, setIsRecording } = useRecording();
   const { activeTab, setActiveTab } = useNavigation();
   const { incomingPair } = usePairing();
@@ -580,12 +582,14 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   // Wire the END_SPEECH handler ref (now that processStreamingTranscript is defined)
   useEffect(() => {
     endOfSpeechHandlerRef.current = (transcript: string) => {
+      // On mobile, hold-to-record handles submission on release — ignore VAD auto-fire
+      if (isMobile) return;
       posthogCapture("streaming_stt_end_of_speech", { transcript_length: transcript.length });
       // Close mic — user finished speaking, transition to processing state
       void streamingSTT.stop();
       void processStreamingTranscript(transcript);
     };
-  }, [processStreamingTranscript, streamingSTT.stop]);
+  }, [isMobile, processStreamingTranscript, streamingSTT.stop]);
 
   const handleUndoTranscript = useCallback(async () => {
     if (!transcriptFeedback) return;
@@ -937,6 +941,8 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
             isProcessing={isProcessing}
             isEmpty={isListEmpty}
             onMicPress={onMicPress}
+            onMicStart={handleStartRecording}
+            onMicStop={handleStopRecording}
             onTextSubmit={processTextInput}
             transcriptFeedback={transcriptFeedback ? { ...transcriptFeedback, currencySymbol } : null}
             onUndoTranscript={handleUndoTranscript}

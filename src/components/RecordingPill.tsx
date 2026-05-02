@@ -8,6 +8,7 @@ interface RecordingPillProps {
     isRecording: boolean;
     isSpeaking?: boolean;
     isProcessing?: boolean;
+    holdMode?: boolean;
     onStopRecording: (event?: React.SyntheticEvent) => void;
 }
 
@@ -15,6 +16,7 @@ export const RecordingPill = React.memo(({
     isRecording,
     isSpeaking,
     isProcessing,
+    holdMode,
     onStopRecording,
 }: RecordingPillProps) => {
     if (isRecording) {
@@ -46,7 +48,7 @@ export const RecordingPill = React.memo(({
                     ))}
                 </div>
                 <span className="text-xs font-medium text-[var(--kk-ember)] flex-shrink-0">
-                    {isSpeaking ? "speaking…" : "listening…"}
+                    {holdMode ? "release to send" : isSpeaking ? "speaking…" : "listening…"}
                 </span>
             </motion.div>
         );
