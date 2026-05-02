@@ -64,6 +64,8 @@ const SARVAM_WS_BASE = "https://api.sarvam.ai/speech-to-text-translate/ws";
 export class SignalingDO {
   private state: DurableObjectState;
   private env: Env;
+  /** In-memory map for outbound Sarvam proxies (DO won't hibernate while these are open) */
+  private sarvamProxies = new Map<string, WebSocket>();
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -99,20 +101,10 @@ export class SignalingDO {
       return;
     }
     const att = ws.deserializeAttachment() as WsAttachment;
-    console.log(`[SignalingDO] Received message on ws (conn_id=${att.conn_id}, for_client_id=${att.for_client_id})`);
-
-    // ── Handle outbound Sarvam messages (Hibernation-safe) ────────────────
-    if (att.for_client_id) {
-      const clientWs = this.findWsByConnId(att.for_client_id);
-      if (clientWs && clientWs.readyState === WebSocket.OPEN) {
-        clientWs.send(raw);
-      }
-      return;
-    }
 
     // Audio chunks have no "type" field — forward directly to Sarvam proxy
     if (!message || typeof message.type !== "string") {
-      const sarvam = this.getSarvamProxy(att.conn_id);
+      const sarvam = this.sarvamProxies.get(att.conn_id);
       if (sarvam && sarvam.readyState === WebSocket.OPEN) {
         sarvam.send(raw);
       }
@@ -128,10 +120,11 @@ export class SignalingDO {
     // ── Sarvam STT proxy ──────────────────────────────────────────────────
 
     if (type === "stt:start") {
-      const existing = this.getSarvamProxy(att.conn_id);
+      const existing = this.sarvamProxies.get(att.conn_id);
       if (existing) {
         console.log(`[SignalingDO] Closing existing Sarvam proxy for conn_id=${att.conn_id}`);
         try { existing.close(); } catch { /* ignore */ }
+        this.sarvamProxies.delete(att.conn_id);
       }
 
       if (!this.env.SARVAM_KEY) {
@@ -155,7 +148,26 @@ export class SignalingDO {
 
       try {
         console.log(`[SignalingDO] Opening Sarvam WebSocket with params: ${params.toString()}`);
-        await this.openSarvamWs(params, att.conn_id);
+        const sarvamWs = await this.openSarvamWs(params);
+
+        // Forward messages from Sarvam to the client
+        sarvamWs.addEventListener("message", (event: MessageEvent) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(event.data);
+          }
+        });
+
+        sarvamWs.addEventListener("error", (event: Event) => {
+          const msg = (event as ErrorEvent).message ?? "Sarvam connection failed";
+          this.send(ws, "error", { error: "Sarvam connection failed: " + msg });
+        });
+
+        sarvamWs.addEventListener("close", () => {
+          this.sarvamProxies.delete(att.conn_id);
+          this.send(ws, "stt:closed");
+        });
+
+        this.sarvamProxies.set(att.conn_id, sarvamWs);
 
         console.log(`[SignalingDO] Sarvam proxy established for conn_id=${att.conn_id}, sending stt:ready`);
         this.send(ws, "stt:ready");
@@ -170,9 +182,10 @@ export class SignalingDO {
     }
 
     if (type === "stt:stop") {
-      const sarvam = this.getSarvamProxy(att.conn_id);
+      const sarvam = this.sarvamProxies.get(att.conn_id);
       if (sarvam) {
         try { sarvam.close(); } catch { /* ignore */ }
+        this.sarvamProxies.delete(att.conn_id);
       }
       return;
     }
@@ -180,7 +193,7 @@ export class SignalingDO {
     // Forward flush and any other non-signaling typed messages to Sarvam proxy
     if (!type.startsWith("stt:") && !type.startsWith("presence:") &&
         !type.startsWith("pairing:") && !type.startsWith("webrtc:")) {
-      const sarvam = this.getSarvamProxy(att.conn_id);
+      const sarvam = this.sarvamProxies.get(att.conn_id);
       if (sarvam && sarvam.readyState === WebSocket.OPEN) {
         sarvam.send(raw);
       }
@@ -371,18 +384,10 @@ export class SignalingDO {
     const att = ws.deserializeAttachment() as WsAttachment;
     console.log(`[SignalingDO] WebSocket closed: conn_id=${att?.conn_id}, code=${code}, reason=${reason}, wasClean=${wasClean}`);
     
-    if (att?.for_client_id) {
-      // This was a Sarvam proxy connection closing. Notify the client.
-      const client = this.findWsByConnId(att.for_client_id);
-      if (client) {
-        this.send(client, "stt:closed");
-      }
-    } else if (att?.conn_id) {
-      // This was a client connection closing. Close its Sarvam proxy if any.
-      const sarvam = this.getSarvamProxy(att.conn_id);
-      if (sarvam) {
-        try { sarvam.close(); } catch { /* ignore */ }
-      }
+    const sarvam = this.sarvamProxies.get(att.conn_id);
+    if (sarvam) {
+      try { sarvam.close(); } catch { /* ignore */ }
+      this.sarvamProxies.delete(att.conn_id);
     }
   }
 
@@ -426,34 +431,11 @@ export class SignalingDO {
     return null;
   }
 
-  private findWsByConnId(conn_id: string): WebSocket | null {
-    for (const ws of this.state.getWebSockets()) {
-      const att = ws.deserializeAttachment() as WsAttachment;
-      if (att?.conn_id === conn_id && ws.readyState === WebSocket.OPEN) {
-        return ws;
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Find the Sarvam outbound WebSocket associated with a client connection.
-   */
-  private getSarvamProxy(client_conn_id: string): WebSocket | null {
-    for (const ws of this.state.getWebSockets()) {
-      const att = ws.deserializeAttachment() as WsAttachment;
-      if (att?.for_client_id === client_conn_id && ws.readyState === WebSocket.OPEN) {
-        return ws;
-      }
-    }
-    return null;
-  }
-
   /**
    * Opens an outbound WebSocket to Sarvam using the Workers fetch API,
    * which allows custom request headers (unlike the browser WebSocket constructor).
    */
-  private async openSarvamWs(params: URLSearchParams, client_conn_id: string): Promise<WebSocket> {
+  private async openSarvamWs(params: URLSearchParams): Promise<WebSocket> {
     const url = `${SARVAM_WS_BASE}?${params}`;
     console.log(`[SignalingDO] Fetching Sarvam WebSocket: ${url}`);
     
@@ -476,16 +458,6 @@ export class SignalingDO {
       throw new Error("Sarvam did not return a WebSocket");
     }
 
-    // Attach metadata so we can route messages back to the correct client
-    const att: WsAttachment = {
-      conn_id: crypto.randomUUID(),
-      for_client_id: client_conn_id
-    };
-    ws.serializeAttachment(att);
-
-    // Accept into the hibernation system
-    this.state.acceptWebSocket(ws);
-    
     return ws;
   }
 }
