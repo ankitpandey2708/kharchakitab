@@ -150,10 +150,22 @@ export class SignalingDO {
         console.log(`[SignalingDO] Opening Sarvam WebSocket with params: ${params.toString()}`);
         const sarvamWs = await this.openSarvamWs(params);
 
-        // Forward messages from Sarvam to the client
+        // Forward messages from Sarvam to the client, wrapped in the expected envelope
         sarvamWs.addEventListener("message", (event: MessageEvent) => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(event.data);
+          if (ws.readyState !== WebSocket.OPEN) return;
+          try {
+            const sarvamMsg = JSON.parse(typeof event.data === "string" ? event.data : new TextDecoder().decode(event.data));
+            let wrapped: unknown;
+            if (sarvamMsg.signal_type) {
+              wrapped = { type: "events", data: sarvamMsg };
+            } else if (sarvamMsg.transcript !== undefined) {
+              wrapped = { type: "data", data: sarvamMsg };
+            } else {
+              wrapped = sarvamMsg;
+            }
+            ws.send(JSON.stringify(wrapped));
+          } catch {
+            ws.send(typeof event.data === "string" ? event.data : new TextDecoder().decode(event.data as ArrayBuffer));
           }
         });
 
@@ -458,6 +470,7 @@ export class SignalingDO {
       throw new Error("Sarvam did not return a WebSocket");
     }
 
+    ws.accept();
     return ws;
   }
 }
