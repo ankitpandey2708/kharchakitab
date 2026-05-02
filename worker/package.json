@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --port 7071",
     "deploy": "wrangler deploy",
     "tail": "wrangler tail"
   },
