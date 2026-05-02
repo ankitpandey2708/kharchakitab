@@ -139,7 +139,7 @@ export class SignalingDO {
         mode: cfg.mode || "translate",
         sample_rate: cfg.sample_rate || "16000",
         vad_signals: "true",
-        high_vad_sensitivity: "true",
+        // high_vad_sensitivity: "true",
         flush_signal: "true",
         input_audio_codec: cfg.input_audio_codec || "pcm_s16le",
       });
@@ -185,7 +185,7 @@ export class SignalingDO {
         this.send(ws, "stt:ready");
       } catch (err) {
         console.error(`[SignalingDO] Failed to start STT proxy:`, err);
-        this.send(ws, "error", { 
+        this.send(ws, "error", {
           error: "Failed to connect to Sarvam: " + (err as Error).message,
           code: "SARVAM_CONN_FAILED"
         });
@@ -204,7 +204,7 @@ export class SignalingDO {
 
     // Forward flush and any other non-signaling typed messages to Sarvam proxy
     if (!type.startsWith("stt:") && !type.startsWith("presence:") &&
-        !type.startsWith("pairing:") && !type.startsWith("webrtc:")) {
+      !type.startsWith("pairing:") && !type.startsWith("webrtc:")) {
       const sarvam = this.sarvamProxies.get(att.conn_id);
       if (sarvam && sarvam.readyState === WebSocket.OPEN) {
         sarvam.send(raw);
@@ -395,7 +395,7 @@ export class SignalingDO {
   async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean): Promise<void> {
     const att = ws.deserializeAttachment() as WsAttachment;
     console.log(`[SignalingDO] WebSocket closed: conn_id=${att?.conn_id}, code=${code}, reason=${reason}, wasClean=${wasClean}`);
-    
+
     const sarvam = this.sarvamProxies.get(att.conn_id);
     if (sarvam) {
       try { sarvam.close(); } catch { /* ignore */ }
@@ -450,7 +450,7 @@ export class SignalingDO {
   private async openSarvamWs(params: URLSearchParams): Promise<WebSocket> {
     const url = `${SARVAM_WS_BASE}?${params}`;
     console.log(`[SignalingDO] Fetching Sarvam WebSocket: ${url}`);
-    
+
     const resp = await fetch(url, {
       headers: {
         Upgrade: "websocket",
