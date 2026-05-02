@@ -280,6 +280,7 @@ export function useStreamingSTT({
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data)
+          console.log("[StreamingSTT] Received message from server:", msg.type, msg)
 
           // Server confirms Sarvam connected — start audio capture
           if (msg.type === "stt:ready") {
@@ -349,8 +350,8 @@ export function useStreamingSTT({
             console.error("[StreamingSTT] Server error:", errData)
             setError(errData?.error || errData?.message || "STT error")
           }
-        } catch {
-          // Ignore malformed messages
+        } catch (err) {
+          console.error("[StreamingSTT] Failed to parse message from server:", event.data, err)
         }
       }
 

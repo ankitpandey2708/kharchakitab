@@ -3,11 +3,23 @@
   "keys": [
     {
       "envVar": "GEMINI_API_KEY",
-      "provider": "gemini"
+      "provider": "gemini",
+      "required": true
     },
     {
       "envVar": "SARVAM_KEY",
-      "provider": "sarvam"
+      "provider": "sarvam",
+      "required": true
+    },
+    {
+      "envVar": "POSTHOG_PERSONAL_API_KEY",
+      "provider": "posthog",
+      "required": false
+    },
+    {
+      "envVar": "OPENROUTER_API_KEY",
+      "provider": "openrouter",
+      "required": true
     }
   ]
 }

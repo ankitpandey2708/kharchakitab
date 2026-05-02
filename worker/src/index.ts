@@ -46,6 +46,8 @@ interface WsAttachment {
   display_name?: string;
   /** Unique per-connection token used to look up the Sarvam proxy */
   conn_id: string;
+  /** If this is a Sarvam outbound WS, which client connection does it belong to? */
+  for_client_id?: string;
 }
 
 interface PairingSession {
@@ -62,13 +64,6 @@ const SARVAM_WS_BASE = "https://api.sarvam.ai/speech-to-text-translate/ws";
 export class SignalingDO {
   private state: DurableObjectState;
   private env: Env;
-
-  /**
-   * Sarvam proxy map: conn_id → outbound WebSocket to Sarvam.
-   * Lives only in memory — if the DO hibernates all STT sessions will have
-   * already ended (clients disconnect when the page is closed).
-   */
-  private sarvamProxies = new Map<string, WebSocket>();
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -104,10 +99,20 @@ export class SignalingDO {
       return;
     }
     const att = ws.deserializeAttachment() as WsAttachment;
+    console.log(`[SignalingDO] Received message on ws (conn_id=${att.conn_id}, for_client_id=${att.for_client_id})`);
+
+    // ── Handle outbound Sarvam messages (Hibernation-safe) ────────────────
+    if (att.for_client_id) {
+      const clientWs = this.findWsByConnId(att.for_client_id);
+      if (clientWs && clientWs.readyState === WebSocket.OPEN) {
+        clientWs.send(raw);
+      }
+      return;
+    }
 
     // Audio chunks have no "type" field — forward directly to Sarvam proxy
     if (!message || typeof message.type !== "string") {
-      const sarvam = this.sarvamProxies.get(att.conn_id);
+      const sarvam = this.getSarvamProxy(att.conn_id);
       if (sarvam && sarvam.readyState === WebSocket.OPEN) {
         sarvam.send(raw);
       }
@@ -123,13 +128,14 @@ export class SignalingDO {
     // ── Sarvam STT proxy ──────────────────────────────────────────────────
 
     if (type === "stt:start") {
-      const existing = this.sarvamProxies.get(att.conn_id);
+      const existing = this.getSarvamProxy(att.conn_id);
       if (existing) {
+        console.log(`[SignalingDO] Closing existing Sarvam proxy for conn_id=${att.conn_id}`);
         try { existing.close(); } catch { /* ignore */ }
-        this.sarvamProxies.delete(att.conn_id);
       }
 
       if (!this.env.SARVAM_KEY) {
+        console.error("[SignalingDO] SARVAM_KEY is missing in env");
         this.send(ws, "error", { message: "Missing SARVAM_KEY" }, request_id);
         return;
       }
@@ -145,39 +151,28 @@ export class SignalingDO {
         input_audio_codec: cfg.input_audio_codec || "pcm_s16le",
       });
 
-      const sarvamWs = await this.openSarvamWs(params);
+      console.log(`[SignalingDO] SARVAM_KEY is present (length: ${this.env.SARVAM_KEY.length}, starts with: ${this.env.SARVAM_KEY.slice(0, 5)}...)`);
 
-      // Register listeners and store proxy BEFORE notifying client,
-      // so audio chunks arriving immediately after stt:ready are handled.
-      sarvamWs.addEventListener("message", (event: MessageEvent) => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(event.data);
-        }
-      });
+      try {
+        console.log(`[SignalingDO] Opening Sarvam WebSocket with params: ${params.toString()}`);
+        await this.openSarvamWs(params, att.conn_id);
 
-      sarvamWs.addEventListener("error", (event: Event) => {
-        const msg = (event as ErrorEvent).message ?? "Sarvam connection failed";
-        this.send(ws, "error", { error: "Sarvam connection failed: " + msg });
-      });
-
-      sarvamWs.addEventListener("close", () => {
-        this.sarvamProxies.delete(att.conn_id);
-        this.send(ws, "stt:closed");
-      });
-
-      this.sarvamProxies.set(att.conn_id, sarvamWs);
-
-      // CF Workers outbound WebSocket: no "open" event fires after accept().
-      // Connection is ready immediately — notify client now.
-      this.send(ws, "stt:ready");
+        console.log(`[SignalingDO] Sarvam proxy established for conn_id=${att.conn_id}, sending stt:ready`);
+        this.send(ws, "stt:ready");
+      } catch (err) {
+        console.error(`[SignalingDO] Failed to start STT proxy:`, err);
+        this.send(ws, "error", { 
+          error: "Failed to connect to Sarvam: " + (err as Error).message,
+          code: "SARVAM_CONN_FAILED"
+        });
+      }
       return;
     }
 
     if (type === "stt:stop") {
-      const sarvam = this.sarvamProxies.get(att.conn_id);
+      const sarvam = this.getSarvamProxy(att.conn_id);
       if (sarvam) {
         try { sarvam.close(); } catch { /* ignore */ }
-        this.sarvamProxies.delete(att.conn_id);
       }
       return;
     }
@@ -185,7 +180,7 @@ export class SignalingDO {
     // Forward flush and any other non-signaling typed messages to Sarvam proxy
     if (!type.startsWith("stt:") && !type.startsWith("presence:") &&
         !type.startsWith("pairing:") && !type.startsWith("webrtc:")) {
-      const sarvam = this.sarvamProxies.get(att.conn_id);
+      const sarvam = this.getSarvamProxy(att.conn_id);
       if (sarvam && sarvam.readyState === WebSocket.OPEN) {
         sarvam.send(raw);
       }
@@ -375,10 +370,19 @@ export class SignalingDO {
   async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean): Promise<void> {
     const att = ws.deserializeAttachment() as WsAttachment;
     console.log(`[SignalingDO] WebSocket closed: conn_id=${att?.conn_id}, code=${code}, reason=${reason}, wasClean=${wasClean}`);
-    const sarvam = this.sarvamProxies.get(att.conn_id);
-    if (sarvam) {
-      try { sarvam.close(); } catch { /* ignore */ }
-      this.sarvamProxies.delete(att.conn_id);
+    
+    if (att?.for_client_id) {
+      // This was a Sarvam proxy connection closing. Notify the client.
+      const client = this.findWsByConnId(att.for_client_id);
+      if (client) {
+        this.send(client, "stt:closed");
+      }
+    } else if (att?.conn_id) {
+      // This was a client connection closing. Close its Sarvam proxy if any.
+      const sarvam = this.getSarvamProxy(att.conn_id);
+      if (sarvam) {
+        try { sarvam.close(); } catch { /* ignore */ }
+      }
     }
   }
 
@@ -422,20 +426,66 @@ export class SignalingDO {
     return null;
   }
 
+  private findWsByConnId(conn_id: string): WebSocket | null {
+    for (const ws of this.state.getWebSockets()) {
+      const att = ws.deserializeAttachment() as WsAttachment;
+      if (att?.conn_id === conn_id && ws.readyState === WebSocket.OPEN) {
+        return ws;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Find the Sarvam outbound WebSocket associated with a client connection.
+   */
+  private getSarvamProxy(client_conn_id: string): WebSocket | null {
+    for (const ws of this.state.getWebSockets()) {
+      const att = ws.deserializeAttachment() as WsAttachment;
+      if (att?.for_client_id === client_conn_id && ws.readyState === WebSocket.OPEN) {
+        return ws;
+      }
+    }
+    return null;
+  }
+
   /**
    * Opens an outbound WebSocket to Sarvam using the Workers fetch API,
    * which allows custom request headers (unlike the browser WebSocket constructor).
    */
-  private async openSarvamWs(params: URLSearchParams): Promise<WebSocket> {
-    const resp = await fetch(`${SARVAM_WS_BASE}?${params}`, {
+  private async openSarvamWs(params: URLSearchParams, client_conn_id: string): Promise<WebSocket> {
+    const url = `${SARVAM_WS_BASE}?${params}`;
+    console.log(`[SignalingDO] Fetching Sarvam WebSocket: ${url}`);
+    
+    const resp = await fetch(url, {
       headers: {
         Upgrade: "websocket",
         "api-subscription-key": this.env.SARVAM_KEY,
       },
     });
+
+    if (resp.status !== 101) {
+      const errorText = await resp.text().catch(() => "No error body");
+      console.error(`[SignalingDO] Sarvam handshake failed: HTTP ${resp.status} - ${errorText}`);
+      throw new Error(`Sarvam handshake failed: HTTP ${resp.status}`);
+    }
+
     const ws = (resp as unknown as { webSocket: WebSocket }).webSocket;
-    if (!ws) throw new Error("Sarvam did not return a WebSocket");
-    ws.accept();
+    if (!ws) {
+      console.error("[SignalingDO] Sarvam returned 101 but no WebSocket object was found in response");
+      throw new Error("Sarvam did not return a WebSocket");
+    }
+
+    // Attach metadata so we can route messages back to the correct client
+    const att: WsAttachment = {
+      conn_id: crypto.randomUUID(),
+      for_client_id: client_conn_id
+    };
+    ws.serializeAttachment(att);
+
+    // Accept into the hibernation system
+    this.state.acceptWebSocket(ws);
+    
     return ws;
   }
 }
