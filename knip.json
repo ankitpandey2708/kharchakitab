@@ -8,6 +8,5 @@
     "content/blog/**",
     "public/worklets/stt-processor.js",
     "worker/**"
-  ],
-  "ignoreBinaries": ["wrangler"]
+  ]
 }

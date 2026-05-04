@@ -59,6 +59,7 @@ import { useBackButton } from "@/src/hooks/useBackButton";
 import { useRecording } from "@/src/context/AppContext";
 import { TRANSACTION_PENDING_LABEL } from "@/src/utils/transactions";
 import { usePendingTransactions } from "@/src/hooks/usePendingTransactions";
+import { useWebMCP } from "@/src/hooks/useWebMCP";
 
 type TransactionInput = Omit<Transaction, "id">;
 
@@ -533,7 +534,9 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
       stopProcessing();
       setIsTextProcessing(false);
     }
-  }, [addPendingTransaction, currency, parseTranscript, refreshTransactions, removePendingTransaction, startProcessing, stopProcessing]);
+  }, [addPendingTransaction, currency, parseTranscript, refreshTransactions, removePendingTransaction, saveSingleExpense, startProcessing, stopProcessing]);
+
+  useWebMCP(processTextInput, refreshTransactions);
 
   const handleStartRecording = useCallback(async () => {
     setLastError(null);
