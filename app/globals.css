@@ -484,38 +484,6 @@ body {
   will-change: transform;
 }
 
-/* Tier-5 screen shake for dramatic transactions */
-@keyframes kk-shake {
-
-  0%,
-  100% {
-    transform: translate(0, 0);
-  }
-
-  15% {
-    transform: translate(-4px, 2px);
-  }
-
-  30% {
-    transform: translate(4px, -2px);
-  }
-
-  45% {
-    transform: translate(-3px, -1px);
-  }
-
-  60% {
-    transform: translate(3px, 1px);
-  }
-
-  75% {
-    transform: translate(-1px, 0);
-  }
-}
-
-.kk-shaking {
-  animation: kk-shake 0.35s ease-out !important;
-}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Gradient Orbs (Background Decoration)

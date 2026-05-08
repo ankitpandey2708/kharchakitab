@@ -1,70 +1,54 @@
 import type { CurrencyCode } from "@/src/utils/money";
 import { LS } from "@/src/config/storageKeys";
 
-const SOUND_FILES: Record<number, string> = {
-  1: "/sounds/coin.mp3",
-  2: "/sounds/chaching.mp3",
-  3: "/sounds/money.mp3",
-  4: "/sounds/atm.mp3",
-  5: "/sounds/dramatic.mp3",
+// Sprite offsets within /sounds/sounds.mp3
+// Order: coin → chaching → atm → money
+const SPRITE: Record<number, { start: number; duration: number }> = {
+  1: { start: 0,     duration: 1.5   },  // coin
+  2: { start: 1.5,   duration: 1.2   },  // chaching
+  3: { start: 2.7,   duration: 1.259 },  // atm
+  4: { start: 3.959, duration: 1.2   },  // money
 };
 
-// Cache Audio elements so we don't re-create on every play
-const audioCache = new Map<number, HTMLAudioElement>();
+let audioCtx: AudioContext | null = null;
+let spriteBuffer: AudioBuffer | null = null;
 
-const getAudio = (tier: number): HTMLAudioElement => {
-  let audio = audioCache.get(tier);
-  if (!audio) {
-    audio = new Audio(SOUND_FILES[tier]);
-    audioCache.set(tier, audio);
+async function getSpriteBuffer(): Promise<AudioBuffer | null> {
+  if (spriteBuffer) return spriteBuffer;
+  try {
+    if (!audioCtx || audioCtx.state === "closed") {
+      audioCtx = new AudioContext();
+    }
+    const res = await fetch("/sounds/sounds.mp3");
+    const arrayBuffer = await res.arrayBuffer();
+    spriteBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    return spriteBuffer;
+  } catch {
+    return null;
   }
-  return audio;
-};
+}
 
 const getTier = (amount: number, currency: CurrencyCode): number => {
   const inr = currency === "INR" ? amount : amount * 80;
   if (inr < 50) return 1;
   if (inr < 500) return 2;
   if (inr < 2000) return 3;
-  if (inr < 5000) return 4;
-  return 5;
+  return 4;
 };
 
-export const playMoneySound = (
-  amount: number,
-  currency: CurrencyCode,
-): void => {
+export const playMoneySound = (amount: number, currency: CurrencyCode): void => {
   if (typeof window === "undefined") return;
   if (localStorage.getItem(LS.SOUND_ENABLED) === "false") return;
 
-  try {
-    const tier = getTier(amount, currency);
-    const audio = getAudio(tier);
-    // Reset to start in case it's still playing from a previous transaction
-    audio.currentTime = 0;
-    void audio.play();
+  const tier = getTier(amount, currency);
+  const { start, duration } = SPRITE[tier];
 
-    // Tier 5: vibrate + visual screen shake for extra impact
-    if (tier === 5) {
-      if (typeof navigator !== "undefined" && navigator.vibrate) {
-        navigator.vibrate([100, 50, 100]);
-      }
-      // Visual shake (works on all devices)
-      const root = document.documentElement;
-      root.classList.remove("kk-shaking");
-      // Double-rAF restarts the CSS animation without a synchronous forced reflow
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          root.classList.add("kk-shaking");
-        });
-      });
-      root.addEventListener(
-        "animationend",
-        () => root.classList.remove("kk-shaking"),
-        { once: true },
-      );
-    }
-  } catch {
-    // Silently ignore — audio feedback is non-critical
-  }
+  getSpriteBuffer().then(buffer => {
+    if (!buffer || !audioCtx) return;
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioCtx.destination);
+    source.start(0, start, duration);
+  }).catch(() => {});
 };

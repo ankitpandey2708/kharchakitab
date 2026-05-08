@@ -3,7 +3,7 @@ console.log("[AgentChat] v2.1 Loaded")
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Send, Check, XIcon, Sparkles, Volume2, ShoppingBag } from "lucide-react"
+import { X, Send, Check, XIcon, Sparkles, ShoppingBag } from "lucide-react"
 import { RecordingPill } from "@/src/components/RecordingPill"
 import { addTransaction } from "@/src/db/db"
 import { SERVICE_CATEGORY } from "@/src/lib/swiggy/client"
@@ -17,8 +17,6 @@ interface DisplayMessage {
   text: string
   /** true while text is still streaming in */
   streaming?: boolean
-  /** true if this response has TTS audio playing */
-  audioPlaying?: boolean
 }
 
 const SUGGESTIONS = [
@@ -46,14 +44,7 @@ export function AgentChat({ open, onClose, onRefreshTransactions }: AgentChatPro
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
-  // TTS playback state
-  const audioCtxRef = useRef<AudioContext | null>(null)
-  const audioQueueRef = useRef<AudioBuffer[]>([])
-  const isPlayingRef = useRef(false)
-  const ttsCancelledRef = useRef(false)
-  const [audioPlaying, setAudioPlaying] = useState(false)
-
-  // Refs for streaming STT callbacks (wired after send/stopTTS are defined)
+  // Refs for streaming STT callbacks (wired after send are defined)
   const sendVoiceRef = useRef<(text: string) => void>(() => {})
   const bargeInRef = useRef<() => void>(() => {})
 
@@ -86,89 +77,8 @@ export function AgentChat({ open, onClose, onRefreshTransactions }: AgentChatPro
     }
   }, [open])
 
-  // ── TTS helpers (HTTP streaming via /api/tts) ──
-
-  const getAudioContext = useCallback(() => {
-    if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
-      audioCtxRef.current = new AudioContext()
-    }
-    return audioCtxRef.current
-  }, [])
-
-  const stopTTS = useCallback(() => {
-    ttsCancelledRef.current = true
-    // Stop audio playback
-    if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
-      audioCtxRef.current.close()
-      audioCtxRef.current = null
-    }
-    audioQueueRef.current = []
-    isPlayingRef.current = false
-    setAudioPlaying(false)
-  }, [])
-
-  const playNextChunk = useCallback(async () => {
-    if (isPlayingRef.current || ttsCancelledRef.current) return
-    const buffer = audioQueueRef.current.shift()
-    if (!buffer) return
-    isPlayingRef.current = true
-    setAudioPlaying(true)
-    try {
-      const ctx = getAudioContext()
-      const source = ctx.createBufferSource()
-      source.buffer = buffer
-      source.connect(ctx.destination)
-      source.onended = () => {
-        isPlayingRef.current = false
-        if (audioQueueRef.current.length > 0 && !ttsCancelledRef.current) {
-          playNextChunk()
-        } else {
-          setAudioPlaying(false)
-        }
-      }
-      source.start()
-    } catch {
-      isPlayingRef.current = false
-      setAudioPlaying(false)
-    }
-  }, [getAudioContext])
-
-  // Track detected language from STT for TTS matching
+  // Track detected language from STT
   const detectedLangRef = useRef<string | null>(null)
-
-  /** Fetch TTS audio for a sentence via HTTP streaming and enqueue for playback */
-  const speakSentence = useCallback(async (text: string) => {
-    if (ttsCancelledRef.current || !text.trim()) return
-    try {
-      const res = await fetch("/api/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, language: detectedLangRef.current || "hi-IN" }),
-      })
-      if (!res.ok || !res.body) {
-        const errBody = await res.text()
-        console.error("[AgentChat] TTS fetch failed:", res.status, errBody)
-        return
-      }
-
-      // Read the full audio response and decode it
-      const arrayBuffer = await res.arrayBuffer()
-      if (ttsCancelledRef.current) return
-      const ctx = getAudioContext()
-      const audioBuffer = await ctx.decodeAudioData(arrayBuffer)
-      if (ttsCancelledRef.current) return
-      audioQueueRef.current.push(audioBuffer)
-      if (!isPlayingRef.current) playNextChunk()
-    } catch {
-      // TTS failed for this sentence — skip silently
-    }
-  }, [getAudioContext, playNextChunk])
-
-  // ── Sentence detection for pipelining ──
-
-  const isSentenceEnd = useCallback((text: string): boolean => {
-    return /[.!?।]\s*$/.test(text)
-  }, [])
 
   async function sendSilent(text: string) {
     setLoading(true)
@@ -233,19 +143,8 @@ export function AgentChat({ open, onClose, onRefreshTransactions }: AgentChatPro
         const reader = res.body!.getReader()
         const decoder = new TextDecoder()
         let fullText = ""
-        let sentenceBuffer = ""
         let responseMessages: any[] = []
         let pa: PendingWriteAction[] = []
-
-        // Reset TTS cancel flag for voice-initiated queries
-        if (isVoice) {
-          ttsCancelledRef.current = false
-        }
-
-        // Reset TTS cancel flag for voice-initiated queries
-        if (isVoice) {
-          ttsCancelledRef.current = false
-        }
 
         // Add streaming placeholder
         console.log("[AgentChat] Adding streaming placeholder message")
@@ -284,7 +183,6 @@ export function AgentChat({ open, onClose, onRefreshTransactions }: AgentChatPro
                   }
 
                   fullText += parsed.content
-                  sentenceBuffer += parsed.content
 
                   // Update streaming message
                   setDisplayMessages(prev => {
@@ -299,12 +197,7 @@ export function AgentChat({ open, onClose, onRefreshTransactions }: AgentChatPro
                     return updated
                   })
 
-                  // Send complete sentences to TTS (fire-and-forget, pipelined)
-                  if (isVoice && isSentenceEnd(sentenceBuffer)) {
-                    console.log("[AgentChat] Sentence detected for TTS:", sentenceBuffer)
-                    speakSentence(sentenceBuffer)
-                    sentenceBuffer = ""
-                  }
+
                 } else if (parsed.type === "response_messages") {
                   responseMessages = parsed.messages
                 } else if (parsed.type === "pending_actions") {
@@ -315,11 +208,6 @@ export function AgentChat({ open, onClose, onRefreshTransactions }: AgentChatPro
               }
             }
           }
-        }
-
-        // Flush remaining text to TTS
-        if (isVoice && sentenceBuffer.trim()) {
-          speakSentence(sentenceBuffer)
         }
 
         // Finalize streaming message
@@ -356,11 +244,10 @@ export function AgentChat({ open, onClose, onRefreshTransactions }: AgentChatPro
     }
   }
 
-  // ── Wire streaming STT callbacks now that send/stopTTS are defined ──
+  // ── Wire streaming STT callbacks now that send is defined ──
 
   useEffect(() => {
     sendVoiceRef.current = (text: string) => {
-      // Store detected language from streaming STT for TTS matching
       detectedLangRef.current = streamingSTT.languageCode
       void send(text, true)
     }
@@ -368,8 +255,7 @@ export function AgentChat({ open, onClose, onRefreshTransactions }: AgentChatPro
 
   useEffect(() => {
     bargeInRef.current = () => {
-      if (audioPlaying || loading) {
-        stopTTS()
+      if (loading) {
         if (abortRef.current) {
           abortRef.current.abort()
           abortRef.current = null
@@ -394,9 +280,8 @@ export function AgentChat({ open, onClose, onRefreshTransactions }: AgentChatPro
         void send(trimmed, true)
       }
     } else {
-      // Barge-in: stop TTS + cancel in-flight LLM stream before starting new recording
-      if (audioPlaying || loading) {
-        stopTTS()
+      // Barge-in: cancel in-flight LLM stream before starting new recording
+      if (loading) {
         if (abortRef.current) {
           abortRef.current.abort()
           abortRef.current = null
@@ -409,17 +294,14 @@ export function AgentChat({ open, onClose, onRefreshTransactions }: AgentChatPro
       }
       await streamingSTT.start()
     }
-  }, [streamingSTT, stopTTS, audioPlaying, loading])
+  }, [streamingSTT, loading])
 
   // Cleanup on close/unmount
   useEffect(() => {
-    if (!open) {
-      stopTTS()
-      if (streamingSTT.isStreaming) {
-        streamingSTT.stop()
-      }
+    if (!open && streamingSTT.isStreaming) {
+      streamingSTT.stop()
     }
-  }, [open, stopTTS, streamingSTT])
+  }, [open, streamingSTT])
 
   async function handleConfirm(accepted: boolean) {
     const action = pendingActions[0]
@@ -568,16 +450,6 @@ export function AgentChat({ open, onClose, onRefreshTransactions }: AgentChatPro
                     {msg.text}
                     {msg.streaming && <span className="kk-chat-cursor" />}
                   </div>
-                  {msg.role === "assistant" && audioPlaying && i === displayMessages.length - 1 && (
-                    <button
-                      type="button"
-                      onClick={stopTTS}
-                      className="kk-chat-audio-indicator"
-                      aria-label="Stop audio"
-                    >
-                      <Volume2 className="w-3 h-3" strokeWidth={2} />
-                    </button>
-                  )}
                 </motion.div>
               ))}
 
