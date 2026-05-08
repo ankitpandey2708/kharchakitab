@@ -87,7 +87,8 @@ export function useBackupFile() {
       setStatus("importing");
       await deserializeBackup(pendingData);
       setPendingData(null);
-      window.location.reload();
+      await new Promise(r => setTimeout(r, 100));
+      window.location.replace(window.location.pathname);
     } catch {
       setError("Restore failed. The backup file may be corrupted.");
       setStatus("error");
