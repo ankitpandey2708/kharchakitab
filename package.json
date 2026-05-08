@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "concurrently \"npm run worker\" \"next dev\"",
-    "build": "envguard validate && next build && npm run deploy:worker",
+    "build": "envguard validate && next build && npm run deploy:worker && node scripts/ping-indexnow.mjs",
     "start": "next start",
     "worker": "cd worker && npx wrangler dev --port 7071",
     "deploy:worker": "cd worker && npx wrangler deploy",
