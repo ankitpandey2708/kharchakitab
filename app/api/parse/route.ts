@@ -34,13 +34,13 @@ function resolveOutcome(result: TierResult, parsed: unknown): TierOutcome {
 }
 
 function tryParseJSON(raw: string): unknown | null {
-  try { return JSON.parse(raw); } catch { /* continue */ }
+  try { return JSON.parse(raw); } catch { void 0; }
   const stripped = raw.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
-  try { return JSON.parse(stripped); } catch { /* continue */ }
+  try { return JSON.parse(stripped); } catch { void 0; }
   const objMatch = stripped.match(/(\{[\s\S]*\})/);
-  if (objMatch) try { return JSON.parse(objMatch[1]); } catch { /* continue */ }
+  if (objMatch) try { return JSON.parse(objMatch[1]); } catch { void 0; }
   const arrMatch = stripped.match(/(\[[\s\S]*\])/);
-  if (arrMatch) try { return JSON.parse(arrMatch[1]); } catch { /* continue */ }
+  if (arrMatch) try { return JSON.parse(arrMatch[1]); } catch { void 0; }
   return null;
 }
 

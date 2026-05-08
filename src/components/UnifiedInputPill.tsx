@@ -72,6 +72,7 @@ export const UnifiedInputPill = React.memo(({
 
   useEffect(() => {
     // Randomize starting hint on client to avoid hydration mismatch
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHintIndex(Math.floor(Math.random() * EXAMPLES.length));
     const interval = setInterval(() => {
       setHintIndex((prev) => (prev + 1) % EXAMPLES.length);
@@ -84,11 +85,13 @@ export const UnifiedInputPill = React.memo(({
       const timer = setTimeout(() => inputRef.current?.focus(), 200);
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [isExpanded]);
 
   // Collapse typing when recording/processing starts or feedback appears
   useEffect(() => {
     if (isRecording || isProcessing || transcriptFeedback) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsExpanded(false);
       setDisplayValue("");
       setTextValue("");

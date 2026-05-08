@@ -70,7 +70,7 @@ function markTipSeen(id: TooltipId): void {
             seenTipsCache = [...seen];
         }
     } catch {
-        // Ignore storage errors
+        void 0; // ignore storage errors
     }
 }
 

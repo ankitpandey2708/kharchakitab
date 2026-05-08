@@ -26,7 +26,7 @@ const sniffHeicByMagic = async (blob: Blob): Promise<boolean> => {
     const ascii = new TextDecoder("ascii").decode(header);
     if (!ascii.includes("ftyp")) return false;
     return HEIC_BRANDS.some((brand) => ascii.includes(`ftyp${brand}`));
-  } catch (error) {
+  } catch {
     return false;
   }
 };
@@ -59,8 +59,8 @@ export const prepareReceiptImage = async (blob: Blob): Promise<Blob> => {
   if (heicByType || heicByMagic) {
     try {
       normalized = await toJpeg(blob);
-    } catch (error) {
-      throw new Error(ERROR_MESSAGES.heicImageCouldNotBeProcessed);
+    } catch (e) {
+      throw new Error(ERROR_MESSAGES.heicImageCouldNotBeProcessed, { cause: e });
     }
   }
 

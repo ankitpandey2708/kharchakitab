@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const acceptHeader = request.headers.get("accept") || "";
   const isMarkdownRequest = acceptHeader.includes("text/markdown");
   const isInternal = request.headers.get("x-internal-request") === "true";
@@ -9,10 +9,10 @@ export function middleware(request: NextRequest) {
   // If it's a markdown request and not already an internal fetch
   if (isMarkdownRequest && !isInternal) {
     const url = new URL(request.url);
-    
+
     // Skip static assets and API routes
-    const isPage = !url.pathname.startsWith("/_next") && 
-                   !url.pathname.startsWith("/api") && 
+    const isPage = !url.pathname.startsWith("/_next") &&
+                   !url.pathname.startsWith("/api") &&
                    !/\.[a-zA-Z0-9]{2,5}$/.test(url.pathname);
 
     if (isPage) {

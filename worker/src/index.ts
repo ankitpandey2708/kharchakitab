@@ -22,7 +22,7 @@ export interface Env {
 
 // ── Worker entry point ────────────────────────────────────────────────────────
 
-export default {
+const worker = {
   async fetch(request: Request, env: Env): Promise<Response> {
     console.log(`[Worker] Incoming request: ${request.method} ${request.url}`);
     console.log(`[Worker] Upgrade header: ${request.headers.get("upgrade")}`);
@@ -38,6 +38,8 @@ export default {
     return resp;
   },
 };
+
+export default worker;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -98,6 +100,7 @@ export class SignalingDO {
     try {
       message = JSON.parse(typeof raw === "string" ? raw : new TextDecoder().decode(raw));
     } catch {
+      void 0;
       return;
     }
     const att = ws.deserializeAttachment() as WsAttachment;
@@ -123,7 +126,7 @@ export class SignalingDO {
       const existing = this.sarvamProxies.get(att.conn_id);
       if (existing) {
         console.log(`[SignalingDO] Closing existing Sarvam proxy for conn_id=${att.conn_id}`);
-        try { existing.close(); } catch { /* ignore */ }
+        try { existing.close(); } catch { void 0; }
         this.sarvamProxies.delete(att.conn_id);
       }
 
@@ -196,7 +199,7 @@ export class SignalingDO {
     if (type === "stt:stop") {
       const sarvam = this.sarvamProxies.get(att.conn_id);
       if (sarvam) {
-        try { sarvam.close(); } catch { /* ignore */ }
+        try { sarvam.close(); } catch { void 0; }
         this.sarvamProxies.delete(att.conn_id);
       }
       return;
@@ -398,12 +401,12 @@ export class SignalingDO {
 
     const sarvam = this.sarvamProxies.get(att.conn_id);
     if (sarvam) {
-      try { sarvam.close(); } catch { /* ignore */ }
+      try { sarvam.close(); } catch { void 0; }
       this.sarvamProxies.delete(att.conn_id);
     }
   }
 
-  async webSocketError(ws: WebSocket, error: any): Promise<void> {
+  async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
     console.error(`[SignalingDO] WebSocket error:`, error);
     await this.webSocketClose(ws, 1011, "Internal Error", false);
   }
@@ -421,10 +424,11 @@ export class SignalingDO {
   }
 
   private getOnlineDevices(
-    _excludeWs?: WebSocket
+    excludeWs?: WebSocket
   ): Array<{ device_id: string; display_name: string }> {
     const result: Array<{ device_id: string; display_name: string }> = [];
     for (const ws of this.state.getWebSockets()) {
+      if (ws === excludeWs) continue;
       const att = ws.deserializeAttachment() as WsAttachment;
       if (att?.device_id) {
         result.push({ device_id: att.device_id, display_name: att.display_name ?? "Unknown" });

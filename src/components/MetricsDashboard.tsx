@@ -112,6 +112,7 @@ const TrendChart = memo(
         }, [chartMeta, totalPrev, dailyAvg]);
 
         useEffect(() => {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setActiveIndex(null);
         }, [chartMeta?.points.length]);
 

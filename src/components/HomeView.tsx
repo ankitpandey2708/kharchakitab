@@ -240,6 +240,7 @@ export const HomeView = React.memo(({
 
   useEffect(() => {
     let active = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     reloadTransactions(() => active);
     return () => {
       active = false;
@@ -248,6 +249,7 @@ export const HomeView = React.memo(({
 
   useEffect(() => {
     if (!deletedTx) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTransactions((prev) => prev.filter((tx) => tx.id !== deletedTx.id));
     setPeriodTransactions((prev) => prev.filter((tx) => tx.id !== deletedTx.id));
     setHouseholdData((prev) => {
@@ -268,6 +270,7 @@ export const HomeView = React.memo(({
 
   useEffect(() => {
     if (!addedTx) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTransactions((prev) => {
       if (prev.some((tx) => tx.id === addedTx.id)) return prev;
       return sortTransactions([addedTx, ...prev]);
@@ -305,6 +308,7 @@ export const HomeView = React.memo(({
 
   useEffect(() => {
     if (!editedTx) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTransactions((prev) =>
       sortTransactions(prev.map((tx) => (tx.id === editedTx.id ? editedTx : tx)))
     );
@@ -508,7 +512,7 @@ export const HomeView = React.memo(({
           <div className="relative px-6 pt-4 pb-6">
             <div className="flex flex-col items-center text-center">
               <h2 className="mt-2 font-[family:var(--font-display)] text-xl font-bold text-[var(--kk-ink)]">
-                Say it, we'll log it
+                {"Say it, we'll log it"}
               </h2>
               <p className="mt-1.5 text-sm text-[var(--kk-ash)] max-w-[220px]">
                 Tap the mic below and try

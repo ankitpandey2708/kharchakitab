@@ -63,7 +63,7 @@ export const useMannKiBaat = () => {
         try {
           const data = JSON.parse(cached);
           if (data.date === todayDate()) return; // Still today, nothing to do
-        } catch { /* regenerate */ }
+        } catch { void 0; }
       }
       // Day has rolled over — reset and regenerate
       setMessage(null);
@@ -186,7 +186,7 @@ export const useMannKiBaat = () => {
         data.dismissed = true;
         localStorage.setItem(LS.MANN_KI_BAAT, JSON.stringify(data));
       } catch {
-        // ignore
+        void 0;
       }
     }
     setIsDismissed(true);

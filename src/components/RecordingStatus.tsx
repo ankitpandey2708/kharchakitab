@@ -44,6 +44,7 @@ export const RecordingStatus = React.memo(
 
       // Select a random starting index
       const randomIndex = Math.floor(Math.random() * EXAMPLES.length);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setExampleIndex(randomIndex);
 
 
@@ -105,7 +106,7 @@ export const RecordingStatus = React.memo(
                     transition={{ duration: 0.3 }}
                     className="inline-block"
                   >
-                    "{EXAMPLES[exampleIndex]}"
+                    {'"'}{EXAMPLES[exampleIndex]}{'"'}
                   </motion.span>
                 </AnimatePresence>
               </div>

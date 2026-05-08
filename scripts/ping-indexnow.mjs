@@ -1,6 +1,5 @@
 import fs from "fs";
 import path from "path";
-import matter from "gray-matter";
 
 const SITE_URL = "https://kharchakitab.com";
 const INDEXNOW_KEY = "8rs7ufd6dv3azpcxshkjjkn5qwx0mv0z";

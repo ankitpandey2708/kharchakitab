@@ -1,8 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 
 export const useBackButton = (isActive: boolean, onBack: () => void) => {
   const onBackRef = useRef(onBack);
-  onBackRef.current = onBack;
+  useLayoutEffect(() => {
+    onBackRef.current = onBack;
+  });
 
   useEffect(() => {
     if (!isActive) return;

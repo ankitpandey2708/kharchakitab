@@ -1,4 +1,3 @@
-/* eslint-disable no-restricted-globals */
 const DB_NAME = "QuickLogDB";
 const DB_VERSION = 5;
 const ALERTS_STORE = "recurring_alerts";

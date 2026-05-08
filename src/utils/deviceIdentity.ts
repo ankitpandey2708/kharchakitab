@@ -82,7 +82,7 @@ export async function deriveDeviceName(): Promise<string> {
         const hints = await uaData.getHighEntropyValues(["model"]);
         if (hints.model) device = hints.model;
       } catch {
-        // Permission denied or not supported — keep platform-derived name
+        void 0; // permission denied or not supported — keep platform-derived name
       }
     }
 

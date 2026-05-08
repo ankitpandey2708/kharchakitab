@@ -149,6 +149,7 @@ export const SyncManager = React.memo(({ onSyncComplete }: SyncManagerProps) => 
       }, 5000); // Show error for 5 seconds
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [errorMessage]);
 
   const { refreshTrigger } = useSyncEvents(pairings[0]?.partner_device_id);
@@ -224,8 +225,7 @@ export const SyncManager = React.memo(({ onSyncComplete }: SyncManagerProps) => 
       >("presence:list", { device_id: device.device_id, partner_device_ids: partnerIds });
 
       setNearbyDevices(list.filter((item) => item.device_id !== device.device_id));
-    } catch (error) {
-
+    } catch {
       setErrorMessage("Unable to discover nearby devices");
     } finally {
       isSearchingRef.current = false;
@@ -1038,7 +1038,7 @@ export const SyncManager = React.memo(({ onSyncComplete }: SyncManagerProps) => 
     const offCandidate = client.on("webrtc:candidate", async (payload) => {
       if (!payload || payload.to_device_id !== identityRef.current?.device_id) return;
       if (!peerConnectionRef.current) return;
-      try { await peerConnectionRef.current.addIceCandidate(payload.candidate); } catch { }
+      try { await peerConnectionRef.current.addIceCandidate(payload.candidate); } catch { void 0; }
     });
 
     return () => {
@@ -1401,7 +1401,7 @@ export const SyncManager = React.memo(({ onSyncComplete }: SyncManagerProps) => 
                           from_device_id: identityRef.current?.device_id,
                           from_display_name: identityRef.current?.display_name,
                         });
-                      } catch { }
+                      } catch { void 0; }
                     }
                   }}
                   className="kk-btn-ghost kk-btn-compact"

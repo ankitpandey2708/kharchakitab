@@ -1,7 +1,5 @@
 import type { NextConfig } from "next";
 
-const isProd = process.env.NODE_ENV === "production";
-
 const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ["framer-motion", "lucide-react", "@headlessui/react"],
@@ -11,15 +9,6 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [
-      ...(isProd ? [{
-        source: "/_next/static/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
-          },
-        ],
-      }] : []),
       {
         source: "/:path*",
         headers: [

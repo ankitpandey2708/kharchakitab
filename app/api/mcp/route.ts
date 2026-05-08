@@ -172,7 +172,7 @@ export async function POST(request: Request) {
         "Access-Control-Allow-Headers": "Content-Type",
       },
     });
-  } catch (err) {
+  } catch {
     return Response.json({
       jsonrpc: "2.0",
       id: null,

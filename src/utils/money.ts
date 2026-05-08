@@ -22,8 +22,8 @@ export const detectCurrency = (): CurrencyCode => {
     if (timeZone === "Asia/Kolkata" || timeZone === "Asia/Calcutta") {
       return "INR";
     }
-  } catch (e) {
-    // Fallback if Intl is not supported or fails
+  } catch {
+    void 0; // fallback if Intl is not supported or fails
   }
 
   const lang = navigator.language || "";

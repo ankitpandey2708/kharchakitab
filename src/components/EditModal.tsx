@@ -62,6 +62,7 @@ export const EditModal = React.memo(({
   item,
   category,
   paymentMethod = "cash",
+  // eslint-disable-next-line react-hooks/purity
   timestamp = Date.now(),
   isPrivate = false,
   isShared = false,

@@ -32,6 +32,7 @@ const BulkExpensePreview = dynamic(() => import("@/src/components/BulkExpensePre
 const SyncOverlay = dynamic(() => import("@/src/components/SyncOverlay").then(m => ({ default: m.SyncOverlay })), { ssr: false });
 const ProfileView = dynamic(() => import("@/src/components/ProfileView").then(m => ({ default: m.ProfileView })), { ssr: false });
 import { useStreamingSTT } from "@/src/hooks/useStreamingSTT";
+import type { DeviceIdentity } from "@/src/types";
 import { useIsMobile } from "@/src/hooks/useIsMobile";
 import {
   addTransaction,
@@ -166,7 +167,7 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const editTimestampFallback = useMemo(() => Date.now(), [editState]);
 
   const { client } = useSignaling();
-  const identityRef = useRef<any>(null);
+  const identityRef = useRef<DeviceIdentity | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -268,6 +269,7 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
       const t = setTimeout(() => setShowInstallBanner(true), 2000);
       return () => clearTimeout(t);
     }
+    return undefined;
   }, [addedTx, canInstall]);
 
   useEffect(() => {

@@ -33,7 +33,7 @@ interface AgentChatProps {
 }
 
 export function AgentChat({ open, onClose, onRefreshTransactions }: AgentChatProps) {
-  const [messages, setMessages] = useState<any[]>([])
+  const [messages, setMessages] = useState<{ role: string; content: string }[]>([])
   const [displayMessages, setDisplayMessages] = useState<DisplayMessage[]>([])
   const [pendingActions, setPendingActions] = useState<PendingWriteAction[]>([])
   const [loading, setLoading] = useState(false)
@@ -75,6 +75,7 @@ export function AgentChat({ open, onClose, onRefreshTransactions }: AgentChatPro
       const t = setTimeout(() => inputRef.current?.focus(), 300)
       return () => clearTimeout(t)
     }
+    return undefined
   }, [open])
 
   // Track detected language from STT
@@ -143,7 +144,7 @@ export function AgentChat({ open, onClose, onRefreshTransactions }: AgentChatPro
         const reader = res.body!.getReader()
         const decoder = new TextDecoder()
         let fullText = ""
-        let responseMessages: any[] = []
+        let responseMessages: { role: string; content: string }[] = []
         let pa: PendingWriteAction[] = []
 
         // Add streaming placeholder
@@ -203,7 +204,7 @@ export function AgentChat({ open, onClose, onRefreshTransactions }: AgentChatPro
                 } else if (parsed.type === "pending_actions") {
                   pa = parsed.actions
                 }
-              } catch (e) {
+              } catch {
                 console.warn("[AgentChat] Partial or malformed JSON in stream:", data)
               }
             }
@@ -290,7 +291,7 @@ export function AgentChat({ open, onClose, onRefreshTransactions }: AgentChatPro
         try {
           const posthog = (await import("posthog-js")).default
           posthog.capture("voice_query_barge_in")
-        } catch { /* posthog unavailable */ }
+        } catch { void 0; }
       }
       await streamingSTT.start()
     }

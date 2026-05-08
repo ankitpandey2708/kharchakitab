@@ -3,8 +3,6 @@ import type { DataSnapshot } from './types'
 import { LS } from '@/src/config/storageKeys'
 
 export async function buildSnapshot(): Promise<DataSnapshot> {
-  console.time('agent:buildSnapshot')
-
   const now = Date.now()
   const fourMonthsAgo = new Date()
   fourMonthsAgo.setMonth(fourMonthsAgo.getMonth() - 4)
@@ -43,8 +41,6 @@ export async function buildSnapshot(): Promise<DataSnapshot> {
     recurring_next_due_at: t.recurring_next_due_at,
     recurring_reminder_days: t.recurring_reminder_days,
   }))
-
-  console.timeEnd('agent:buildSnapshot')
 
   return {
     expenses,

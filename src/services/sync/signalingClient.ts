@@ -4,11 +4,13 @@ type SignalingMessage = {
   request_id?: string;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Handler = (payload: any) => void;
 
 export class SignalingClient {
   private ws: WebSocket | null = null;
   private handlers = new Map<string, Set<Handler>>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private pending = new Map<string, (payload: any) => void>();
   private url: string;
   private intentionalClose = false;
@@ -85,7 +87,7 @@ export class SignalingClient {
         await this.connect();
         this.handlers.get("reconnected")?.forEach((h) => h(null));
       } catch {
-        // connect() failed — ws.onclose will fire and scheduleReconnect again
+        void 0; // connect() failed — ws.onclose will fire and scheduleReconnect again
       }
     }, delay);
   }
@@ -116,7 +118,7 @@ export class SignalingClient {
     this.ws.send(JSON.stringify({ type, payload }));
   }
 
-  request<T = any>(type: string, payload?: unknown): Promise<T> {
+  request<T = unknown>(type: string, payload?: unknown): Promise<T> {
     const request_id = `req_${Date.now()}_${Math.random().toString(16).slice(2)}`;
     return new Promise((resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {

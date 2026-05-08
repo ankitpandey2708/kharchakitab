@@ -1,4 +1,4 @@
-import { generateText, streamText, stepCountIs } from 'ai'
+import { generateText, streamText, stepCountIs, type ModelMessage } from 'ai'
 import { cookies } from 'next/headers'
 import { createAgentTools } from '@/src/lib/agent/tools'
 import { SYSTEM_PROMPT, resolveProviders } from '@/src/lib/agent/config'
@@ -65,12 +65,11 @@ function extractPendingActions(steps: Array<{ toolResults: Array<{ output: unkno
 }
 
 export async function POST(request: Request) {
-  console.time('agent:total-roundtrip')
   const t0 = Date.now()
 
   try {
     const { messages, snapshot, stream: wantStream }: {
-      messages: any[]
+      messages: ModelMessage[]
       snapshot: DataSnapshot
       stream?: boolean
     } = await request.json()
@@ -127,7 +126,7 @@ export async function POST(request: Request) {
             const response = await streamResult.response
             const usage = await streamResult.usage
             captureCompletion({
-              userMessage: messages.at(-1)?.content ?? '',
+              userMessage: typeof messages.at(-1)?.content === 'string' ? (messages.at(-1)?.content as string) : '',
               reply: (await streamResult.text),
               toolsCalled: steps.flatMap(s => s.toolCalls.map(tc => tc.toolName)),
               totalTokens: usage.totalTokens ?? 0,
@@ -150,7 +149,6 @@ export async function POST(request: Request) {
             }
           } finally {
             controller.close()
-            console.timeEnd('agent:total-roundtrip')
           }
         },
       })
@@ -195,7 +193,6 @@ export async function POST(request: Request) {
 
     if (!result) {
       console.log('[agent] all providers exhausted')
-      console.timeEnd('agent:total-roundtrip')
       return Response.json(
         { reply: 'All AI providers are rate-limited, try again shortly.', responseMessages: [], pendingActions: [] },
         { status: 503 },
@@ -207,14 +204,13 @@ export async function POST(request: Request) {
     const toolsCalled = result.steps.flatMap((s: any) => s.toolCalls.map((tc: any) => tc.toolName))
     console.log('[agent] steps:', result.steps.length, 'tools-called:', toolsCalled, 'provider:', chosenLabel)
     captureCompletion({
-      userMessage: messages.at(-1)?.content ?? '',
+      userMessage: typeof messages.at(-1)?.content === 'string' ? (messages.at(-1)?.content as string) : '',
       reply: result.text,
       toolsCalled,
       totalTokens: result.usage.totalTokens ?? 0,
       latencyMs: Date.now() - t0,
       provider: chosenLabel,
     })
-    console.timeEnd('agent:total-roundtrip')
 
     return Response.json({
       reply: result.text,
@@ -223,7 +219,6 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error('agent:error', error)
-    console.timeEnd('agent:total-roundtrip')
     return Response.json(
       {
         reply: 'Something went wrong, try again.',

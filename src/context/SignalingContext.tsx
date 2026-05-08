@@ -161,6 +161,7 @@ export const SignalingProvider = ({ children }: { children: React.ReactNode }) =
     }, []);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         connect();
 
         // Close WebSocket on pagehide so the page is eligible for bfcache.

@@ -1,4 +1,4 @@
-import { openDB, type IDBPIndex } from "idb";
+import { openDB, type IDBPDatabase, type IDBPIndex } from "idb";
 import type {
   DeviceIdentity,
   PairingRecord,
@@ -90,6 +90,7 @@ let cacheGeneration = 0;
 const getDb = () =>
   openDB<QuickLogDB>(DB_NAME, DB_VERSION, {
     upgrade: async (db, oldVersion, _newVersion, transaction) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let store: any;
       if (!db.objectStoreNames.contains("transactions")) {
         store = db.createObjectStore("transactions", { keyPath: "id" });
@@ -254,6 +255,7 @@ const isDeleted = (tx: Transaction) => Boolean(tx.deleted_at);
 function stripLegacyTxFields(tx: Transaction): Transaction {
   const record = tx as unknown as Record<string, unknown>;
   if (!("source" in record)) return tx;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { source: _ignored, ...rest } = record;
   return rest as unknown as Transaction;
 }
@@ -310,7 +312,7 @@ const resolveDeviceIdentity = async (): Promise<DeviceIdentity> => {
   try {
     const fpData = await getFingerprintData();
     if (fpData) visitorId = fpData.visitorId;
-  } catch { /* non-fatal */ }
+  } catch { void 0; }
 
   const smartName = await deriveDeviceName();
 
@@ -592,7 +594,7 @@ export const upsertTransactionRaw = async (tx: Transaction): Promise<void> => {
   invalidateCache(tx.timestamp);
 };
 
-const clearTransactionHistory = async (db: any, id: string) => {
+const clearTransactionHistory = async (db: IDBPDatabase<QuickLogDB>, id: string) => {
   const tx = db.transaction("transaction_versions", "readwrite");
   const versions = tx.store;
   const index = versions.index("by-transaction");
@@ -797,7 +799,7 @@ export const updateRecurringTemplate = async (
   if (!existing) return;
 
   const now = Date.now();
-  let nextUpdates = { ...updates, updated_at: now };
+  const nextUpdates = { ...updates, updated_at: now };
 
   // Recalculate next_due_at if frequency or dates changed
   if (

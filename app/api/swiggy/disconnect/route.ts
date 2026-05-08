@@ -14,7 +14,7 @@ export async function POST() {
         headers: { Authorization: `Bearer ${token}` },
       });
     } catch {
-      // best-effort — clear cookie regardless
+      void 0; // best-effort — clear cookie regardless
     }
   }
 

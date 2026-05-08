@@ -32,9 +32,13 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
 // Legacy hook for backward compatibility - prefer specific hooks for better performance
 export const useAppContext = () => {
   // Import dynamically to avoid circular dependencies
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { useRecording: useRec } = require("./RecordingContext");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { useNavigation: useNav } = require("./NavigationContext");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { useCurrencyContext: useCurr } = require("./CurrencyContext");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { usePairing: usePair } = require("./PairingContext");
 
   const recording = useRec();

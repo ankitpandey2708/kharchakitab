@@ -83,7 +83,7 @@ Which reply is better? Respond with only A, B, or TIE.`
     throw new Error(`OpenRouter ${response.status}: ${err}`)
   }
 
-  const data = await response.json() as any
+  const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> }
   const verdict = (data.choices?.[0]?.message?.content ?? '').trim().toUpperCase()
   if (verdict === 'A' || verdict === 'B' || verdict === 'TIE') return verdict
   return 'TIE'
@@ -96,7 +96,7 @@ async function main() {
 
   const cases = loadDataset(resolve(process.cwd(), datasetArg))
     .filter(c => !filterId || c.id === filterId)
-    .filter(c => (c as any).goldenReply)
+    .filter(c => (c as { goldenReply?: unknown }).goldenReply)
 
   if (cases.length === 0) {
     console.log('No cases with goldenReply found. Add "goldenReply": "..." to JSONL cases to enable L2 judging.')
@@ -109,7 +109,7 @@ async function main() {
 
   for (const c of cases) {
     const userMessage = c.messages.find(m => m.role === 'user')?.content ?? ''
-    const goldenReply = (c as any).goldenReply as string
+    const goldenReply = (c as unknown as { goldenReply: string }).goldenReply
 
     try {
       const candidateReply = await getAgentReply(c)

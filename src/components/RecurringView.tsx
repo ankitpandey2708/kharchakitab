@@ -137,6 +137,7 @@ function CalendarPickerPopover({
 
   useLayoutEffect(() => {
     const rect = anchorEl.getBoundingClientRect();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCoords({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
   }, [anchorEl]);
 
@@ -346,7 +347,7 @@ export const RecurringView = React.memo(({
   const makeToggle = (setter: React.Dispatch<React.SetStateAction<Set<string>>>) =>
     (group: string) => setter((prev) => {
       const next = new Set(prev);
-      next.has(group) ? next.delete(group) : next.add(group);
+      if (next.has(group)) { next.delete(group); } else { next.add(group); }
       return next;
     });
 

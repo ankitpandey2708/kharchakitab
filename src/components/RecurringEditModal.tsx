@@ -286,7 +286,7 @@ export const RecurringEditModal = React.memo(({
                     {mode === "new" ? "Add recurring" : "Edit recurring"}
                   </div>
                   <div className="mt-1 text-xs text-[var(--kk-ash)]">
-                    Set the cadence once, we'll keep it on track.
+                    {"Set the cadence once, we’ll keep it on track."}
                   </div>
                 </div>
                 <button type="button" onClick={onClose} className="kk-icon-btn mt-1">

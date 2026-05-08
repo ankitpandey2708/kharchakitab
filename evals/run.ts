@@ -93,7 +93,19 @@ function fmtRow(id: string, scores: ScoreResult[]) {
 
 // ── L4: trace sampling ──
 
-async function fetchTraceEvents(): Promise<any[]> {
+interface TraceEvent {
+  uuid?: string;
+  properties?: {
+    user_message?: string;
+    tools_called?: string[];
+    reply?: string;
+    total_tokens?: number;
+    latency_ms?: number;
+    [key: string]: unknown;
+  };
+}
+
+async function fetchTraceEvents(): Promise<TraceEvent[]> {
   const key = process.env.POSTHOG_PERSONAL_API_KEY
   const host = process.env.NEXT_PUBLIC_POSTHOG_HOST ?? 'https://us.i.posthog.com'
   if (!key) throw new Error('POSTHOG_PERSONAL_API_KEY not set')
@@ -102,7 +114,7 @@ async function fetchTraceEvents(): Promise<any[]> {
     headers: { Authorization: `Bearer ${key}` },
   })
   if (!res.ok) throw new Error(`PostHog API ${res.status}: ${await res.text()}`)
-  const data = await res.json() as any
+  const data = await res.json() as { results?: TraceEvent[] }
   return data.results ?? []
 }
 

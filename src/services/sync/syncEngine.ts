@@ -138,7 +138,7 @@ export const buildSyncPayload = async (
         }
       }
     } catch {
-      // localStorage read failed — skip budget sync, not critical
+      void 0; // localStorage read failed — skip budget sync, not critical
     }
   }
 
@@ -275,7 +275,7 @@ export const applySyncPayload = async (
         window.localStorage.setItem(LS.BUDGETS_HOUSEHOLD, JSON.stringify(local));
       }
     } catch {
-      // Budget merge failed — not critical, skip
+      void 0; // budget merge failed — not critical, skip
     }
   }
 

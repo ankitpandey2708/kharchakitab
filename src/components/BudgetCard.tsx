@@ -151,7 +151,7 @@ export const BudgetCard = React.memo(({
                 const stored = window.localStorage.getItem(LS.BUDGETS_HOUSEHOLD);
                 const parsed = stored ? JSON.parse(stored) : {};
                 setHouseholdBudgets(typeof parsed === "object" && parsed !== null ? parsed : {});
-            } catch { /* ignore */ }
+            } catch { void 0; }
         };
         const offRefresh = syncEvents.on("sync:refresh", reload);
         const offComplete = syncEvents.on("sync:complete", reload);
@@ -223,6 +223,7 @@ export const BudgetCard = React.memo(({
         if (!isHousehold || !householdEntry || !deviceId) return null;
         const isYou = householdEntry.set_by === deviceId;
         const name = isYou ? "you" : (partnerName ?? "Partner");
+        // eslint-disable-next-line react-hooks/purity
         const ago = Date.now() - householdEntry.updated_at;
         const days = Math.floor(ago / 86400000);
         const timeLabel = days === 0 ? "today" : days === 1 ? "yesterday" : `${days}d ago`;

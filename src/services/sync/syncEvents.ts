@@ -1,5 +1,6 @@
 type SyncEventType = "sync:start" | "sync:progress" | "sync:complete" | "sync:error" | "sync:refresh";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SyncEventListener = (data?: any) => void;
 
 class SyncEventEmitter {
@@ -23,15 +24,14 @@ class SyncEventEmitter {
         };
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     emit(event: SyncEventType, data?: any): void {
         const arr = this.listeners.get(event);
         if (arr) {
             arr.forEach((listener) => {
                 try {
                     listener(data);
-                } catch (error) {
-
-                }
+                } catch { void 0; }
             });
         }
     }

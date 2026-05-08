@@ -152,6 +152,7 @@ export const ImportModal = React.memo(
     const isFailure = fatalError || (result && result.imported === 0 && hasErrors);
 
     const [mounted, setMounted] = useState(false);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => { setMounted(true); }, []);
     if (!mounted) return null;
 

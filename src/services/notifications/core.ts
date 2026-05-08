@@ -154,7 +154,7 @@ export const registerPeriodicSync = async (tag: string, minInterval: number) => 
       await periodic.register(tag, { minInterval });
     }
   } catch {
-    // Best-effort
+    void 0; // best-effort
   }
 };
 
@@ -168,7 +168,7 @@ export const unregisterPeriodicSync = async (tag: string) => {
       await periodic.unregister(tag);
     }
   } catch {
-    // Best-effort
+    void 0; // best-effort
   }
 };
 
@@ -181,7 +181,7 @@ export const registerBackgroundSync = async (tag: string) => {
       await syncManager.register(tag);
     }
   } catch {
-    // Best-effort
+    void 0; // best-effort
   }
 };
 
@@ -196,7 +196,7 @@ export const postToSW = async (message: Record<string, unknown>) => {
       const ready = await navigator.serviceWorker.ready;
       ready.active?.postMessage(payload);
     } catch {
-      // ignore
+      void 0;
     }
     return;
   }

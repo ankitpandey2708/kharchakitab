@@ -3,7 +3,8 @@ class SttProcessor extends AudioWorkletProcessor {
    * AudioWorkletProcessor for capturing raw PCM audio samples.
    * This runs on a dedicated audio thread to ensure glitch-free capture.
    */
-  process(inputs, outputs, parameters) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  process(inputs, _outputs, _parameters) {
     const input = inputs[0];
     if (input && input.length > 0) {
       // Send the first channel of the first input to the main thread.

@@ -218,15 +218,13 @@ const DeviceNameRow = React.memo(() => {
 DeviceNameRow.displayName = "DeviceNameRow";
 
 const SwiggyConnectRow = React.memo(() => {
-  const [isLinked, setIsLinked] = useState(false);
+  const [isLinked, setIsLinked] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("swiggy_linked") === "true" : false
+  );
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const popupRef = useRef<Window | null>(null);
   const messageHandlerRef = useRef<((e: MessageEvent) => void) | null>(null);
-
-  useEffect(() => {
-    setIsLinked(localStorage.getItem("swiggy_linked") === "true");
-  }, []);
 
   const cleanupPopup = useCallback(() => {
     if (messageHandlerRef.current) {

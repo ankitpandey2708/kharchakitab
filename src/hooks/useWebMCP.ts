@@ -26,7 +26,7 @@ export function useWebMCP(
     // Register WebMCP context and tools
     // We use provideContext as requested by the user, which is part of the emerging WebMCP spec
     try {
-      // @ts-ignore - WebMCP is an experimental API
+      // @ts-expect-error - WebMCP is an experimental API
       navigator.modelContext.provideContext({
         tools: [
           {
@@ -43,7 +43,7 @@ export function useWebMCP(
                 max_amount: { type: "number" },
               }
             },
-            execute: async (args: any) => {
+            execute: async (args: Record<string, unknown>) => {
               const snapshot = await buildSnapshot();
               const tools = createAgentTools(snapshot);
               return await tools.query_expenses.execute(args);
@@ -68,10 +68,10 @@ export function useWebMCP(
               },
               required: ["group_by", "period"]
             },
-            execute: async (args: any) => {
+            execute: async (args: Record<string, unknown>) => {
               const snapshot = await buildSnapshot();
               const tools = createAgentTools(snapshot);
-              return await tools.get_summary.execute(args);
+              return await tools.get_summary.execute(args as { group_by: string; period: string });
             }
           },
           {
@@ -128,10 +128,10 @@ export function useWebMCP(
                 lookahead_days: { type: "number", default: 7, description: "Number of days to look ahead (max 30)" }
               }
             },
-            execute: async (args: any) => {
+            execute: async (args: Record<string, unknown>) => {
               const snapshot = await buildSnapshot();
               const tools = createAgentTools(snapshot);
-              return await tools.get_recurring.execute(args);
+              return await tools.get_recurring.execute(args as { lookahead_days: number });
             }
           }
         ]
