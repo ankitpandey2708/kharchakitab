@@ -3,9 +3,10 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { EyeOff, MoreHorizontal, RefreshCw, Fingerprint, Handshake } from "lucide-react";
-import type { Transaction } from "@/src/types";
+import type { Tag, Transaction } from "@/src/types";
 import { CategoryIcon } from "@/src/components/CategoryIcon";
 import { TransactionRowActions } from "@/src/components/TransactionRowActions";
+import { TagBadge } from "@/src/components/TagBadge";
 
 type MetaVariant = "date" | "time";
 
@@ -28,6 +29,7 @@ interface TransactionRowProps {
   isProcessing?: boolean;
   ownerLabel?: string;
   showActions?: boolean;
+  resolvedTags?: Tag[];
 }
 
 
@@ -62,6 +64,7 @@ export const TransactionRow = React.memo(
     isProcessing = false,
     ownerLabel,
     showActions = true,
+    resolvedTags,
   }: TransactionRowProps) => {
     // Mobile UX: only the "..." button should be actionable; the row itself is not clickable.
     const isClickable = false;
@@ -128,6 +131,13 @@ export const TransactionRow = React.memo(
                     </span>
                   )}
                 </div>
+                {resolvedTags && resolvedTags.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {resolvedTags.map((tag) => (
+                      <TagBadge key={tag.id} tag={tag} size="xs" />
+                    ))}
+                  </div>
+                )}
               </>
             )}
           </div>

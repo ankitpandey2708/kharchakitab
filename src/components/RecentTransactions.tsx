@@ -2,7 +2,7 @@
 
 import React, { useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { Transaction } from "@/src/types";
+import type { Tag, Transaction } from "@/src/types";
 import { TransactionRow } from "@/src/components/TransactionRow";
 import { isProcessingTransaction } from "@/src/utils/transactions";
 
@@ -18,6 +18,7 @@ interface RecentTransactionsProps {
     onOpenMobileSheet?: (id: string) => void;
     currencySymbol: string;
     formatCurrency: (amount: number) => string;
+    tagMap?: Map<string, Tag>;
 }
 
 const canEditTransaction = (tx: Transaction, identity: { device_id: string } | null): boolean => {
@@ -35,6 +36,7 @@ export const RecentTransactions = React.memo(({
     onOpenMobileSheet,
     currencySymbol,
     formatCurrency,
+    tagMap,
 }: RecentTransactionsProps) => {
     const recentTransactions = useMemo(
         () => [...pendingTransactions, ...transactions].slice(0, 5),
@@ -52,21 +54,9 @@ export const RecentTransactions = React.memo(({
                 <div>
                     <div className="kk-label">Last 5 txns</div>
                 </div>
-                <div className="flex items-center gap-3">
-                    {/* {onViewAll && (
-                        <button
-                            type="button"
-                            onClick={onViewAll}
-                            className="kk-btn-secondary kk-btn-compact"
-                        >
-                            <BarChart3 className="h-3.5 w-3.5" />
-                            View all
-                        </button>
-                    )} */}
-                </div>
             </div>
 
-            <div className="mt-5 space-y-3">
+            <div className="mt-5 space-y-2">
                 {recentTransactions.length === 0 ? (
                     <div className="py-6 text-center text-sm text-[var(--kk-ash)]">
                         No recent transactions
@@ -83,6 +73,9 @@ export const RecentTransactions = React.memo(({
                                 .toUpperCase();
                             const label = `${day} ${month}`;
                             const canEdit = canEditTransaction(tx, identity);
+                            const resolvedTags = tagMap && tx.tags?.length
+                                ? tx.tags.map((id) => tagMap.get(id)).filter((t): t is Tag => !!t)
+                                : undefined;
                             return (
                                 <TransactionRow
                                     key={rowKey}
@@ -101,6 +94,7 @@ export const RecentTransactions = React.memo(({
                                     amountMaxWidthClass="max-w-[24vw]"
                                     isProcessing={processing}
                                     showActions={!processing}
+                                    resolvedTags={resolvedTags}
                                 />
                             );
                         })}

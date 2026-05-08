@@ -6,7 +6,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, ChevronLeft, Fingerprint, Handshake } from "lucide-react";
+import { ChevronLeft, Fingerprint, Handshake, Search } from "lucide-react";
 import {
   deleteTransaction,
   fetchTransactions,
@@ -14,8 +14,9 @@ import {
   isTransactionShared,
   getDeviceIdentity,
   getPairings,
+  getAllTags,
 } from "@/src/db/db";
-import type { Transaction } from "@/src/types";
+import type { Tag, Transaction } from "@/src/types";
 import { useEscapeKey } from "@/src/hooks/useEscapeKey";
 import { useBackButton } from "@/src/hooks/useBackButton";
 import { FilterKey, getRangeForFilter, toDateInputValue } from "@/src/utils/dates";
@@ -40,6 +41,7 @@ interface AnalyticsViewProps {
   onEdit?: (tx: Transaction) => void;
   editedTx?: Transaction | null;
   refreshKey?: number;
+  tagsVersion?: number;
   onImported?: () => void;
 }
 
@@ -53,11 +55,11 @@ export const AnalyticsView = React.memo(({
   onEdit,
   editedTx,
   refreshKey,
+  tagsVersion,
   onImported,
 }: AnalyticsViewProps) => {
   const { symbol: currencySymbol, formatCurrency: formatCurrencyUtil } = useCurrency();
   const [filter, setFilter] = useState<FilterKey>("month");
-  const [query, setQuery] = useState("");
   const [items, setItems] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -78,7 +80,6 @@ export const AnalyticsView = React.memo(({
   const [isExporting, setIsExporting] = useState(false);
   const [isMetricsLoading, setIsMetricsLoading] = useState(false);
   const [metricsVersion, setMetricsVersion] = useState(0);
-  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [debouncedCustomStart, setDebouncedCustomStart] = useState("");
   const [debouncedCustomEnd, setDebouncedCustomEnd] = useState("");
   const [renderLimit, setRenderLimit] = useState(200);
@@ -92,6 +93,8 @@ export const AnalyticsView = React.memo(({
   } = useMobileSheet();
   const [isMobileSheetShared, setIsMobileSheetShared] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [tagMap, setTagMap] = useState<Map<string, Tag>>(new Map());
 
   const openMobileSheet = useCallback(async (id: string) => {
     const shared = await isTransactionShared(id);
@@ -135,6 +138,12 @@ export const AnalyticsView = React.memo(({
       setPartnerName(pairings[0]?.partner_display_name ?? null);
     })();
   }, []);
+
+  useEffect(() => {
+    getAllTags().then((tags) => {
+      setTagMap(new Map(tags.map((t) => [t.id, t])));
+    });
+  }, [isOpen, tagsVersion]);
 
   const [allocationMode, setAllocationMode] = useState<"amount" | "count">(
     "amount"
@@ -255,7 +264,7 @@ export const AnalyticsView = React.memo(({
     if (listRef.current) {
       listRef.current.scrollTop = 0;
     }
-  }, [filter, query, isOpen]);
+  }, [filter, isOpen]);
 
   useEffect(() => {
     if (!editedTx) return;
@@ -264,13 +273,6 @@ export const AnalyticsView = React.memo(({
     );
     setMetricsVersion((prev) => prev + 1);
   }, [editedTx]);
-
-  useEffect(() => {
-    const handle = window.setTimeout(() => {
-      setDebouncedQuery(query);
-    }, 200);
-    return () => window.clearTimeout(handle);
-  }, [query]);
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
@@ -611,13 +613,14 @@ export const AnalyticsView = React.memo(({
         result = result.filter((tx) => tx.category === categoryFilter);
       }
     }
-    // Search
-    if (!debouncedQuery.trim()) return result;
-    const q = debouncedQuery.toLowerCase();
-    return result.filter((tx) =>
-      `${tx.item} ${tx.category} ${tx.amount}`.toLowerCase().includes(q)
-    );
-  }, [allocationMetrics.categories, categoryFilter, currentDeviceId, debouncedQuery, items, ownerFilter]);
+    // Tag filter
+    if (selectedTagIds.length > 0) {
+      result = result.filter((tx) =>
+        tx.tags && selectedTagIds.every((id) => tx.tags!.includes(id))
+      );
+    }
+    return result;
+  }, [allocationMetrics.categories, categoryFilter, currentDeviceId, items, ownerFilter, selectedTagIds]);
 
   const visibleItems = useMemo(
     () => filteredItems.slice(0, renderLimit),
@@ -990,8 +993,6 @@ export const AnalyticsView = React.memo(({
                 </div>
 
                 <HistoryFilters
-                  query={query}
-                  onQueryChange={setQuery}
                   filter={filter}
                   onFilterChange={setFilter}
                   customStart={customStart}
@@ -1004,6 +1005,9 @@ export const AnalyticsView = React.memo(({
                   isExportDisabled={range === null}
                   onExport={exportTransactions}
                   onImport={() => setIsImportOpen(true)}
+                  selectedTagIds={selectedTagIds}
+                  onTagFilterChange={setSelectedTagIds}
+                  tagsVersion={tagsVersion}
                 />
 
                 {/* Owner filter — only shown when partner data exists */}
@@ -1172,18 +1176,10 @@ export const AnalyticsView = React.memo(({
                       <Search className="h-7 w-7 text-[var(--kk-ash)]" />
                     </div>
                     <div className="mt-4 text-base font-semibold text-[var(--kk-ink)]">
-                      {categoryFilter
-                        ? `No ${categoryFilter} expenses`
-                        : debouncedQuery.trim()
-                          ? "No search results"
-                          : "No expenses found"}
+                      {categoryFilter ? `No ${categoryFilter} expenses` : "No expenses found"}
                     </div>
                     <div className="mt-1 text-sm text-[var(--kk-ash)]">
-                      {categoryFilter
-                        ? "Tap the category again to clear the filter"
-                        : debouncedQuery.trim()
-                          ? "Try a different search term"
-                          : "Try adjusting your filters"}
+                      {categoryFilter ? "Tap the category again to clear the filter" : "Try adjusting your filters"}
                     </div>
                   </motion.div>
                 ) : flattenedItems ? (
@@ -1241,6 +1237,7 @@ export const AnalyticsView = React.memo(({
                             formatCurrency={formatCurrency}
                             currencySymbol={currencySymbol}
                             amountMaxWidthClass="max-w-[24vw]"
+                            resolvedTags={item.tx.tags?.map((id) => tagMap.get(id)).filter((t): t is Tag => !!t)}
                           />
                         </div>
                       );
@@ -1280,6 +1277,7 @@ export const AnalyticsView = React.memo(({
                                 formatCurrency={formatCurrency}
                                 currencySymbol={currencySymbol}
                                 amountMaxWidthClass="max-w-[24vw]"
+                                resolvedTags={tx.tags?.map((id) => tagMap.get(id)).filter((t): t is Tag => !!t)}
                               />
                             );
                           })}

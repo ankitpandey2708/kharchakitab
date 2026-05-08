@@ -1,5 +1,16 @@
 import type { Frequency } from "@/src/config/recurring";
 
+export interface Tag {
+  id: string;
+  name: string;
+  color: string;
+  created_at: number;
+  updated_at: number;
+  deleted_at?: number | null;
+  owner_device_id?: string;
+  version?: number;
+}
+
 export interface Transaction {
   id: string;
   amount: number;
@@ -7,6 +18,7 @@ export interface Transaction {
   category: string;
   paymentMethod: "cash" | "upi" | "card" | "unknown";
   timestamp: number;
+  tags?: string[];
   owner_device_id?: string;
   created_at?: number;
   updated_at?: number;

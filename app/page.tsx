@@ -31,6 +31,7 @@ const NotificationsSettings = dynamic(() => import("@/src/components/Notificatio
 const BulkExpensePreview = dynamic(() => import("@/src/components/BulkExpensePreview").then(m => ({ default: m.BulkExpensePreview })), { ssr: false });
 const SyncOverlay = dynamic(() => import("@/src/components/SyncOverlay").then(m => ({ default: m.SyncOverlay })), { ssr: false });
 const ProfileView = dynamic(() => import("@/src/components/ProfileView").then(m => ({ default: m.ProfileView })), { ssr: false });
+const TagManager = dynamic(() => import("@/src/components/TagManager").then(m => ({ default: m.TagManager })), { ssr: false });
 import { useStreamingSTT } from "@/src/hooks/useStreamingSTT";
 import type { DeviceIdentity } from "@/src/types";
 import { useIsMobile } from "@/src/hooks/useIsMobile";
@@ -75,6 +76,7 @@ const buildTransaction = (
   paymentMethod: data.paymentMethod,
   timestamp: data.timestamp,
   is_private: data.is_private ?? false,
+  tags: data.tags ?? [],
 });
 
 
@@ -140,8 +142,11 @@ const AppShell = () => {
     timestamp?: number;
     isPrivate?: boolean;
     isShared?: boolean;
+    tags?: string[];
   } | null>(null);
   const isEditing = editState !== null;
+  const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
+  const [tagsVersion, setTagsVersion] = useState(0);
   const [lastError, setLastError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const { pendingTransactions, addPending: addPendingTransaction, removePending: removePendingTransaction } = usePendingTransactions();
@@ -726,6 +731,7 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
       timestamp: tx.timestamp,
       isPrivate: tx.is_private ?? false,
       isShared,
+      tags: tx.tags ?? [],
     });
   }, []);
 
@@ -784,6 +790,7 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
       paymentMethod: "cash" | "upi" | "card" | "unknown";
       timestamp: number;
       isPrivate?: boolean;
+      tags: string[];
     }) => {
       if (data.amount <= 0) {
         setLastError(ERROR_MESSAGES.amountGreaterThanZero);
@@ -794,6 +801,7 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
         {
           ...data,
           is_private: data.isPrivate ?? false,
+          tags: data.tags,
         },
         editState.id
       );
@@ -897,6 +905,7 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
           <section>
             <HomeView
               refreshKey={refreshKey}
+              tagsVersion={tagsVersion}
               addedTx={addedTx}
               deletedTx={deletedTx}
               editedTx={editedTx}
@@ -925,6 +934,7 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
           <ProfileView
             onOpenSync={handleOpenSync}
             onOpenNotifications={handleOpenNotifications}
+            onOpenTags={() => setIsTagManagerOpen(true)}
           />
         </section>
 
@@ -977,10 +987,19 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
           timestamp={editState?.timestamp ?? editTimestampFallback}
           isPrivate={editState?.isPrivate ?? false}
           isShared={editState?.isShared ?? false}
+          tags={editState?.tags ?? []}
           onClose={handleCloseEdit}
           onSave={handleSaveEdit}
+          onTagCreated={() => setTagsVersion((v) => v + 1)}
         />
       )}
+
+      {/* Tag Manager */}
+      <TagManager
+        isOpen={isTagManagerOpen}
+        onClose={() => setIsTagManagerOpen(false)}
+        onTagsChanged={() => setTagsVersion((v) => v + 1)}
+      />
 
       {/* Bulk Expense Preview Sheet */}
       {bulkExpenses && (
@@ -1012,6 +1031,7 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
         onClose={handleCloseHistory}
         onDeleted={handleHistoryDeleted}
         refreshKey={refreshKey}
+        tagsVersion={tagsVersion}
         editedTx={editedTx}
         onEdit={openEdit}
         onImported={() => setRefreshKey((k) => k + 1)}

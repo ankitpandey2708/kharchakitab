@@ -64,6 +64,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Worker build artifacts:
+    "worker/.wrangler/**",
   ]),
   {
     plugins: { catchPlugin },

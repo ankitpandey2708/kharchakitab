@@ -15,10 +15,9 @@ import {
   Sparkles,
   TrendingUp,
   MoreHorizontal,
-  Download,
   Globe,
 } from "lucide-react";
-import { downloadICS, openGoogleCalendar, toICSFilename } from "@/src/utils/ics";
+import { openGoogleCalendar } from "@/src/utils/ics";
 import {
   RECURRING_TEMPLATES,
   FREQUENCY_LABEL_MAP,
@@ -126,12 +125,10 @@ function CalendarPickerPopover({
   anchorEl,
   onClose,
   onGoogleCalendar,
-  onDownloadICS,
 }: {
   anchorEl: HTMLElement;
   onClose: () => void;
   onGoogleCalendar: () => void;
-  onDownloadICS: () => void;
 }) {
   const [coords, setCoords] = useState<{ top: number; right: number } | null>(null);
 
@@ -167,15 +164,6 @@ function CalendarPickerPopover({
           >
             <Globe className="h-4 w-4 text-[var(--kk-ash)] transition-colors group-hover/cal:text-[var(--kk-ember)]" />
             Google Calendar
-          </button>
-          <div className="mx-3 border-t border-[var(--kk-smoke)]" />
-          <button
-            type="button"
-            className="group/ics flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium text-[var(--kk-ink)] transition-colors hover:bg-[var(--kk-ember)]/8"
-            onClick={onDownloadICS}
-          >
-            <Download className="h-4 w-4 text-[var(--kk-ash)] transition-colors group-hover/ics:text-[var(--kk-ember)]" />
-            Download .ics
           </button>
         </div>
       </motion.div>
@@ -500,7 +488,6 @@ export const RecurringView = React.memo(({
                 anchorEl={calendarPicker.anchorEl}
                 onClose={() => setCalendarPicker(null)}
                 onGoogleCalendar={() => { posthog.capture("recurring_calendar_added", { method: "google_calendar", name: template.item }); openGoogleCalendar(template, currencySymbol); setCalendarPicker(null); }}
-                onDownloadICS={() => { posthog.capture("recurring_calendar_added", { method: "ics_download", name: template.item }); downloadICS(template, toICSFilename(template.item)); setCalendarPicker(null); }}
               />
             )}
             {!isEnded && (
@@ -656,18 +643,6 @@ export const RecurringView = React.memo(({
                   <span className="text-xs text-[var(--kk-ash)] whitespace-nowrap">Due Soon</span>
                 </div>
               )}
-              <motion.button
-                type="button"
-                whileHover={{ scale: 1.05, y: -2 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => { posthog.capture("recurring_calendar_added", { method: "ics_bulk", count: activeTemplates.length }); downloadICS(activeTemplates, "kharchakitab-recurring.ics"); }}
-                className="group/export relative flex flex-col items-center rounded-xl border border-[var(--kk-ember)]/20 bg-gradient-to-b from-[var(--kk-ember)]/8 to-[var(--kk-ember)]/15 px-4 py-2 transition-colors transition-shadow hover:border-[var(--kk-ember)]/35 hover:shadow-[0_4px_16px_-6px_rgba(222,88,38,0.3)] transform-gpu"
-              >
-                <span className="flex h-7 items-center justify-center">
-                  <CalendarPlus className="h-5 w-5 text-[var(--kk-ember)] transition-transform group-hover/export:scale-110" />
-                </span>
-                <span className="text-xs font-semibold text-[var(--kk-ember)] whitespace-nowrap">Add to Cal</span>
-              </motion.button>
             </div>
           </div>
         </div>
@@ -923,18 +898,6 @@ export const RecurringView = React.memo(({
                     >
                       <Globe className="h-4 w-4 text-[var(--kk-ember)]" />
                       Google Calendar
-                    </button>
-                    <button
-                      type="button"
-                      className="kk-btn-secondary flex items-center justify-center gap-2 border-dashed border-[var(--kk-smoke-heavy)] text-[var(--kk-ash)] active:scale-[0.97] transition-colors transition-[border-color] hover:border-solid hover:border-[var(--kk-ember)]/40 hover:text-[var(--kk-ember)] transform-gpu"
-                      onClick={() => {
-                        posthog.capture("recurring_calendar_added", { method: "ics_download", name: actionSheetTemplate.item });
-                        downloadICS(actionSheetTemplate, toICSFilename(actionSheetTemplate.item));
-                        setActionSheetTemplate(null);
-                      }}
-                    >
-                      <Download className="h-4 w-4" />
-                      Download .ics
                     </button>
                   </div>
                   {actionSheetTemplate.recurring_end_date >= Date.now() && (

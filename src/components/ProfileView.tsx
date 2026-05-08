@@ -10,6 +10,7 @@ import {
   Pencil,
   Share2,
   Smartphone,
+  Tag,
   Users,
   Volume2,
 } from "lucide-react";
@@ -316,9 +317,10 @@ SwiggyConnectRow.displayName = "SwiggyConnectRow";
 interface ProfileViewProps {
   onOpenSync: () => void;
   onOpenNotifications: () => void;
+  onOpenTags?: () => void;
 }
 
-export const ProfileView = React.memo(({ onOpenSync, onOpenNotifications }: ProfileViewProps) => {
+export const ProfileView = React.memo(({ onOpenSync, onOpenNotifications, onOpenTags }: ProfileViewProps) => {
   const [shareMessage, setShareMessage] = useState<string | null>(null);
 
   const handleShare = useCallback(async () => {
@@ -392,6 +394,12 @@ export const ProfileView = React.memo(({ onOpenSync, onOpenNotifications }: Prof
 
           <SectionHeader>Preferences</SectionHeader>
           <div className="space-y-3">
+            <ActionRow
+              icon={<Tag className="h-4 w-4" />}
+              label="Tags"
+              description="Create and manage custom tags for your expenses."
+              onClick={onOpenTags}
+            />
             <DeviceNameRow />
             <SettingRow
               icon={<Coins className="h-4 w-4" />}

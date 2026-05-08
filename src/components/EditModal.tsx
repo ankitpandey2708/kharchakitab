@@ -10,6 +10,7 @@ import { useEscapeKey } from "@/src/hooks/useEscapeKey";
 import { toDateInputValue } from "@/src/utils/dates";
 import { normalizeAmount } from "@/src/utils/money";
 import { useCurrency } from "@/src/hooks/useCurrency";
+import { TagPicker } from "@/src/components/TagPicker";
 
 interface EditModalProps {
   isOpen: boolean;
@@ -21,6 +22,8 @@ interface EditModalProps {
   timestamp?: number;
   isPrivate?: boolean;
   isShared?: boolean;
+  tags?: string[];
+  onTagCreated?: () => void;
   onClose: () => void;
   onSave: (data: {
     amount: number;
@@ -29,6 +32,7 @@ interface EditModalProps {
     paymentMethod: "cash" | "upi" | "card" | "unknown";
     timestamp: number;
     isPrivate?: boolean;
+    tags: string[];
   }) => void;
 }
 
@@ -62,10 +66,11 @@ export const EditModal = React.memo(({
   item,
   category,
   paymentMethod = "cash",
-  // eslint-disable-next-line react-hooks/purity
-  timestamp = Date.now(),
+  timestamp,
   isPrivate = false,
   isShared = false,
+  tags = [],
+  onTagCreated,
   onClose,
   onSave,
 }: EditModalProps) => {
@@ -73,11 +78,10 @@ export const EditModal = React.memo(({
   const [amountValue, setAmountValue] = useState(amount.toString());
   const [itemValue, setItemValue] = useState(item);
   const [categoryValue, setCategoryValue] = useState(category);
-  const [paymentValue, setPaymentValue] = useState<
-    PaymentKey
-  >(paymentMethod);
-  const [dateValue, setDateValue] = useState(toDateInputValue(timestamp));
+  const [paymentValue, setPaymentValue] = useState<PaymentKey>(paymentMethod);
+  const [dateValue, setDateValue] = useState(() => toDateInputValue(timestamp ?? Date.now()));
   const [isPrivateValue, setIsPrivateValue] = useState(isPrivate);
+  const [tagIds, setTagIds] = useState<string[]>(tags);
   const sortedCategoryOptions = useMemo(
     () => [...CATEGORY_OPTIONS].sort((a, b) => a.key.localeCompare(b.key)),
     []
@@ -90,11 +94,12 @@ export const EditModal = React.memo(({
         setItemValue(item);
         setCategoryValue(category);
         setPaymentValue(paymentMethod);
-        setDateValue(toDateInputValue(timestamp));
+        setDateValue(toDateInputValue(timestamp ?? Date.now()));
         setIsPrivateValue(isPrivate);
+        setTagIds(tags);
       });
     }
-  }, [isOpen, amount, item, category, paymentMethod, timestamp, isPrivate]);
+  }, [isOpen, amount, item, category, paymentMethod, timestamp, isPrivate, tags]);
 
   useEscapeKey(isOpen, onClose);
 
@@ -272,6 +277,11 @@ export const EditModal = React.memo(({
                 </div>
               </div>
 
+              {/* Tags */}
+              <div className="mt-4 kk-radius-xl border border-[var(--kk-smoke)] bg-white p-4">
+                <TagPicker selectedIds={tagIds} onChange={setTagIds} onTagCreated={onTagCreated} />
+              </div>
+
               <div className={`mt-4 kk-radius-lg border px-4 py-3 ${isShared
                   ? "border-[var(--kk-smoke-heavy)] bg-[var(--kk-smoke)]/70"
                   : isPrivateValue
@@ -303,7 +313,7 @@ export const EditModal = React.memo(({
                         </div>
                         <div className="mt-0.5 text-xs text-[var(--kk-ash)]">
                           {isShared
-                            ? "Already shared. Can’t be hidden later."
+                            ? "Already shared. Can't be hidden later."
                             : isPrivateValue
                               ? "Only on this device."
                               : "Visible to household on next sync."}
@@ -355,9 +365,10 @@ export const EditModal = React.memo(({
                     category: categoryValue,
                     paymentMethod: paymentValue,
                     timestamp: dateValue
-                      ? mergeDateWithTime(dateValue, timestamp)
-                      : timestamp,
+                      ? mergeDateWithTime(dateValue, timestamp ?? Date.now())
+                      : (timestamp ?? Date.now()),
                     isPrivate: isPrivateValue,
+                    tags: tagIds,
                   })
                 }
                 disabled={Number(amountValue || 0) <= 0}

@@ -5,6 +5,7 @@ import type {
   RecurringAlertQueueEntry,
   Recurring_template,
   SyncState,
+  Tag,
   Transaction,
   TransactionVersion,
 } from "@/src/types";
@@ -68,10 +69,18 @@ interface QuickLogDB {
       "by-next-fire": number;
     };
   };
+  tags: {
+    key: string;
+    value: Tag;
+    indexes: {
+      "by-name": string;
+      "by-updated": number;
+    };
+  };
 }
 
 export const DB_NAME = "QuickLogDB";
-export const DB_VERSION = 5; // Incremented for recurring_alerts store
+export const DB_VERSION = 6; // Incremented for tags store
 export const DB_STORES = [
   "transactions",
   "transaction_versions",
@@ -80,6 +89,7 @@ export const DB_STORES = [
   "sync_state",
   "recurring_templates",
   "recurring_alerts",
+  "tags",
 ] as const satisfies readonly (keyof QuickLogDB)[];
 const MAX_CACHE_ENTRIES = 50;
 const queryCache = new Map<string, Transaction[]>();
@@ -155,6 +165,12 @@ const getDb = () =>
           keyPath: "template_id",
         });
         alerts.createIndex("by-next-fire", "next_fire");
+      }
+
+      if (!db.objectStoreNames.contains("tags")) {
+        const tagsStore = db.createObjectStore("tags", { keyPath: "id" });
+        tagsStore.createIndex("by-name", "name");
+        tagsStore.createIndex("by-updated", "updated_at");
       }
 
       if (oldVersion < 2) {
@@ -1260,4 +1276,87 @@ export const importTransactionsFromCsv = async (
   }
 
   return result;
+};
+
+// ── Tag CRUD ────────────────────────────────────────────────────────────────
+
+const isTagNameTaken = async (db: Awaited<ReturnType<typeof getDb>>, name: string, excludeId?: string): Promise<boolean> => {
+  const normalized = name.trim().toLowerCase();
+  const all = await db.getAll("tags");
+  return all.some((t) => !t.deleted_at && t.name.toLowerCase() === normalized && t.id !== excludeId);
+};
+
+export const createTag = async (name: string, color: string): Promise<Tag> => {
+  const db = await getDb();
+  if (await isTagNameTaken(db, name)) {
+    throw new Error(`A tag named "${name.trim()}" already exists.`);
+  }
+  const identity = await getDeviceIdentity();
+  const now = Date.now();
+  const tag: Tag = {
+    id: generateId(),
+    name: name.trim(),
+    color,
+    created_at: now,
+    updated_at: now,
+    deleted_at: null,
+    owner_device_id: identity.device_id,
+    version: 1,
+  };
+  await db.put("tags", tag);
+  return tag;
+};
+
+export const updateTag = async (id: string, patch: Partial<Pick<Tag, "name" | "color">>): Promise<void> => {
+  const db = await getDb();
+  const existing = await db.get("tags", id);
+  if (!existing) return;
+  if (patch.name && await isTagNameTaken(db, patch.name, id)) {
+    throw new Error(`A tag named "${patch.name.trim()}" already exists.`);
+  }
+  const updated: Tag = {
+    ...existing,
+    ...patch,
+    name: patch.name ? patch.name.trim() : existing.name,
+    updated_at: Date.now(),
+    version: (existing.version ?? 1) + 1,
+  };
+  await db.put("tags", updated);
+};
+
+export const countTransactionsWithTag = async (tagId: string): Promise<number> => {
+  const db = await getDb();
+  const all = await db.getAll("transactions");
+  return all.filter((t) => !t.deleted_at && Array.isArray(t.tags) && t.tags.includes(tagId)).length;
+};
+
+export const removeTagFromAllTransactions = async (tagId: string): Promise<void> => {
+  const db = await getDb();
+  const all = await db.getAll("transactions");
+  const affected = all.filter((t) => !t.deleted_at && Array.isArray(t.tags) && t.tags.includes(tagId));
+  const now = Date.now();
+  await Promise.all(
+    affected.map((t) =>
+      db.put("transactions", {
+        ...t,
+        tags: t.tags.filter((id: string) => id !== tagId),
+        updated_at: now,
+        version: (t.version ?? 1) + 1,
+      })
+    )
+  );
+};
+
+export const deleteTag = async (id: string): Promise<void> => {
+  const db = await getDb();
+  // Soft delete so sync tombstones work
+  const existing = await db.get("tags", id);
+  if (!existing) return;
+  await db.put("tags", { ...existing, deleted_at: Date.now(), updated_at: Date.now() });
+};
+
+export const getAllTags = async (): Promise<Tag[]> => {
+  const db = await getDb();
+  const all = await db.getAll("tags");
+  return all.filter((t) => !t.deleted_at).sort((a, b) => a.name.localeCompare(b.name));
 };

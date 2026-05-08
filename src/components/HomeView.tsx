@@ -10,8 +10,9 @@ import {
   isTransactionShared,
   getDeviceIdentity,
   getPairings,
+  getAllTags,
 } from "@/src/db/db";
-import type { Transaction } from "@/src/types";
+import type { Tag, Transaction } from "@/src/types";
 import { getRangeForFilter } from "@/src/utils/dates";
 import { TransactionActionSheet } from "@/src/components/TransactionActionSheet";
 import { RecentTransactions } from "@/src/components/RecentTransactions";
@@ -27,6 +28,7 @@ import { isProcessingTransaction } from "@/src/utils/transactions";
 
 interface TransactionListProps {
   refreshKey?: number;
+  tagsVersion?: number;
   onViewAll?: () => void;
   onEdit?: (tx: Transaction) => void;
   onDeleted?: (tx: Transaction) => void;
@@ -64,6 +66,7 @@ const CATEGORY_COLORS = [
 
 export const HomeView = React.memo(({
   refreshKey,
+  tagsVersion,
   onViewAll,
   onEdit,
   onDeleted,
@@ -89,6 +92,7 @@ export const HomeView = React.memo(({
   } | null>(null);
   const [hasPairingGlobally, setHasPairingGlobally] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [tagMap, setTagMap] = useState<Map<string, Tag>>(new Map());
   const [selectedMonthOffset, setSelectedMonthOffset] = useState(0);
   const [hasEverHadTransactions, setHasEverHadTransactions] = useState(true);
 
@@ -144,8 +148,10 @@ export const HomeView = React.memo(({
       setIdentity(id);
       const pairings = await getPairings();
       setHasPairingGlobally(pairings.length > 0);
+      const tags = await getAllTags();
+      setTagMap(new Map(tags.map((t) => [t.id, t])));
     })();
-  }, [refreshKey]);
+  }, [refreshKey, tagsVersion]);
 
   // Also refresh pairing state on same-tab sync events
   useEffect(() => {
@@ -776,6 +782,7 @@ export const HomeView = React.memo(({
         onOpenMobileSheet={openMobileSheet}
         currencySymbol={currencySymbol}
         formatCurrency={formatCurrency}
+        tagMap={tagMap}
       />
 
       <TransactionActionSheet
