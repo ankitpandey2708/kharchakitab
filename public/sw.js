@@ -1,5 +1,5 @@
 const DB_NAME = "QuickLogDB";
-const DB_VERSION = 5;
+const DB_VERSION = 6; // Must match DB_VERSION in src/db/db.ts
 const ALERTS_STORE = "recurring_alerts";
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
