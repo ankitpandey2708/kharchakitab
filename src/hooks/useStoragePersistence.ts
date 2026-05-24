@@ -37,16 +37,17 @@ export function useStoragePersistence(): StorageStatus {
 
     const run = async () => {
       // Step 1: Request persistent storage
-      let isPersisted = false;
+      let isPersisted: boolean | null = null;
       try {
-        // Check current state first
-        isPersisted = await navigator.storage.persisted();
-        if (!isPersisted) {
-          // Request persistence — Chrome on Android grants this for installed PWAs
-          isPersisted = await navigator.storage.persist();
+        if (typeof navigator.storage.persisted === "function") {
+          isPersisted = await navigator.storage.persisted();
+          if (!isPersisted && typeof navigator.storage.persist === "function") {
+            isPersisted = await navigator.storage.persist();
+          }
         }
       } catch {
         // Browser may not support persist() — not a fatal error
+        void 0;
       }
 
       // Step 2: Check storage quota
@@ -68,6 +69,7 @@ export function useStoragePersistence(): StorageStatus {
         }
       } catch {
         // estimate() not supported — skip
+        void 0;
       }
 
       setStatus({ isPersisted, usagePercent, usageMB, quotaMB, isNearFull });

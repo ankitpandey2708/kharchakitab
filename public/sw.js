@@ -1,5 +1,4 @@
 const DB_NAME = "QuickLogDB";
-const DB_VERSION = 6; // Must match DB_VERSION in src/db/db.ts
 const ALERTS_STORE = "recurring_alerts";
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -9,15 +8,10 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 const openDb = () =>
   new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    // Open without version so the SW doesn't drive schema upgrades/migrations.
+    // Schema upgrades are handled entirely by the main thread in src/db/db.ts.
+    const request = indexedDB.open(DB_NAME);
     request.onerror = () => reject(request.error);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(ALERTS_STORE)) {
-        const store = db.createObjectStore(ALERTS_STORE, { keyPath: "template_id" });
-        store.createIndex("by-next-fire", "next_fire");
-      }
-    };
     request.onsuccess = () => resolve(request.result);
   });
 

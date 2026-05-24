@@ -139,15 +139,17 @@ export const BackupSettings = React.memo(() => {
       )}
 
       {/* Storage status info */}
-      {usagePercent !== null && (
+      {(usagePercent !== null || isPersisted !== null) && (
         <div className={`flex items-center gap-2 rounded-[var(--kk-radius-md)] px-4 py-3 ${isNearFull ? "bg-[var(--kk-danger-bg)]" : "bg-white/60"}`}>
           <HardDrive className={`h-4 w-4 flex-shrink-0 ${isNearFull ? "text-[var(--kk-danger-ink)]" : "text-[var(--kk-ash)]"}`} />
           <div className="flex-1 min-w-0">
-            <p className={`text-xs font-medium ${isNearFull ? "text-[var(--kk-danger-ink)]" : "text-[var(--kk-ash)]"}`}>
-              {isNearFull
-                ? `Storage ${usagePercent}% full — download a backup now!`
-                : `Storage: ${usageMB} MB of ${quotaMB} MB used (${usagePercent}%)`}
-            </p>
+            {usagePercent !== null && (
+              <p className={`text-xs font-medium ${isNearFull ? "text-[var(--kk-danger-ink)]" : "text-[var(--kk-ash)]"}`}>
+                {isNearFull
+                  ? `Storage ${usagePercent}% full — download a backup now!`
+                  : `Storage: ${usageMB} MB of ${quotaMB} MB used (${usagePercent}%)`}
+              </p>
+            )}
             {isPersisted === false && (
               <p className="text-xs text-[var(--kk-ash)] mt-0.5">
                 ⚠️ Data not yet protected — add to home screen to enable persistent storage.
