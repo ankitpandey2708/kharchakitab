@@ -57,6 +57,7 @@ import { useCurrency } from "@/src/hooks/useCurrency";
 import { usePwaInstall } from "@/src/hooks/usePwaInstall";
 import { useOnboardingTour } from "@/src/hooks/useOnboardingTour";
 import { useBackButton } from "@/src/hooks/useBackButton";
+import { useStoragePersistence } from "@/src/hooks/useStoragePersistence";
 // import { useStreak } from "@/src/hooks/useStreak";
 import { useRecording } from "@/src/context/AppContext";
 import { TRANSACTION_PENDING_LABEL } from "@/src/utils/transactions";
@@ -121,6 +122,9 @@ const AppShell = () => {
   const { code: currency, symbol: currencySymbol } = useCurrency();
   const { canPrompt: canInstall, promptInstall, dismiss: dismissInstall } = usePwaInstall();
   const { showTooltip, showTooltipsInOrder } = useOnboardingTour();
+  // Fix: Request persistent storage on every app start so Android Chrome never
+  // evicts IndexedDB data after ~21 days of inactivity or low storage pressure.
+  useStoragePersistence();
   // const { count: streakCount, broke: streakBroke, lostCount: streakLostCount, recordActivity: recordStreak } = useStreak();
 
   // Initialize presence at app level for discoverability

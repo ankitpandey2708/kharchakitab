@@ -4,9 +4,6 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ["framer-motion", "lucide-react", "@headlessui/react"],
   },
-  turbopack: {
-    root: __dirname,
-  },
   async headers() {
     return [
       {
