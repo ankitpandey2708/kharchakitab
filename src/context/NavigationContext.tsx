@@ -39,7 +39,7 @@ export const NavigationProvider = ({ children }: { children: React.ReactNode }) 
 export const useNavigation = () => {
     const ctx = useContext(NavigationContext);
     if (!ctx) {
-        throw new Error(ERROR_MESSAGES.useAppContextMustBeWithinProvider);
+        throw new Error(ERROR_MESSAGES.appContextMustBeWithinProvider);
     }
     return ctx;
 };

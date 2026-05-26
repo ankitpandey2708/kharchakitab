@@ -37,7 +37,7 @@ export const RecordingProvider = ({ children }: { children: React.ReactNode }) =
 export const useRecording = () => {
     const ctx = useContext(RecordingContext);
     if (!ctx) {
-        throw new Error(ERROR_MESSAGES.useAppContextMustBeWithinProvider);
+        throw new Error(ERROR_MESSAGES.appContextMustBeWithinProvider);
     }
     return ctx;
 };

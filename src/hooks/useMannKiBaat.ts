@@ -23,63 +23,11 @@ export const useMannKiBaat = () => {
   const [isLoading, setIsLoading] = useState(false);
   const generatingRef = useRef(false);
 
-  const tryLoad = useCallback(() => {
-    if (!getMannKiBaatEnabled()) return;
-
-    const today = todayDate();
-    const cached = localStorage.getItem(LS.MANN_KI_BAAT);
-    if (cached) {
-      try {
-        const data = JSON.parse(cached) as MannKiBaatMessage & { date?: string };
-        if (data.date === today) {
-          if (data.dismissed) { setIsDismissed(true); return; }
-          setMessage(data);
-          posthog.capture("mann_ki_baat_shown", { type: data.type, source: "cache" });
-          return;
-        }
-        // Stale (different day) — remove and regenerate
-        localStorage.removeItem(LS.MANN_KI_BAAT);
-      } catch {
-        localStorage.removeItem(LS.MANN_KI_BAAT);
-      }
-    }
-
-    void generate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Initial load
-  useEffect(() => {
-    tryLoad();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Re-check on visibility change — handles day rollover while app is backgrounded
-  useEffect(() => {
-    const handleVisible = () => {
-      if (document.visibilityState !== "visible") return;
-      const cached = localStorage.getItem(LS.MANN_KI_BAAT);
-      if (cached) {
-        try {
-          const data = JSON.parse(cached);
-          if (data.date === todayDate()) return; // Still today, nothing to do
-        } catch { void 0; }
-      }
-      // Day has rolled over — reset and regenerate
-      setMessage(null);
-      setIsDismissed(false);
-      tryLoad();
-    };
-
-    document.addEventListener("visibilitychange", handleVisible);
-    return () => document.removeEventListener("visibilitychange", handleVisible);
-  }, [tryLoad]);
-
-  const cacheSet = (msg: MannKiBaatMessage) => {
+  const cacheSet = useCallback((msg: MannKiBaatMessage) => {
     localStorage.setItem(LS.MANN_KI_BAAT, JSON.stringify({ ...msg, date: todayDate() }));
-  };
+  }, []);
 
-  const generate = async () => {
+  const generate = useCallback(async () => {
     if (generatingRef.current) return;
     generatingRef.current = true;
     setIsLoading(true);
@@ -176,7 +124,57 @@ export const useMannKiBaat = () => {
       setIsLoading(false);
       generatingRef.current = false;
     }
-  };
+  }, [cacheSet]);
+
+  const tryLoad = useCallback(() => {
+    if (!getMannKiBaatEnabled()) return;
+
+    const today = todayDate();
+    const cached = localStorage.getItem(LS.MANN_KI_BAAT);
+    if (cached) {
+      try {
+        const data = JSON.parse(cached) as MannKiBaatMessage & { date?: string };
+        if (data.date === today) {
+          if (data.dismissed) { setIsDismissed(true); return; }
+          setMessage(data);
+          posthog.capture("mann_ki_baat_shown", { type: data.type, source: "cache" });
+          return;
+        }
+        // Stale (different day) — remove and regenerate
+        localStorage.removeItem(LS.MANN_KI_BAAT);
+      } catch {
+        localStorage.removeItem(LS.MANN_KI_BAAT);
+      }
+    }
+
+    void generate();
+  }, [generate]);
+
+  // Initial load
+  useEffect(() => {
+    tryLoad();
+  }, [tryLoad]);
+
+  // Re-check on visibility change — handles day rollover while app is backgrounded
+  useEffect(() => {
+    const handleVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      const cached = localStorage.getItem(LS.MANN_KI_BAAT);
+      if (cached) {
+        try {
+          const data = JSON.parse(cached);
+          if (data.date === todayDate()) return; // Still today, nothing to do
+        } catch { void 0; }
+      }
+      // Day has rolled over — reset and regenerate
+      setMessage(null);
+      setIsDismissed(false);
+      tryLoad();
+    };
+
+    document.addEventListener("visibilitychange", handleVisible);
+    return () => document.removeEventListener("visibilitychange", handleVisible);
+  }, [tryLoad]);
 
   const dismiss = useCallback(() => {
     const cached = localStorage.getItem(LS.MANN_KI_BAAT);

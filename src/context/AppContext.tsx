@@ -4,10 +4,10 @@
 "use client";
 
 import React from "react";
-import { RecordingProvider } from "./RecordingContext";
-import { NavigationProvider } from "./NavigationContext";
-import { CurrencyProvider } from "./CurrencyContext";
-import { PairingProvider } from "./PairingContext";
+import { RecordingProvider, useRecording } from "./RecordingContext";
+import { NavigationProvider, useNavigation } from "./NavigationContext";
+import { CurrencyProvider, useCurrencyContext } from "./CurrencyContext";
+import { PairingProvider, usePairing } from "./PairingContext";
 import { MascotProvider } from "./MascotContext";
 
 // Re-export all hooks for backward compatibility
@@ -34,20 +34,10 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
 
 // Legacy hook for backward compatibility - prefer specific hooks for better performance
 export const useAppContext = () => {
-  // Import dynamically to avoid circular dependencies
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { useRecording: useRec } = require("./RecordingContext");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { useNavigation: useNav } = require("./NavigationContext");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { useCurrencyContext: useCurr } = require("./CurrencyContext");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { usePairing: usePair } = require("./PairingContext");
-
-  const recording = useRec();
-  const navigation = useNav();
-  const currency = useCurr();
-  const pairing = usePair();
+  const recording = useRecording();
+  const navigation = useNavigation();
+  const currency = useCurrencyContext();
+  const pairing = usePairing();
 
   return {
     // Recording

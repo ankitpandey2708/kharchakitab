@@ -55,7 +55,7 @@ export const CurrencyProvider = ({ children }: { children: React.ReactNode }) =>
 export const useCurrencyContext = () => {
     const ctx = useContext(CurrencyContext);
     if (!ctx) {
-        throw new Error(ERROR_MESSAGES.useAppContextMustBeWithinProvider);
+        throw new Error(ERROR_MESSAGES.appContextMustBeWithinProvider);
     }
     return ctx;
 };

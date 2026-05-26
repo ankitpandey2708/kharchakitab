@@ -1,3 +1,4 @@
+import reactCompiler from "eslint-plugin-react-compiler";
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
@@ -68,7 +69,7 @@ const eslintConfig = defineConfig([
     "worker/.wrangler/**",
   ]),
   {
-    plugins: { catchPlugin },
+    plugins: { catchPlugin, 'react-compiler': reactCompiler },
     settings: {
       react: { version: "detect" },
     },
@@ -81,7 +82,8 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-unused-vars": [
         "error",
         { caughtErrors: "all", caughtErrorsIgnorePattern: "^_" },
-      ]
+      ],
+      "react-compiler/react-compiler": "error",
     },
   },
 ]);

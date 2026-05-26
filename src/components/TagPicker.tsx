@@ -31,18 +31,17 @@ export const TagPicker = React.memo(({ selectedIds, onChange, onTagCreated }: Ta
 
   useEffect(() => { void loadTags(); }, [loadTags]);
 
-  // On mount, purge stale IDs (tags that were deleted since this tx was saved)
   const didPurge = useRef(false);
   useEffect(() => {
-    if (didPurge.current || selectedIds.length === 0) return;
+    if (didPurge.current) return;
     didPurge.current = true;
+    if (selectedIds.length === 0) return;
     getAllTags().then((all) => {
       const validIds = new Set(all.map((t) => t.id));
       const cleaned = selectedIds.filter((id) => validIds.has(id));
       if (cleaned.length !== selectedIds.length) onChange(cleaned);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [selectedIds, onChange]);
 
   useFocusOnOpen(isCreating, inputRef);
 

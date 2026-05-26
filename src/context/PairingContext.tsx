@@ -43,7 +43,7 @@ export const PairingProvider = ({ children }: { children: React.ReactNode }) => 
 export const usePairing = () => {
     const ctx = useContext(PairingContext);
     if (!ctx) {
-        throw new Error(ERROR_MESSAGES.useAppContextMustBeWithinProvider);
+        throw new Error(ERROR_MESSAGES.appContextMustBeWithinProvider);
     }
     return ctx;
 };

@@ -15,7 +15,7 @@ export const ERROR_MESSAGES = {
   receiptParsingFailed: "Receipt parsing failed.",
   failedToParseReceiptJson: "Failed to parse receipt JSON.",
   receiptResponseDidNotMatchSchema: "Receipt response did not match schema.",
-  useAppContextMustBeWithinProvider:
+  appContextMustBeWithinProvider:
     "useAppContext must be used within AppProvider",
 } as const;
 
