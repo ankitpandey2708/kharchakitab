@@ -8,7 +8,6 @@ import { RecordingProvider, useRecording } from "./RecordingContext";
 import { NavigationProvider, useNavigation } from "./NavigationContext";
 import { CurrencyProvider, useCurrencyContext } from "./CurrencyContext";
 import { PairingProvider, usePairing } from "./PairingContext";
-import { MascotProvider } from "./MascotContext";
 
 // Re-export all hooks for backward compatibility
 export { useRecording } from "./RecordingContext";
@@ -22,9 +21,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
       <NavigationProvider>
         <CurrencyProvider>
           <PairingProvider>
-            <MascotProvider>
-              {children}
-            </MascotProvider>
+            {children}
           </PairingProvider>
         </CurrencyProvider>
       </NavigationProvider>

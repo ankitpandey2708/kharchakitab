@@ -1,10 +1,8 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React from "react";
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
-import { RiveMascot } from "@/src/components/RiveMascot";
-import type { MascotMood } from "@/src/context/MascotContext";
 import type { MannKiBaatMessage } from "@/src/utils/mannKiBaat";
 
 interface MannKiBaatProps {
@@ -75,19 +73,6 @@ export const MannKiBaat = React.memo(({
   isLoading,
   onDismiss,
 }: MannKiBaatProps) => {
-  // Map message type to mascot mood
-  const mascotMood = useMemo<MascotMood>(() => {
-    if (!message) return "idle";
-    switch (message.type) {
-      case "praise": return "celebrate";
-      case "roast": return "roast";
-      case "warning": return "warning";
-      case "streak": return "celebrate";
-      case "pattern": return "thinking";
-      default: return "idle";
-    }
-  }, [message?.type]);
-
   /* ── Loading skeleton ── */
   if (isLoading) {
     return (
@@ -133,8 +118,7 @@ export const MannKiBaat = React.memo(({
         {/* Header */}
         <div className="flex items-start justify-between gap-3 mb-2">
           <div className="flex items-center gap-2">
-            {/* Rive Mascot — matches the message tone */}
-            <RiveMascot mood={mascotMood} size={28} />
+
             <span className="text-[10px] font-bold tracking-[0.16em] uppercase text-[var(--kk-ember)]">
               Mann ki Baat
             </span>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-export interface StorageStatus {
+interface StorageStatus {
   isPersisted: boolean | null;   // null = not yet checked
   usagePercent: number | null;   // null = not yet checked
   usageMB: number | null;

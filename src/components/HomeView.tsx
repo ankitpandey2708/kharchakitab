@@ -25,8 +25,6 @@ import { useMannKiBaat } from "@/src/hooks/useMannKiBaat";
 import { syncEvents } from "@/src/services/sync/syncEvents";
 
 import { isProcessingTransaction } from "@/src/utils/transactions";
-import { useMascot } from "@/src/context/MascotContext";
-import { RiveMascot } from "@/src/components/RiveMascot";
 
 interface TransactionListProps {
   refreshKey?: number;
@@ -82,7 +80,6 @@ export const HomeView = React.memo(({
 }: TransactionListProps) => {
   const { symbol: currencySymbol, formatCurrency } = useCurrency();
   const mannKiBaat = useMannKiBaat();
-  const mascot = useMascot();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [periodTransactions, setPeriodTransactions] = useState<Transaction[]>([]);
   const [identity, setIdentity] = useState<{ device_id: string } | null>(null);
@@ -121,10 +118,6 @@ export const HomeView = React.memo(({
     fetchTransactions({ limit: 1 }).then((txs) => {
       const hadTx = txs.length > 0;
       setHasEverHadTransactions(hadTx);
-      // Set mascot to wave in empty state
-      if (!hadTx) {
-        mascot.setPermanentMood("wave");
-      }
     });
   }, []);
 
@@ -286,8 +279,6 @@ export const HomeView = React.memo(({
 
   useEffect(() => {
     if (!addedTx) return;
-    // Trigger mascot celebration on new transaction
-    mascot.trigger("celebrate");
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setTransactions((prev) => {
       if (prev.some((tx) => tx.id === addedTx.id)) return prev;
@@ -529,8 +520,7 @@ export const HomeView = React.memo(({
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_center,rgba(255,107,53,0.08)_0%,transparent_60%)]" />
           <div className="relative px-6 pt-4 pb-6">
             <div className="flex flex-col items-center text-center">
-              {/* Rive Mascot — friendly wave on first visit */}
-              <RiveMascot mood={mascot.currentMood} size={100} className="mb-1" />
+              {/* Friendly wave on first visit */}
               <h2 className="mt-1 font-[family:var(--font-display)] text-xl font-bold text-[var(--kk-ink)]">
                 {"Say it, we'll log it"}
               </h2>
