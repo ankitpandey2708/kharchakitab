@@ -1,7 +1,7 @@
 import { openDB } from "idb";
 import type { Recurring_template, RecurringAlertQueueEntry } from "@/src/types";
 import { calculateNextDueDate, getNextUpcomingDueDate } from "@/src/config/recurring";
-import { DB_NAME, DB_VERSION } from "@/src/db/db";
+import { DB_NAME, getEffectiveDbVersion } from "@/src/db/db";
 import {
   getMasterEnabled,
   registerPeriodicSync,
@@ -90,7 +90,7 @@ const setAlertsHash = (value: string) => {
 };
 
 const openAlertsDb = async () =>
-  openDB(DB_NAME, DB_VERSION, {
+  openDB(DB_NAME, await getEffectiveDbVersion(), {
     upgrade: (db) => {
       if (!db.objectStoreNames.contains("recurring_alerts")) {
         const alerts = db.createObjectStore("recurring_alerts", {

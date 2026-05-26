@@ -1,5 +1,5 @@
 import { openDB } from "idb";
-import { DB_NAME, DB_VERSION, DB_STORES } from "@/src/db/db";
+import { DB_NAME, DB_STORES, getEffectiveDbVersion } from "@/src/db/db";
 import { LS_BACKUP_KEYS } from "@/src/config/storageKeys";
 
 export interface BackupData {
@@ -22,7 +22,7 @@ export async function serializeBackup(): Promise<BackupData> {
     if (val !== null) result.localStorage[key] = val;
   }
 
-  const db = await openDB(DB_NAME, DB_VERSION);
+  const db = await openDB(DB_NAME, await getEffectiveDbVersion());
   for (const store of DB_STORES) {
     const records = await db.getAll(store);
     if (records.length > 0) result.indexedDB[store] = records;
@@ -39,7 +39,7 @@ export async function deserializeBackup(
     localStorage.setItem(key, value);
   }
 
-  const db = await openDB(DB_NAME, DB_VERSION);
+  const db = await openDB(DB_NAME, await getEffectiveDbVersion());
 
   if ((data.indexedDB.device_identity?.length ?? 0) > 0) {
     const clearTx = db.transaction("device_identity", "readwrite");

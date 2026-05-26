@@ -80,7 +80,7 @@ interface QuickLogDB {
 }
 
 export const DB_NAME = "QuickLogDB";
-export const DB_VERSION = 6; // Incremented for tags store
+const DB_VERSION = 6; // Incremented for tags store
 export const DB_STORES = [
   "transactions",
   "transaction_versions",
@@ -97,8 +97,52 @@ const cacheRanges = new Map<string, { start: number; end: number } | null>();
 const pendingRequests = new Map<string, Promise<Transaction[]>>();
 let cacheGeneration = 0;
 
+// ---------------------------------------------------------------------------
+// Version mismatch guard
+//
+// Resolves the effective database version by detecting the current version on
+// disk and picking the maximum of DB_VERSION and the detected version. This
+// prevents "VersionError: The operation failed because the stored database is
+// a higher version than the version requested." which can occur when a stale
+// service worker or cached JS bundle requests a version lower than the
+// database's current version.
+// ---------------------------------------------------------------------------
+let _effectiveVersion: number | null = null;
+let _versionPromise: Promise<number> | null = null;
+
+const resolveEffectiveVersion = async (): Promise<number> => {
+  if (_effectiveVersion !== null) return _effectiveVersion;
+  if (_versionPromise) return _versionPromise;
+
+  _versionPromise = new Promise<number>((resolve) => {
+    try {
+      const request = indexedDB.open(DB_NAME);
+      request.onsuccess = () => {
+        const currentVersion = request.result.version;
+        request.result.close();
+        resolve(Math.max(DB_VERSION, currentVersion));
+      };
+      request.onupgradeneeded = () => {
+        // Database doesn't exist yet — abort the implicit creation at version 1
+        // so the real openDB call (below) creates it at the correct version.
+        request.transaction?.abort();
+        resolve(DB_VERSION);
+      };
+      request.onerror = () => resolve(DB_VERSION);
+    } catch {
+      resolve(DB_VERSION);
+    }
+  });
+
+  _effectiveVersion = await _versionPromise;
+  return _effectiveVersion;
+};
+
+export const getEffectiveDbVersion = resolveEffectiveVersion;
+
 const getDb = () =>
-  openDB<QuickLogDB>(DB_NAME, DB_VERSION, {
+  resolveEffectiveVersion().then((version) =>
+    openDB<QuickLogDB>(DB_NAME, version, {
     upgrade: async (db, oldVersion, _newVersion, transaction) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let store: any;
@@ -194,7 +238,8 @@ const getDb = () =>
         }
       }
     },
-  });
+    })
+  );
 
 const generateId = () => {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
