@@ -7,16 +7,7 @@ import {
   COOKIE_CLAUDE_OAUTH_STATE,
   setTokenCookies,
 } from "@/src/lib/claude/oauth";
-
-interface TokenResponse {
-  token_type: string;
-  access_token: string;
-  expires_in: number;
-  refresh_token: string;
-  scope: string;
-  organization: { uuid: string; name: string };
-  account: { uuid: string; email_address: string };
-}
+import type { TokenResponse } from "@/src/lib/claude/oauth";
 
 /**
  * POST /api/claude/callback

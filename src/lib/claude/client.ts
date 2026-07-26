@@ -4,6 +4,7 @@ import {
   CLAUDE_CLIENT_ID,
   CLAUDE_TOKEN_URL,
   CLAUDE_HEADERS,
+  TOKEN_COOKIE_PROPS,
   COOKIE_CLAUDE_ACCESS_TOKEN,
   COOKIE_CLAUDE_REFRESH_TOKEN,
   COOKIE_CLAUDE_TOKEN_EXPIRES_AT,
@@ -104,13 +105,7 @@ export function setClaudeRefreshedCookies(
   tokens: { accessToken: string; refreshToken: string; expiresIn: number },
 ): void {
   const expiresAt = Math.floor(Date.now() / 1000) + tokens.expiresIn;
-  const opts = {
-    httpOnly: true,
-    sameSite: "lax" as const,
-    maxAge: 60 * 60 * 24 * 30,
-    path: "/",
-  };
-  res.cookies.set(COOKIE_CLAUDE_ACCESS_TOKEN, tokens.accessToken, opts);
-  res.cookies.set(COOKIE_CLAUDE_REFRESH_TOKEN, tokens.refreshToken, opts);
-  res.cookies.set(COOKIE_CLAUDE_TOKEN_EXPIRES_AT, String(expiresAt), opts);
+  res.cookies.set(COOKIE_CLAUDE_ACCESS_TOKEN, tokens.accessToken, TOKEN_COOKIE_PROPS);
+  res.cookies.set(COOKIE_CLAUDE_REFRESH_TOKEN, tokens.refreshToken, TOKEN_COOKIE_PROPS);
+  res.cookies.set(COOKIE_CLAUDE_TOKEN_EXPIRES_AT, String(expiresAt), TOKEN_COOKIE_PROPS);
 }

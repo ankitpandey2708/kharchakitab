@@ -74,7 +74,7 @@ export function buildClaudePrompt(prompt: string): string {
   return `${CLAUDE_SYSTEM_PROMPT_PREFIX}\n\n${prompt}`;
 }
 
-interface TokenResponse {
+export interface TokenResponse {
   token_type: string;
   access_token: string;
   expires_in: number;
@@ -85,7 +85,7 @@ interface TokenResponse {
 }
 
 /** Shared cookie options for setting tokens */
-const tokenCookieProps = {
+export const TOKEN_COOKIE_PROPS = {
   httpOnly: true,
   sameSite: "lax" as const,
   maxAge: TOKEN_COOKIE_MAX_AGE,
@@ -101,12 +101,12 @@ export function setTokenCookies(
 ): void {
   const expiresAt = Math.floor(Date.now() / 1000) + tokenData.expires_in;
 
-  res.cookies.set(COOKIE_CLAUDE_ACCESS_TOKEN, tokenData.access_token, tokenCookieProps);
-  res.cookies.set(COOKIE_CLAUDE_REFRESH_TOKEN, tokenData.refresh_token, tokenCookieProps);
-  res.cookies.set(COOKIE_CLAUDE_ORG_UUID, tokenData.organization.uuid, tokenCookieProps);
-  res.cookies.set(COOKIE_CLAUDE_ACCOUNT_EMAIL, tokenData.account.email_address, tokenCookieProps);
-  res.cookies.set(COOKIE_CLAUDE_SCOPES, tokenData.scope, tokenCookieProps);
-  res.cookies.set(COOKIE_CLAUDE_TOKEN_EXPIRES_AT, String(expiresAt), tokenCookieProps);
+  res.cookies.set(COOKIE_CLAUDE_ACCESS_TOKEN, tokenData.access_token, TOKEN_COOKIE_PROPS);
+  res.cookies.set(COOKIE_CLAUDE_REFRESH_TOKEN, tokenData.refresh_token, TOKEN_COOKIE_PROPS);
+  res.cookies.set(COOKIE_CLAUDE_ORG_UUID, tokenData.organization.uuid, TOKEN_COOKIE_PROPS);
+  res.cookies.set(COOKIE_CLAUDE_ACCOUNT_EMAIL, tokenData.account.email_address, TOKEN_COOKIE_PROPS);
+  res.cookies.set(COOKIE_CLAUDE_SCOPES, tokenData.scope, TOKEN_COOKIE_PROPS);
+  res.cookies.set(COOKIE_CLAUDE_TOKEN_EXPIRES_AT, String(expiresAt), TOKEN_COOKIE_PROPS);
 }
 
 
