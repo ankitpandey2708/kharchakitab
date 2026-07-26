@@ -4,8 +4,9 @@ import type { CurrencyCode } from "@/src/utils/money";
 import { formatDateYMD } from "@/src/utils/dates";
 import { getPostHogClient } from "@/src/lib/posthog-server";
 import { ExpenseSchema } from "@/src/utils/schemas";
-import { CLAUDE_OAUTH_MODEL, CLAUDE_SYSTEM_PROMPT_PREFIX } from "@/src/lib/claude/oauth";
+import { CLAUDE_OAUTH_MODEL, CLAUDE_FETCH_HEADERS, buildClaudePrompt } from "@/src/lib/claude/oauth";
 import { getFreshClaudeToken, setClaudeRefreshedCookies } from "@/src/lib/claude/client";
+import { geminiEndpoint, cleanGeminiOutput } from "@/src/lib/providers/gemini";
 
 export const runtime = "nodejs";
 
@@ -29,13 +30,12 @@ async function callClaudeVision(
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token}`,
-        "anthropic-version": "2023-06-01",
-        "anthropic-beta": "oauth-2025-04-20,claude-code-20250219",
+        ...CLAUDE_FETCH_HEADERS,
       },
       body: JSON.stringify({
         model,
         max_tokens: 1024,
-        system: `${CLAUDE_SYSTEM_PROMPT_PREFIX}\n\n${prompt}`,
+        system: buildClaudePrompt(prompt),
         messages: [
           {
             role: "user",
@@ -70,7 +70,7 @@ async function callGemini(prompt: string, base64: string, mimeType: string, mode
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return { error: "Gemini API key not configured." };
   const isGemma = model.includes("gemma");
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${apiKey}`;
+  const endpoint = geminiEndpoint(model);
   console.log(`[AI] gemini: sending request (model=${model}, imageBytes=${Math.round(base64.length * 0.75)})`);
   const t0 = Date.now();
   try {
@@ -107,7 +107,7 @@ async function callGemini(prompt: string, base64: string, mimeType: string, mode
     };
     console.log(`[AI] gemini: body parsed total=${Date.now() - t0}ms`);
     let out = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (out) out = out.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+    if (out) out = cleanGeminiOutput(out);
     return out ? { text: out } : { error: "Empty response from Gemini." };
   } catch (e) {
     console.log(`[AI] gemini: exception after ${Date.now() - t0}ms — ${e instanceof Error ? e.message : e}`);

@@ -52,8 +52,27 @@ export const CLAUDE_OAUTH_MODEL =
  * Defined here so all routes (agent, parse, receipt) can import without
  * depending on the agent config module.
  */
-export const CLAUDE_SYSTEM_PROMPT_PREFIX =
+const CLAUDE_SYSTEM_PROMPT_PREFIX =
   "You are Claude Code, Anthropic's official CLI for Claude.";
+
+/** Headers for @ai-sdk/anthropic SDK calls (config.ts, parse/route.ts). */
+export const CLAUDE_HEADERS = {
+  "anthropic-beta": "oauth-2025-04-20,claude-code-20250219",
+} as const;
+
+/** Headers for raw fetch calls (receipt/route.ts). Includes the required version header. */
+export const CLAUDE_FETCH_HEADERS = {
+  ...CLAUDE_HEADERS,
+  "anthropic-version": "2023-06-01",
+} as const;
+
+/**
+ * Prefix a prompt with the required Claude Code system prompt prefix.
+ * The API validates that the system message starts with this exact string.
+ */
+export function buildClaudePrompt(prompt: string): string {
+  return `${CLAUDE_SYSTEM_PROMPT_PREFIX}\n\n${prompt}`;
+}
 
 interface TokenResponse {
   token_type: string;

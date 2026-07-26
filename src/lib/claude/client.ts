@@ -1,11 +1,24 @@
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { cookies } from "next/headers";
 import {
   CLAUDE_CLIENT_ID,
   CLAUDE_TOKEN_URL,
+  CLAUDE_HEADERS,
   COOKIE_CLAUDE_ACCESS_TOKEN,
   COOKIE_CLAUDE_REFRESH_TOKEN,
   COOKIE_CLAUDE_TOKEN_EXPIRES_AT,
 } from "./oauth";
+
+/**
+ * Create an Anthropic SDK client configured with an OAuth token.
+ * Adds the required beta headers automatically.
+ */
+export function createClaudeClient(token: string) {
+  return createAnthropic({
+    authToken: token,
+    headers: CLAUDE_HEADERS,
+  });
+}
 
 interface FreshTokenResult {
   token: string | null;

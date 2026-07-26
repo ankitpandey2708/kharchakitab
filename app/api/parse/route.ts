@@ -4,11 +4,10 @@ import { getMannKiBaatPrompt, MANN_KI_BAAT_TYPE_INSTRUCTIONS, getSystemPrompt } 
 import { formatDateYMD } from "@/src/utils/dates";
 import { ExpenseArraySchema } from "@/src/utils/schemas";
 import type { CurrencyCode } from "@/src/utils/money";
-import { isOnCooldown, setCooldown, geminiKey, extractRateLimit } from "@/src/lib/providers/circuit-breaker";
 import { generateText } from "ai";
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { CLAUDE_OAUTH_MODEL, CLAUDE_SYSTEM_PROMPT_PREFIX } from "@/src/lib/claude/oauth";
-import { getFreshClaudeToken, setClaudeRefreshedCookies } from "@/src/lib/claude/client";
+import { CLAUDE_OAUTH_MODEL, buildClaudePrompt } from "@/src/lib/claude/oauth";
+import { getFreshClaudeToken, setClaudeRefreshedCookies, createClaudeClient } from "@/src/lib/claude/client";
+import { geminiEndpoint, cleanGeminiOutput } from "@/src/lib/providers/gemini";
 
 type TierOutcome = "success" | "timeout" | "rate_limit" | "schema_fail" | "transport_error" | "truncation" | "cancelled";
 
@@ -87,7 +86,7 @@ async function callGemini(
 
   const isGemma = model.includes("gemma");
   const isExpense = requestType === "expense";
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${apiKey}`;
+  const endpoint = geminiEndpoint(model);
 
   const timeoutCtrl = new AbortController();
   const timer = setTimeout(() => timeoutCtrl.abort(), GEMINI_TIMEOUT_MS);
@@ -124,8 +123,6 @@ async function callGemini(
       const errBody = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
       const msg = errBody?.error?.message ?? `Gemini error ${response.status}`;
       if (response.status === 429) {
-        const retryAfter = parseInt(response.headers.get("retry-after") ?? "", 10);
-        setCooldown(geminiKey(model), isNaN(retryAfter) ? 60 : retryAfter);
         console.log(`[AI] gemini: rate_limit model=${model} — ${msg}`);
         return { outcome: "rate_limit", latency_ms, error: msg };
       }
@@ -149,7 +146,7 @@ async function callGemini(
     console.log(`[AI] gemini: parsed total=${latency_total}ms finishReason=${finishReason} tokens=${output_tokens}`);
 
     let out = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (out) out = out.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+    if (out) out = cleanGeminiOutput(out);
 
     if (!out) return { outcome: "transport_error", latency_ms: latency_total, output_tokens, error: "Empty response from Gemini." };
 
@@ -183,14 +180,10 @@ async function callClaude(
   const signal = mergeSignals(timeoutCtrl.signal, cancelSignal);
 
   try {
-    const anthropic = createAnthropic({
-      authToken: token,
-      headers: { "anthropic-beta": "oauth-2025-04-20,claude-code-20250219" },
-    });
+    const anthropic = createClaudeClient(token);
     const result = await generateText({
       model: anthropic(CLAUDE_OAUTH_MODEL) as unknown as Parameters<typeof generateText>[0]['model'],
-      // Claude OAuth requires the system prompt to start with the Claude Code prefix
-      prompt: `${CLAUDE_SYSTEM_PROMPT_PREFIX}\n\n${text}`,
+      prompt: buildClaudePrompt(text),
       temperature,
       maxOutputTokens: 1024,
       abortSignal: signal,
@@ -208,8 +201,8 @@ async function callClaude(
       if (cancelSignal?.aborted) return { outcome: "cancelled", latency_ms };
       return { outcome: "timeout", latency_ms, error: "Timeout after 10000ms" };
     }
-    const { isRateLimit } = extractRateLimit(e);
-    if (isRateLimit) {
+    const eAny = e as Error & { statusCode?: number };
+    if (eAny.statusCode === 429 || (e instanceof Error && (e.message.includes("429") || e.message.toLowerCase().includes("rate limit")))) {
       console.log(`[AI] claude: rate_limit — ${e instanceof Error ? e.message : e}`);
       return { outcome: "rate_limit", latency_ms, error: e instanceof Error ? e.message : "Rate limited" };
     }
@@ -311,12 +304,6 @@ export async function POST(request: NextRequest) {
   // --- Gemini sequential fallback ---
   if (finalParsed === null) {
     for (const m of ([model1, model2].filter(Boolean)) as string[]) {
-      if (isOnCooldown(geminiKey(m))) {
-        const t = nextTier();
-        telemetry[`${t}_outcome`] = "rate_limit_cooldown";
-        telemetry[`${t}_latency_ms`] = 0;
-        continue;
-      }
       const win = accept(
         await callGemini(geminiPrompt(basePrompt, m), m, temperature, requestType),
         requestType, nextTier(), modelLabel(m), telemetry,

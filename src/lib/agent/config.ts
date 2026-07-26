@@ -1,8 +1,7 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
-import { createAnthropic } from '@ai-sdk/anthropic'
 import type { LanguageModel } from 'ai'
-import { CLAUDE_OAUTH_MODEL, CLAUDE_SYSTEM_PROMPT_PREFIX } from '@/src/lib/claude/oauth'
-import { geminiKey } from '@/src/lib/providers/circuit-breaker'
+import { CLAUDE_OAUTH_MODEL, buildClaudePrompt } from '@/src/lib/claude/oauth'
+import { createClaudeClient } from '@/src/lib/claude/client'
 
 interface AgentProvider {
   key: string
@@ -36,7 +35,7 @@ Rules:
  */
 export function buildSystemPrompt(providerKey: string): string {
   if (providerKey === 'claude-oauth') {
-    return `${CLAUDE_SYSTEM_PROMPT_PREFIX}\n\n${SYSTEM_PROMPT}`
+    return buildClaudePrompt(SYSTEM_PROMPT)
   }
   return SYSTEM_PROMPT
 }
@@ -48,12 +47,7 @@ export function buildSystemPrompt(providerKey: string): string {
  */
 export function createClaudeProvider(token: string): AgentProvider | null {
   try {
-    const anthropic = createAnthropic({
-      authToken: token,
-      headers: {
-        'anthropic-beta': 'oauth-2025-04-20,claude-code-20250219',
-      },
-    })
+    const anthropic = createClaudeClient(token)
     const modelId = CLAUDE_OAUTH_MODEL
     return {
       key: 'claude-oauth',
@@ -85,7 +79,7 @@ export function resolveProviders(): AgentProvider[] {
   const geminiModels = (process.env.GEMINI_MODEL || '').split(',').map(s => s.trim()).filter(Boolean)
   for (const m of geminiModels) {
     const modelId = m.replace(/^models\//, '')
-    providers.push({ key: geminiKey(m), label: modelId, model: google(modelId) as LanguageModel })
+    providers.push({ key: `gemini:${modelId}`, label: modelId, model: google(modelId) as LanguageModel })
   }
 
   return providers

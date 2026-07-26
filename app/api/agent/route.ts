@@ -4,7 +4,6 @@ import { NextResponse } from 'next/server'
 import { createAgentTools } from '@/src/lib/agent/tools'
 import { resolveProviders, createClaudeProvider, buildSystemPrompt } from '@/src/lib/agent/config'
 import type { DataSnapshot, PendingWriteAction } from '@/src/lib/agent/types'
-import { isOnCooldown, setCooldown, extractRateLimit } from '@/src/lib/providers/circuit-breaker'
 import { getFreshClaudeToken, setClaudeRefreshedCookies } from '@/src/lib/claude/client'
 import { PostHog } from 'posthog-node'
 
@@ -97,24 +96,9 @@ export async function POST(request: Request) {
       }
     }
 
-    const available = providers.filter(p => !isOnCooldown(p.key))
-
-    if (available.length === 0) {
-      console.log('[agent] all providers on cooldown')
-      const cooldownResponse = NextResponse.json(
-        { error: 'All AI providers are rate-limited, try again shortly.' },
-        { status: 503 },
-      )
-      if (responseTokens) setClaudeRefreshedCookies(cooldownResponse, responseTokens)
-      return cooldownResponse
-    }
-
     // ── Streaming path ──
-    // streamText() is synchronous — 429 can only surface during stream consumption,
-    // not at call time. So we pick the first available provider and handle rate-limit
-    // errors inside the SSE stream, setting cooldown so the next request skips it.
     if (wantStream) {
-      const p = available[0]
+      const p = providers[0]
       const systemPrompt = buildSystemPrompt(p.key)
       console.log('[agent] streaming with provider:', p.label)
 
@@ -163,14 +147,7 @@ export async function POST(request: Request) {
             }
             send({ type: 'done' })
           } catch (err) {
-            const { isRateLimit, retryAfterSec } = extractRateLimit(err)
-            if (isRateLimit) {
-              setCooldown(p.key, retryAfterSec)
-              console.log(`[agent] stream rate-limited on ${p.key}, cooldown set`)
-              send({ type: 'error', message: 'Rate limited, please retry.', code: 'rate_limit' })
-            } else {
-              send({ type: 'error', message: err instanceof Error ? err.message : 'Stream error' })
-            }
+            send({ type: 'error', message: err instanceof Error ? err.message : 'Stream error' })
           } finally {
             controller.close()
           }
@@ -189,12 +166,12 @@ export async function POST(request: Request) {
       return streamResponse
     }
 
-    // ── Non-streaming path: try each provider in order, skip on 429 ──
+    // ── Non-streaming path: try each provider in order ──
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let result: any = null
     let chosenLabel = ''
 
-    for (const p of available) {
+    for (const p of providers) {
       const systemPrompt = buildSystemPrompt(p.key)
       console.log('[agent] trying provider:', p.label)
       try {
@@ -209,20 +186,15 @@ export async function POST(request: Request) {
         chosenLabel = p.label
         break
       } catch (err) {
-        const { isRateLimit, retryAfterSec } = extractRateLimit(err)
-        if (isRateLimit) {
-          setCooldown(p.key, retryAfterSec)
-          console.log(`[agent] rate-limited on ${p.key}, trying next provider`)
-          continue
-        }
-        throw err
+        console.log(`[agent] provider ${p.label} failed: ${err instanceof Error ? err.message : err}, trying next`)
+        continue
       }
     }
 
     if (!result) {
-      console.log('[agent] all providers exhausted')
+      console.log('[agent] all providers failed')
       const exhaustedResponse = NextResponse.json(
-        { reply: 'All AI providers are rate-limited, try again shortly.', responseMessages: [], pendingActions: [] },
+        { reply: 'Something went wrong, try again shortly.', responseMessages: [], pendingActions: [] },
         { status: 503 },
       )
       if (responseTokens) setClaudeRefreshedCookies(exhaustedResponse, responseTokens)
