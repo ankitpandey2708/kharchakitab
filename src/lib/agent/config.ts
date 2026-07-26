@@ -1,6 +1,7 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
-import { createOpenAI } from '@ai-sdk/openai'
+import { createAnthropic } from '@ai-sdk/anthropic'
 import type { LanguageModel } from 'ai'
+import { CLAUDE_OAUTH_MODEL, CLAUDE_SYSTEM_PROMPT_PREFIX } from '@/src/lib/claude/oauth'
 import { geminiKey } from '@/src/lib/providers/circuit-breaker'
 
 interface AgentProvider {
@@ -25,6 +26,45 @@ Rules:
 - Swiggy Instamart orders: call get_swiggy_instamart_orders directly — no address_id needed. Only call log_swiggy_order (service="instamart") for orders with status "delivered".
 - After calling log_swiggy_order, tell the user to confirm using the button below — NEVER say the expense has been logged yet.`
 
+/**
+ * Required prefix for the system prompt when using Claude via OAuth.
+ * The API validates that the prompt starts with this exact string.
+ */
+/**
+ * Build the system prompt appropriate for the given provider.
+ * Claude OAuth requires the prompt to start with a specific prefix.
+ */
+export function buildSystemPrompt(providerKey: string): string {
+  if (providerKey === 'claude-oauth') {
+    return `${CLAUDE_SYSTEM_PROMPT_PREFIX}\n\n${SYSTEM_PROMPT}`
+  }
+  return SYSTEM_PROMPT
+}
+
+/**
+ * Create a Claude provider using the user's OAuth access token.
+ * The token is sent as Authorization: Bearer, and the required
+ * anthropic-beta headers are added automatically.
+ */
+export function createClaudeProvider(token: string): AgentProvider | null {
+  try {
+    const anthropic = createAnthropic({
+      authToken: token,
+      headers: {
+        'anthropic-beta': 'oauth-2025-04-20,claude-code-20250219',
+      },
+    })
+    const modelId = CLAUDE_OAUTH_MODEL
+    return {
+      key: 'claude-oauth',
+      label: `claude/${modelId}`,
+      model: anthropic(modelId) as unknown as LanguageModel,
+    }
+  } catch {
+    return null
+  }
+}
+
 export function resolveModelId(): string {
   const raw = process.env.GEMINI_MODEL
   if (!raw) throw new Error('GEMINI_MODEL env var is required')
@@ -46,16 +86,6 @@ export function resolveProviders(): AgentProvider[] {
   for (const m of geminiModels) {
     const modelId = m.replace(/^models\//, '')
     providers.push({ key: geminiKey(m), label: modelId, model: google(modelId) as LanguageModel })
-  }
-
-  // OpenRouter first (parity with /api/parse which uses OR as primary)
-  if (process.env.OPENROUTER_API_KEY) {
-    const orModel = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini'
-    const openrouter = createOpenAI({
-      baseURL: 'https://openrouter.ai/api/v1',
-      apiKey: process.env.OPENROUTER_API_KEY,
-    })
-    providers.push({ key: 'openrouter', label: `openrouter/${orModel}`, model: openrouter(orModel) as LanguageModel })
   }
 
   return providers

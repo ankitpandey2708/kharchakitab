@@ -17,8 +17,8 @@
     "remotion:render": "remotion render remotion/index.ts LaunchVideo out/launch-video.mp4"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.20",
     "@ai-sdk/google": "^3.0.66",
-    "@ai-sdk/openai": "^3.0.58",
     "@fingerprintjs/fingerprintjs": "^5.2.0",
     "@headlessui/react": "^2.2.10",
     "@mdx-js/mdx": "^3.1.1",

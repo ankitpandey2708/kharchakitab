@@ -7,7 +7,9 @@ import { SYSTEM_PROMPT, resolveModelId, getGoogleProvider } from '../src/lib/age
 import { buildSnapshot } from './fixtures/snapshot'
 import type { EvalCase } from './scorers/types'
 
-const JUDGE_MODEL = 'openrouter/free'
+// Judge model is now Gemini (same as agent), since OpenRouter was removed.
+// The evals judge evaluates which reply is better using the same LLM.
+const JUDGE_MODEL = 'gemini'
 
 function loadDataset(path: string): EvalCase[] {
   const raw = readFileSync(path, 'utf8')
@@ -47,9 +49,6 @@ async function judgeReplies(
   replyB: string,
   rubric: string
 ): Promise<'A' | 'B' | 'TIE'> {
-  const apiKey = process.env.OPENROUTER_API_KEY
-  if (!apiKey) throw new Error('OPENROUTER_API_KEY not set')
-
   const prompt = `${rubric}
 
 ---
@@ -64,27 +63,16 @@ ${replyB}
 
 Which reply is better? Respond with only A, B, or TIE.`
 
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: JUDGE_MODEL,
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0,
-      max_tokens: 10,
-    }),
+  const google = getGoogleProvider()
+  const modelId = resolveModelId()
+  const result = await generateText({
+    model: google(modelId),
+    prompt,
+    temperature: 0,
+    maxOutputTokens: 10,
   })
 
-  if (!response.ok) {
-    const err = await response.text()
-    throw new Error(`OpenRouter ${response.status}: ${err}`)
-  }
-
-  const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> }
-  const verdict = (data.choices?.[0]?.message?.content ?? '').trim().toUpperCase()
+  const verdict = result.text.trim().toUpperCase()
   if (verdict === 'A' || verdict === 'B' || verdict === 'TIE') return verdict
   return 'TIE'
 }
@@ -103,7 +91,7 @@ async function main() {
     process.exit(0)
   }
 
-  console.log(`L2 judge: ${cases.length} case(s) using ${JUDGE_MODEL} via OpenRouter\n`)
+  console.log(`L2 judge: ${cases.length} case(s) using ${JUDGE_MODEL}\n`)
 
   let wins = 0, ties = 0, losses = 0
 

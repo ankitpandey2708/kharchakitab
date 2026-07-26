@@ -1,9 +1,11 @@
 import { generateText, streamText, stepCountIs, type ModelMessage } from 'ai'
 import { cookies } from 'next/headers'
+import { NextResponse } from 'next/server'
 import { createAgentTools } from '@/src/lib/agent/tools'
-import { SYSTEM_PROMPT, resolveProviders } from '@/src/lib/agent/config'
+import { resolveProviders, createClaudeProvider, buildSystemPrompt } from '@/src/lib/agent/config'
 import type { DataSnapshot, PendingWriteAction } from '@/src/lib/agent/types'
 import { isOnCooldown, setCooldown, extractRateLimit } from '@/src/lib/providers/circuit-breaker'
+import { getFreshClaudeToken, setClaudeRefreshedCookies } from '@/src/lib/claude/client'
 import { PostHog } from 'posthog-node'
 
 function captureCompletion(props: {
@@ -67,6 +69,9 @@ function extractPendingActions(steps: Array<{ toolResults: Array<{ output: unkno
 export async function POST(request: Request) {
   const t0 = Date.now()
 
+  // Track refreshed tokens to set on the response
+  let responseTokens: { accessToken: string; refreshToken: string; expiresIn: number } | null = null
+
   try {
     const { messages, snapshot, stream: wantStream }: {
       messages: ModelMessage[]
@@ -78,12 +83,30 @@ export async function POST(request: Request) {
     const swiggyToken = cookieStore.get('swiggy_access_token')?.value
     const tools = createAgentTools(snapshot, { swiggyToken })
 
+    // Build providers list: Claude OAuth (highest priority), then Gemini
     const providers = resolveProviders()
+
+    // If user has a Claude OAuth token, add it as the primary provider
+    const { token: claudeToken, refreshedTokens } = await getFreshClaudeToken()
+    if (claudeToken) {
+      const claudeProvider = createClaudeProvider(claudeToken)
+      if (claudeProvider) {
+        providers.unshift(claudeProvider)
+        responseTokens = refreshedTokens ?? null
+        console.log('[agent] Claude OAuth provider added (priority: high)')
+      }
+    }
+
     const available = providers.filter(p => !isOnCooldown(p.key))
 
     if (available.length === 0) {
       console.log('[agent] all providers on cooldown')
-      return Response.json({ error: 'All AI providers are rate-limited, try again shortly.' }, { status: 503 })
+      const cooldownResponse = NextResponse.json(
+        { error: 'All AI providers are rate-limited, try again shortly.' },
+        { status: 503 },
+      )
+      if (responseTokens) setClaudeRefreshedCookies(cooldownResponse, responseTokens)
+      return cooldownResponse
     }
 
     // ── Streaming path ──
@@ -92,11 +115,12 @@ export async function POST(request: Request) {
     // errors inside the SSE stream, setting cooldown so the next request skips it.
     if (wantStream) {
       const p = available[0]
+      const systemPrompt = buildSystemPrompt(p.key)
       console.log('[agent] streaming with provider:', p.label)
 
       const result = streamText({
         model: p.model,
-        system: SYSTEM_PROMPT,
+        system: systemPrompt,
         messages,
         tools,
         stopWhen: stepCountIs(5),
@@ -153,13 +177,16 @@ export async function POST(request: Request) {
         },
       })
 
-      return new Response(stream, {
+      const streamResponse = new NextResponse(stream, {
         headers: {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
           Connection: 'keep-alive',
         },
       })
+
+      if (responseTokens) setClaudeRefreshedCookies(streamResponse, responseTokens)
+      return streamResponse
     }
 
     // ── Non-streaming path: try each provider in order, skip on 429 ──
@@ -168,11 +195,12 @@ export async function POST(request: Request) {
     let chosenLabel = ''
 
     for (const p of available) {
+      const systemPrompt = buildSystemPrompt(p.key)
       console.log('[agent] trying provider:', p.label)
       try {
         result = await generateText({
           model: p.model,
-          system: SYSTEM_PROMPT,
+          system: systemPrompt,
           messages,
           tools,
           stopWhen: stepCountIs(5),
@@ -193,10 +221,12 @@ export async function POST(request: Request) {
 
     if (!result) {
       console.log('[agent] all providers exhausted')
-      return Response.json(
+      const exhaustedResponse = NextResponse.json(
         { reply: 'All AI providers are rate-limited, try again shortly.', responseMessages: [], pendingActions: [] },
         { status: 503 },
       )
+      if (responseTokens) setClaudeRefreshedCookies(exhaustedResponse, responseTokens)
+      return exhaustedResponse
     }
 
     const pendingActions = extractPendingActions(result.steps)
@@ -212,14 +242,16 @@ export async function POST(request: Request) {
       provider: chosenLabel,
     })
 
-    return Response.json({
+    const nonStreamResponse = NextResponse.json({
       reply: result.text,
       responseMessages: result.response.messages,
       pendingActions,
     })
+    if (responseTokens) setClaudeRefreshedCookies(nonStreamResponse, responseTokens)
+    return nonStreamResponse
   } catch (error) {
     console.error('agent:error', error)
-    return Response.json(
+    const errorResponse = NextResponse.json(
       {
         reply: 'Something went wrong, try again.',
         responseMessages: [],
@@ -227,5 +259,7 @@ export async function POST(request: Request) {
       },
       { status: 200 },
     )
+    if (responseTokens) setClaudeRefreshedCookies(errorResponse, responseTokens)
+    return errorResponse
   }
 }

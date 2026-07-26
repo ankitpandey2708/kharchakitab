@@ -6,7 +6,9 @@ import { ExpenseArraySchema } from "@/src/utils/schemas";
 import type { CurrencyCode } from "@/src/utils/money";
 import { isOnCooldown, setCooldown, geminiKey, extractRateLimit } from "@/src/lib/providers/circuit-breaker";
 import { generateText } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { CLAUDE_OAUTH_MODEL, CLAUDE_SYSTEM_PROMPT_PREFIX } from "@/src/lib/claude/oauth";
+import { getFreshClaudeToken, setClaudeRefreshedCookies } from "@/src/lib/claude/client";
 
 type TierOutcome = "success" | "timeout" | "rate_limit" | "schema_fail" | "transport_error" | "truncation" | "cancelled";
 
@@ -20,7 +22,6 @@ interface TierResult {
 }
 
 const GEMINI_TIMEOUT_MS = 8000;
-const HEDGE_DELAY_MS = 700;
 
 const GEMINI_MODELS = (process.env.GEMINI_MODEL || "")
   .split(",").map((m) => m.trim()).filter(Boolean);
@@ -170,54 +171,50 @@ async function callGemini(
   }
 }
 
-async function callOpenRouter(text: string, temperature: number, cancelSignal?: AbortSignal): Promise<TierResult> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) return { outcome: "transport_error", latency_ms: 0, error: "OpenRouter API key not configured." };
-
-  const model = process.env.OPENROUTER_MODEL || "openrouter/free";
+async function callClaude(
+  text: string,
+  token: string,
+  temperature: number,
+  cancelSignal?: AbortSignal,
+): Promise<TierResult> {
+  const t0 = Date.now();
   const timeoutCtrl = new AbortController();
   const timer = setTimeout(() => timeoutCtrl.abort(), 10000);
-  const abortSignal = mergeSignals(timeoutCtrl.signal, cancelSignal);
-  const t0 = Date.now();
-
-  console.log(`[AI] openrouter: sending request (model=${model}, temp=${temperature}, timeout=10000ms)`);
+  const signal = mergeSignals(timeoutCtrl.signal, cancelSignal);
 
   try {
-    const openrouter = createOpenAI({ baseURL: "https://openrouter.ai/api/v1", apiKey });
+    const anthropic = createAnthropic({
+      authToken: token,
+      headers: { "anthropic-beta": "oauth-2025-04-20,claude-code-20250219" },
+    });
     const result = await generateText({
-      model: openrouter(model),
-      prompt: text,
+      model: anthropic(CLAUDE_OAUTH_MODEL) as unknown as Parameters<typeof generateText>[0]['model'],
+      // Claude OAuth requires the system prompt to start with the Claude Code prefix
+      prompt: `${CLAUDE_SYSTEM_PROMPT_PREFIX}\n\n${text}`,
       temperature,
       maxOutputTokens: 1024,
-      abortSignal,
+      abortSignal: signal,
     });
 
     const latency_ms = Date.now() - t0;
     const truncated = result.finishReason === "length";
     const output_tokens = result.usage?.outputTokens;
-
-    console.log(`[AI] openrouter: success total=${latency_ms}ms finishReason=${result.finishReason} tokens=${output_tokens}`);
-
-    if (!result.text) return { outcome: "transport_error", latency_ms, output_tokens, error: "Empty response from OpenRouter." };
+    console.log(`[AI] claude: success total=${latency_ms}ms finishReason=${result.finishReason} tokens=${output_tokens}`);
+    if (!result.text) return { outcome: "transport_error", latency_ms, output_tokens, error: "Empty response from Claude." };
     return { outcome: truncated ? "truncation" : "success", latency_ms, output_tokens, truncated, text: result.text };
   } catch (e) {
     const latency_ms = Date.now() - t0;
     if (e instanceof Error && e.name === "AbortError") {
-      if (cancelSignal?.aborted) {
-        console.log(`[AI] openrouter: cancelled after ${latency_ms}ms`);
-        return { outcome: "cancelled", latency_ms };
-      }
-      console.log(`[AI] openrouter: timeout after ${latency_ms}ms`);
+      if (cancelSignal?.aborted) return { outcome: "cancelled", latency_ms };
       return { outcome: "timeout", latency_ms, error: "Timeout after 10000ms" };
     }
-    const { isRateLimit, retryAfterSec } = extractRateLimit(e);
+    const { isRateLimit } = extractRateLimit(e);
     if (isRateLimit) {
-      setCooldown("openrouter", retryAfterSec);
-      console.log(`[AI] openrouter: rate_limit — ${e instanceof Error ? e.message : e}`);
+      console.log(`[AI] claude: rate_limit — ${e instanceof Error ? e.message : e}`);
       return { outcome: "rate_limit", latency_ms, error: e instanceof Error ? e.message : "Rate limited" };
     }
-    console.log(`[AI] openrouter: exception after ${latency_ms}ms — ${e instanceof Error ? e.message : e}`);
-    return { outcome: "transport_error", latency_ms, error: e instanceof Error ? e.message : "Network error reaching OpenRouter." };
+    console.log(`[AI] claude: exception after ${latency_ms}ms — ${e instanceof Error ? e.message : e}`);
+    return { outcome: "transport_error", latency_ms, error: e instanceof Error ? e.message : "Network error reaching Claude." };
   } finally {
     clearTimeout(timer);
   }
@@ -293,76 +290,25 @@ export async function POST(request: NextRequest) {
   const telemetry: Record<string, unknown> = { input_length: text.length };
   let finalParsed: unknown = null;
   let provider = "unknown";
+  // Track refreshed Claude tokens for the response
+  let responseTokens: { accessToken: string; refreshToken: string; expiresIn: number } | null = null;
 
   const [model1, model2] = GEMINI_MODELS;
   let tierN = 0;
   const nextTier = () => `tier${++tierN}`;
 
-  // --- OpenRouter fires first; Gemini models hedge if OR is slow ---
-  if (!isOnCooldown("openrouter")) {
-    const ctrlOR = new AbortController();
-    const orPromise = callOpenRouter(basePrompt, temperature, ctrlOR.signal);
-    const hedgeSentinel = new Promise<"hedge">((res) => setTimeout(() => res("hedge"), HEDGE_DELAY_MS));
-
-    const first = await Promise.race([
-      orPromise.then((r) => ({ kind: "result" as const, r })),
-      hedgeSentinel.then(() => ({ kind: "hedge" as const })),
-    ]);
-
-    if (first.kind === "result") {
-      // OR finished within hedge window
-      const win = accept(first.r, requestType, nextTier(), "openrouter", telemetry);
-      if (win) { finalParsed = win.parsed; provider = win.provider; }
-    } else {
-      // OR slow — fire Gemini models in parallel with the still-running OR
-      telemetry["hedged"] = true;
-      console.log(`[AI] hedge: openrouter slow after ${HEDGE_DELAY_MS}ms, firing gemini in parallel`);
-
-      const orTier = nextTier();
-      const activeGemini = ([model1, model2].filter((m) => m && !isOnCooldown(geminiKey(m)))) as string[];
-      const geminiCtrls = activeGemini.map(() => new AbortController());
-      const geminiTiers = activeGemini.map(() => nextTier());
-      const geminiPromises = activeGemini.map((m, i) =>
-        callGemini(geminiPrompt(basePrompt, m), m, temperature, requestType, geminiCtrls[i].signal)
-      );
-
-      await new Promise<void>((resolve) => {
-        let pending = 1 + geminiPromises.length;
-        let won = false;
-
-        function onWin() {
-          won = true;
-          geminiCtrls.forEach((c) => c.abort());
-          ctrlOR.abort();
-          resolve();
-        }
-
-        function handle(r: TierResult, t: string, label: string) {
-          if (won) { recordTier(telemetry, t, r, "cancelled"); return; }
-          const parsed = validateAndParse(r, requestType);
-          if (parsed !== null) {
-            recordTier(telemetry, t, r, r.outcome);
-            finalParsed = parsed;
-            provider = label;
-            onWin();
-          } else {
-            pending--;
-            recordTier(telemetry, t, r, resolveOutcome(r, null));
-            if (pending === 0) resolve();
-          }
-        }
-
-        orPromise.then((r) => handle(r, orTier, "openrouter"));
-        geminiPromises.forEach((p, i) => p.then((r) => handle(r, geminiTiers[i], modelLabel(activeGemini[i]))));
-      });
-    }
-  } else {
-    const t = nextTier();
-    telemetry[`${t}_outcome`] = "rate_limit_cooldown";
-    telemetry[`${t}_latency_ms`] = 0;
+  // ── Claude OAuth first (user's own subscription, highest priority) ──
+  const { token: claudeToken, refreshedTokens } = await getFreshClaudeToken();
+  if (claudeToken) {
+    responseTokens = refreshedTokens ?? null;
+    const win = accept(
+      await callClaude(basePrompt, claudeToken, temperature),
+      requestType, nextTier(), "claude", telemetry,
+    );
+    if (win) { finalParsed = win.parsed; provider = win.provider; }
   }
 
-  // --- Gemini sequential fallback (OR on cooldown, or OR fast-failed before hedge fired) ---
+  // --- Gemini sequential fallback ---
   if (finalParsed === null) {
     for (const m of ([model1, model2].filter(Boolean)) as string[]) {
       if (isOnCooldown(geminiKey(m))) {
@@ -384,12 +330,16 @@ export async function POST(request: NextRequest) {
   if (finalParsed === null) {
     const event = requestType === "mann-ki-baat" ? "mann_ki_baat_generate_failed" : "expense_parse_failed";
     posthog?.capture({ distinctId, event, properties: { ...telemetry, provider, total_ms } });
-    return NextResponse.json({ error: "All AI providers failed." }, { status: 502 });
+    const errRes = NextResponse.json({ error: "All AI providers failed." }, { status: 502 });
+    if (responseTokens) setClaudeRefreshedCookies(errRes, responseTokens);
+    return errRes;
   }
 
   const event = requestType === "mann-ki-baat" ? "mann_ki_baat_generated" : "expense_parsed";
   console.log(`[AI] ${event}: provider=${provider} total=${total_ms}ms`);
   posthog?.capture({ distinctId, event, properties: { ...telemetry, provider, total_ms } });
 
-  return NextResponse.json({ data: finalParsed });
+  const okRes = NextResponse.json({ data: finalParsed });
+  if (responseTokens) setClaudeRefreshedCookies(okRes, responseTokens);
+  return okRes;
 }

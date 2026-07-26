@@ -4,6 +4,8 @@ import type { CurrencyCode } from "@/src/utils/money";
 import { formatDateYMD } from "@/src/utils/dates";
 import { getPostHogClient } from "@/src/lib/posthog-server";
 import { ExpenseSchema } from "@/src/utils/schemas";
+import { CLAUDE_OAUTH_MODEL, CLAUDE_SYSTEM_PROMPT_PREFIX } from "@/src/lib/claude/oauth";
+import { getFreshClaudeToken, setClaudeRefreshedCookies } from "@/src/lib/claude/client";
 
 export const runtime = "nodejs";
 
@@ -11,6 +13,58 @@ type AIResult = { text: string } | { error: string };
 
 const GEMINI_MODELS = (process.env.GEMINI_MODEL || "")
   .split(",").map((m) => m.trim()).filter(Boolean);
+
+async function callClaudeVision(
+  prompt: string,
+  base64: string,
+  mimeType: string,
+  token: string,
+): Promise<AIResult> {
+  const model = CLAUDE_OAUTH_MODEL;
+  const t0 = Date.now();
+  console.log(`[AI] claude: sending vision request (model=${model}, imageBytes=${Math.round(base64.length * 0.75)})`);
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "oauth-2025-04-20,claude-code-20250219",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 1024,
+        system: `${CLAUDE_SYSTEM_PROMPT_PREFIX}\n\n${prompt}`,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "image", source: { type: "base64", media_type: mimeType, data: base64 } },
+            ],
+          },
+        ],
+      }),
+    });
+    const ttfb = Date.now() - t0;
+    console.log(`[AI] claude: vision response received status=${response.status} ttfb=${ttfb}ms`);
+    if (!response.ok) {
+      const errBody = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
+      const msg = errBody?.error?.message ?? `Claude error ${response.status}`;
+      console.log(`[AI] claude: vision error after ${Date.now() - t0}ms — ${msg}`);
+      return { error: msg };
+    }
+    const data = (await response.json()) as {
+      content?: Array<{ text?: string }>;
+    };
+    const out = data.content?.[0]?.text;
+    console.log(`[AI] claude: vision parsed total=${Date.now() - t0}ms`);
+    return out ? { text: out } : { error: "Empty response from Claude." };
+  } catch (e) {
+    console.log(`[AI] claude: vision exception after ${Date.now() - t0}ms — ${e instanceof Error ? e.message : e}`);
+    return { error: e instanceof Error ? e.message : "Network error reaching Claude." };
+  }
+}
 
 async function callGemini(prompt: string, base64: string, mimeType: string, model: string): Promise<AIResult> {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -61,61 +115,6 @@ async function callGemini(prompt: string, base64: string, mimeType: string, mode
   }
 }
 
-async function callOpenRouterVision(prompt: string, base64: string, mimeType: string): Promise<AIResult> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) return { error: "OpenRouter API key not configured." };
-  const model = process.env.OPENROUTER_MODEL || "openrouter/free";
-  console.log(`[AI] openrouter: sending request (model=${model}, imageBytes=${Math.round(base64.length * 0.75)})`);
-  const t0 = Date.now();
-  try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: prompt },
-              { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64}` } },
-            ],
-          },
-        ],
-        temperature: 0,
-        max_tokens: 1024,
-        response_format: { type: "json_object" },
-      }),
-    });
-    const ttfb = Date.now() - t0;
-    const resolvedModel = response.headers.get("x-model-id") ?? response.headers.get("openrouter-model") ?? "unknown";
-    const queueTime = response.headers.get("x-queue-time");
-    const genTime = response.headers.get("x-generation-time");
-    const rateLimit = response.headers.get("x-ratelimit-remaining-requests");
-    console.log(`[AI] openrouter: response status=${response.status} ttfb=${ttfb}ms resolved_model=${resolvedModel} queue=${queueTime}ms gen=${genTime}ms rate_limit_remaining=${rateLimit}`);
-    if (!response.ok) {
-      const errBody = (await response.json().catch(() => null)) as { error?: { message?: string; code?: number } } | null;
-      const msg = errBody?.error?.message ?? `OpenRouter error ${response.status}`;
-      const code = errBody?.error?.code;
-      console.log(`[AI] openrouter: FAILED status=${response.status} code=${code} after ${Date.now() - t0}ms — ${msg}`);
-      return { error: msg };
-    }
-    const data = (await response.json()) as {
-      model?: string;
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-    console.log(`[AI] openrouter: success model_used=${data.model ?? resolvedModel} total=${Date.now() - t0}ms`);
-    const out = data.choices?.[0]?.message?.content;
-    return out ? { text: out } : { error: "Empty response from OpenRouter." };
-  } catch (e) {
-    console.log(`[AI] openrouter: exception after ${Date.now() - t0}ms — ${e instanceof Error ? e.message : e}`);
-    return { error: e instanceof Error ? e.message : "Network error reaching OpenRouter." };
-  }
-}
-
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const file = formData.get("image");
@@ -140,22 +139,29 @@ export async function POST(request: NextRequest) {
 
   let result: AIResult = { error: "No models configured." };
   let provider = "unknown";
+  let responseTokens: { accessToken: string; refreshToken: string; expiresIn: number } | null = null;
 
-  for (const model of GEMINI_MODELS) {
-    const label = model.split("/").pop()!;
-    const t = Date.now();
-    result = await callGemini(prompt, base64, mimeType, model);
-    console.log(`[AI] ${label}: total call duration=${Date.now() - t}ms`);
-    if (!("error" in result)) { provider = label; break; }
-    console.log(`[AI] ${label} failed → next — ${result.error}`);
+  // ── Claude OAuth first (user's own subscription, highest priority) ──
+  const { token: claudeToken, refreshedTokens } = await getFreshClaudeToken();
+  if (claudeToken) {
+    responseTokens = refreshedTokens ?? null;
+    result = await callClaudeVision(prompt, base64, mimeType, claudeToken);
+    if (!("error" in result)) {
+      provider = "claude";
+      console.log(`[AI] claude: vision success total=${Date.now() - reqStart}ms`);
+    }
   }
 
-  // Final fallback: OpenRouter
+  // ── Gemini fallback ──
   if ("error" in result) {
-    const t = Date.now();
-    result = await callOpenRouterVision(prompt, base64, mimeType);
-    console.log(`[AI] openrouter: total call duration=${Date.now() - t}ms`);
-    provider = "openrouter";
+    for (const model of GEMINI_MODELS) {
+      const label = model.split("/").pop()!;
+      const t = Date.now();
+      result = await callGemini(prompt, base64, mimeType, model);
+      console.log(`[AI] ${label}: total call duration=${Date.now() - t}ms`);
+      if (!("error" in result)) { provider = label; break; }
+      console.log(`[AI] ${label} failed → next — ${result.error}`);
+    }
   }
 
   if ("error" in result) {
@@ -166,7 +172,9 @@ export async function POST(request: NextRequest) {
         properties: { provider, error: result.error, image_size_bytes: buffer.byteLength },
       });
     }
-    return NextResponse.json({ error: result.error }, { status: 502 });
+    const failRes = NextResponse.json({ error: result.error }, { status: 502 });
+    if (responseTokens) setClaudeRefreshedCookies(failRes, responseTokens);
+    return failRes;
   }
 
   if (posthog) {
@@ -201,5 +209,7 @@ export async function POST(request: NextRequest) {
   }
 
   console.log(`[AI] receipt_parsed: provider=${provider} total_request=${Date.now() - reqStart}ms`);
-  return NextResponse.json({ data: validation.data });
+  const okRes = NextResponse.json({ data: validation.data });
+  if (responseTokens) setClaudeRefreshedCookies(okRes, responseTokens);
+  return okRes;
 }
