@@ -28,6 +28,7 @@ const AnalyticsView = dynamic(() => import("@/src/components/AnalyticsView").the
 const RecurringView = dynamic(() => import("@/src/components/RecurringView").then(m => ({ default: m.RecurringView })), { ssr: false });
 const RecurringEditModal = dynamic(() => import("@/src/components/RecurringEditModal").then(m => ({ default: m.RecurringEditModal })), { ssr: false });
 const NotificationsSettings = dynamic(() => import("@/src/components/NotificationsSettings").then(m => ({ default: m.NotificationsSettings })), { ssr: false });
+const AiProvidersSettings = dynamic(() => import("@/src/components/AiProvidersSettings").then(m => ({ default: m.AiProvidersSettings })), { ssr: false });
 const BulkExpensePreview = dynamic(() => import("@/src/components/BulkExpensePreview").then(m => ({ default: m.BulkExpensePreview })), { ssr: false });
 const SyncOverlay = dynamic(() => import("@/src/components/SyncOverlay").then(m => ({ default: m.SyncOverlay })), { ssr: false });
 const ProfileView = dynamic(() => import("@/src/components/ProfileView").then(m => ({ default: m.ProfileView })), { ssr: false });
@@ -158,6 +159,7 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isSyncOpen, setIsSyncOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isAiProvidersOpen, setIsAiProvidersOpen] = useState(false);
   const [isTxnSheetOpen, setIsTxnSheetOpen] = useState(false);
   const [isReceiptProcessing, setIsReceiptProcessing] = useState(false);
   const [isTextProcessing, setIsTextProcessing] = useState(false);
@@ -756,6 +758,14 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     setIsNotificationsOpen(false);
   }, []);
 
+  const handleOpenAiProviders = useCallback(() => {
+    setIsAiProvidersOpen(true);
+  }, []);
+
+  const handleCloseAiProviders = useCallback(() => {
+    setIsAiProvidersOpen(false);
+  }, []);
+
   // Auto-open sync overlay when an incoming pairing request arrives
   useEffect(() => {
     if (incomingPair) {
@@ -938,6 +948,7 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
           <ProfileView
             onOpenSync={handleOpenSync}
             onOpenNotifications={handleOpenNotifications}
+            onOpenAiProviders={handleOpenAiProviders}
             onOpenTags={() => setIsTagManagerOpen(true)}
           />
         </section>
@@ -1045,6 +1056,12 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
       <NotificationsSettings
         isOpen={isNotificationsOpen}
         onClose={handleCloseNotifications}
+      />
+
+      {/* AI Providers Settings — full-screen overlay */}
+      <AiProvidersSettings
+        isOpen={isAiProvidersOpen}
+        onClose={handleCloseAiProviders}
       />
 
       {/* Sync Manager — full-screen overlay */}

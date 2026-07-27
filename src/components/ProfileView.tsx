@@ -7,14 +7,13 @@ import {
   ChevronRight,
   Coffee,
   Coins,
-
+  KeyRound,
   Pencil,
   Share2,
   Smartphone,
   Tag,
   Users,
   Volume2,
-  X,
 } from "lucide-react";
 import posthog from "posthog-js";
 import { BackupSettings } from "@/src/components/BackupSettings";
@@ -72,11 +71,10 @@ const SettingRow = ({
   stackOnMobile?: boolean;
 }) => (
   <div
-    className={`rounded-[var(--kk-radius-md)] bg-white/80 px-4 py-3 shadow-sm ${
-      stackOnMobile
+    className={`rounded-[var(--kk-radius-md)] bg-white/80 px-4 py-3 shadow-sm ${stackOnMobile
         ? "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
         : "flex items-center justify-between gap-3"
-    }`}
+      }`}
   >
     <div className="flex items-center gap-3 min-w-0">
       <div
@@ -314,309 +312,48 @@ const SwiggyConnectRow = React.memo(() => {
   );
 });
 
-SwiggyConnectRow.displayName = "SwiggyConnectRow";
+SwiggyConnectRow.displayName = "SwiggyConnectRow";/** Single action row that opens the AI Providers settings page */
+const AiProvidersRow = React.memo<{ onClick: () => void }>(
+  ({ onClick }) => {
+    const [summary, setSummary] = useState("Configure AI providers");
 
-/** Anthropic / Claude logo SVG */
-const ClaudeLogo = ({ className }: { className?: string }) => (
-  <svg
-    role="img"
-    viewBox="0 0 24 24"
-    xmlns="http://www.w3.org/2000/svg"
-    className={className}
-    fill="#D97757"
-  >
-    <title>Claude</title>
-    <path d="M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z" fillRule="nonzero"/>
-  </svg>
-);
+    useEffect(() => {
+      const fetchSummary = async () => {
+        try {
+          const res = await fetch("/api/keys");
+          if (!res.ok) return;
+          const data = (await res.json()) as {
+            keys: Array<{ provider: string; configured: boolean; source: string }>;
+          };
+          const configured = data.keys.filter((k) => k.configured).map((k) => k.provider);
+          if (configured.length === 0) setSummary("Add API keys");
+          else setSummary(configured.map((id) => id.charAt(0).toUpperCase() + id.slice(1)).join(" · "));
+        } catch { void 0; }
+      };
+      void fetchSummary();
+    }, []);
 
-/** Gemini logo SVG */
-const GeminiLogo = ({ className }: { className?: string }) => (
-  <svg
-    role="img"
-    viewBox="0 0 24 24"
-    xmlns="http://www.w3.org/2000/svg"
-    className={className}
-    fill="#1A73E8"
-  >
-    <title>Gemini</title>
-    <path d="M12 24A14.304 14.304 0 000 12 14.304 14.304 0 0012 0a14.304 14.304 0 0012 12 14.304 14.304 0 00-12 12z" />
-  </svg>
-);
-
-/**
- * API Key input row — shared between Anthropic and Gemini.
- */
-const ApiKeyRow = React.memo<{
-  provider: "anthropic" | "gemini";
-  label: string;
-  description: string;
-  icon: React.ReactNode;
-  initialConfigured: boolean;
-  initialSource: string;
-}>(({ provider, label, description, icon, initialConfigured, initialSource }) => {
-  const [isConfigured, setIsConfigured] = useState(initialConfigured);
-  const [source, setSource] = useState(initialSource);
-  const [showInput, setShowInput] = useState(false);
-  const [keyValue, setKeyValue] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Focus input when dialog opens
-  useEffect(() => {
-    if (showInput) setTimeout(() => inputRef.current?.focus(), 100);
-  }, [showInput]);
-
-  // Refresh config status
-  const refreshStatus = useCallback(async () => {
-    try {
-      const res = await fetch("/api/keys");
-      if (!res.ok) return;
-      const data = (await res.json()) as { keys: Array<{ provider: string; configured: boolean; source: string }> };
-      const found = data.keys.find((k) => k.provider === provider);
-      if (found) {
-        setIsConfigured(found.configured);
-        setSource(found.source);
-      }
-    } catch { void 0; }
-  }, [provider]);
-
-  const handleSave = useCallback(async () => {
-    const trimmed = keyValue.trim();
-    if (!trimmed) {
-      setError("Please enter an API key.");
-      return;
-    }
-    setIsSaving(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/keys", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, key: trimmed }),
-      });
-      const data = (await res.json()) as { ok?: boolean; error?: string };
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error ?? "Failed to save key");
-      }
-      setIsConfigured(true);
-      setSource("cookie");
-      setShowInput(false);
-      setKeyValue("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save key");
-    } finally {
-      setIsSaving(false);
-    }
-  }, [keyValue, provider]);
-
-  const handleRemove = useCallback(async () => {
-    try {
-      await fetch("/api/keys", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider }),
-      });
-      setIsConfigured(false);
-      setSource("none");
-      setShowInput(false);
-      setKeyValue("");
-      void refreshStatus();
-    } catch { void 0; }
-  }, [provider, refreshStatus]);
-
-  const descText = isConfigured
-    ? source === "env"
-      ? `Server key active — enter yours to override`
-      : `API key saved`
-    : description;
-
-  return (
-    <div className="space-y-1.5">
-      <SettingRow
-        icon={icon}
-        label={label}
-        description={descText}
-      >
-        {isConfigured && source === "env" ? (
-          <div className="flex items-center gap-2">
-            <span className="flex items-center gap-1 text-xs text-[var(--kk-ash)]">
-              <Check className="h-3 w-3 text-[var(--kk-sage)]" />
-              Server
-            </span>
-            <button
-              type="button"
-              onClick={() => setShowInput(true)}
-              className="rounded-full bg-[var(--kk-paper)] px-3 py-1 text-xs font-semibold text-[var(--kk-ink)] hover:bg-[var(--kk-smoke)] transition-colors"
-            >
-              Override
-            </button>
-          </div>
-        ) : isConfigured ? (
-          <div className="flex items-center gap-2">
-            <span className="flex items-center gap-1 text-xs text-[var(--kk-sage)]">
-              <Check className="h-3 w-3" />
-              Saved
-            </span>
-            <button
-              type="button"
-              onClick={() => void handleRemove()}
-              className="text-xs text-[var(--kk-ash)] hover:text-[var(--kk-ink)] transition-colors"
-            >
-              Remove
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setShowInput(true)}
-            className="rounded-full bg-[var(--kk-paper)] px-4 py-1.5 text-xs font-semibold text-[var(--kk-ink)] hover:bg-[var(--kk-smoke)] transition-colors"
-          >
-            Add Key
-          </button>
-        )}
-      </SettingRow>
-
-      {/* Key Input Dialog */}
-      {showInput && (
-        <div className="rounded-xl bg-white border border-[var(--kk-smoke)] p-4 shadow-sm space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-[var(--kk-ink)]">
-              Enter {label} API Key
-            </span>
-            <button
-              type="button"
-              onClick={() => { setShowInput(false); setError(null); setKeyValue(""); }}
-              className="flex h-6 w-6 items-center justify-center rounded-full text-[var(--kk-ash)] hover:bg-[var(--kk-smoke)] transition-colors"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-          <p className="text-xs text-[var(--kk-ash)] leading-relaxed">
-            {provider === "anthropic"
-              ? `Paste your Anthropic API key from the Claude Console. It starts with "sk-ant-".`
-              : `Paste your Google AI Studio API key. It starts with "AIza".`}
-          </p>
-          <div className="space-y-2">
-            <input
-              ref={inputRef}
-              type="password"
-              value={keyValue}
-              onChange={(e) => setKeyValue(e.target.value)}
-              placeholder={`sk-ant-... or AIza...`}
-              className="w-full rounded-lg border border-[var(--kk-smoke)] bg-white px-3 py-2 text-sm font-mono text-[var(--kk-ink)] placeholder:text-[var(--kk-ash)]/50 focus:outline-none focus:border-[var(--kk-sage)]"
-              autoComplete="off"
-              onKeyDown={(e) => { if (e.key === "Enter") void handleSave(); }}
-            />
-          </div>
-          {error && (
-            <p className="text-xs text-[var(--kk-danger)]">{error}</p>
-          )}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => void handleSave()}
-              disabled={isSaving || !keyValue.trim()}
-              className="flex-1 rounded-lg bg-[var(--kk-ink)] py-2 text-xs font-semibold text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {isSaving ? "Saving…" : "Save Key"}
-            </button>
-            <button
-              type="button"
-              onClick={() => { setShowInput(false); setError(null); setKeyValue(""); }}
-              className="rounded-lg border border-[var(--kk-smoke)] bg-white px-4 py-2 text-xs font-semibold text-[var(--kk-ash)] hover:bg-[var(--kk-paper)] transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-});
-
-ApiKeyRow.displayName = "ApiKeyRow";
-
-/** Fetches initial API key config status on mount */
-const useApiKeyStatus = () => {
-  const [status, setStatus] = useState<{
-    anthropic: { configured: boolean; source: string };
-    gemini: { configured: boolean; source: string };
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchStatus = async () => {
-      try {
-        const res = await fetch("/api/keys");
-        if (!res.ok) { setLoading(false); return; }
-        const data = (await res.json()) as { keys: Array<{ provider: string; configured: boolean; source: string }> };
-        const anthropic = data.keys.find((k) => k.provider === "anthropic") ?? { configured: false, source: "none" };
-        const gemini = data.keys.find((k) => k.provider === "gemini") ?? { configured: false, source: "none" };
-        setStatus({
-          anthropic: { configured: anthropic.configured, source: anthropic.source },
-          gemini: { configured: gemini.configured, source: gemini.source },
-        });
-      } catch { void 0; } finally {
-        setLoading(false);
-      }
-    };
-    void fetchStatus();
-  }, []);
-
-  return { status, loading };
-};
-
-/** Section that renders Anthropic + Gemini API key rows */
-const ApiKeysSection = React.memo(() => {
-  const { status, loading } = useApiKeyStatus();
-
-  if (loading) {
     return (
-      <div className="space-y-2">
-        <SettingRow
-          icon={<div className="h-4 w-4 rounded-full bg-[var(--kk-smoke)] animate-pulse" />}
-          label="..."
-          description="Loading..."
-        >
-          <div className="h-6 w-16 rounded-full bg-[var(--kk-smoke)] animate-pulse" />
-        </SettingRow>
-      </div>
+      <ActionRow
+        icon={<KeyRound className="h-4 w-4" />}
+        label="AI Providers"
+        description={summary}
+        onClick={onClick}
+      />
     );
-  }
+  },
+);
 
-  return (
-    <div className="space-y-2">
-      <ApiKeyRow
-        provider="anthropic"
-        label="Claude (Anthropic)"
-        description="Enter your Anthropic API key for AI responses"
-        icon={<ClaudeLogo className="h-4 w-4" />}
-        initialConfigured={status?.anthropic.configured ?? false}
-        initialSource={status?.anthropic.source ?? "none"}
-      />
-      <ApiKeyRow
-        provider="gemini"
-        label="Google Gemini"
-        description="Enter your Gemini API key (fallback if no Claude key)"
-        icon={<GeminiLogo className="h-4 w-4" />}
-        initialConfigured={status?.gemini.configured ?? false}
-        initialSource={status?.gemini.source ?? "none"}
-      />
-    </div>
-  );
-});
-
-ApiKeysSection.displayName = "ApiKeysSection";
+AiProvidersRow.displayName = "AiProvidersRow";
 
 interface ProfileViewProps {
   onOpenSync: () => void;
   onOpenNotifications: () => void;
+  onOpenAiProviders: () => void;
   onOpenTags?: () => void;
 }
 
-export const ProfileView = React.memo(({ onOpenSync, onOpenNotifications, onOpenTags }: ProfileViewProps) => {
+export const ProfileView = React.memo(({ onOpenSync, onOpenNotifications, onOpenAiProviders, onOpenTags }: ProfileViewProps) => {
   const [shareMessage, setShareMessage] = useState<string | null>(null);
 
   const handleShare = useCallback(async () => {
@@ -717,7 +454,7 @@ export const ProfileView = React.memo(({ onOpenSync, onOpenNotifications, onOpen
 
           <SectionHeader>Integrations</SectionHeader>
           <SwiggyConnectRow />
-          <ApiKeysSection />
+          <AiProvidersRow onClick={onOpenAiProviders} />
 
           <SectionDivider />
 
