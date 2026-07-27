@@ -2,9 +2,8 @@ import { generateText, streamText, stepCountIs, type ModelMessage } from 'ai'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { createAgentTools } from '@/src/lib/agent/tools'
-import { resolveProviders, createClaudeProvider, buildSystemPrompt } from '@/src/lib/agent/config'
+import { resolveProviders, buildSystemPrompt } from '@/src/lib/agent/config'
 import type { DataSnapshot, PendingWriteAction } from '@/src/lib/agent/types'
-import { getFreshClaudeToken, setClaudeRefreshedCookies } from '@/src/lib/claude/client'
 import { PostHog } from 'posthog-node'
 
 function captureCompletion(props: {
@@ -68,9 +67,6 @@ function extractPendingActions(steps: Array<{ toolResults: Array<{ output: unkno
 export async function POST(request: Request) {
   const t0 = Date.now()
 
-  // Track refreshed tokens to set on the response
-  let responseTokens: { accessToken: string; refreshToken: string; expiresIn: number } | null = null
-
   try {
     const { messages, snapshot, stream: wantStream }: {
       messages: ModelMessage[]
@@ -82,19 +78,8 @@ export async function POST(request: Request) {
     const swiggyToken = cookieStore.get('swiggy_access_token')?.value
     const tools = createAgentTools(snapshot, { swiggyToken })
 
-    // Build providers list: Claude OAuth (highest priority), then Gemini
-    const providers = resolveProviders()
-
-    // If user has a Claude OAuth token, add it as the primary provider
-    const { token: claudeToken, refreshedTokens } = await getFreshClaudeToken()
-    if (claudeToken) {
-      const claudeProvider = createClaudeProvider(claudeToken)
-      if (claudeProvider) {
-        providers.unshift(claudeProvider)
-        responseTokens = refreshedTokens ?? null
-        console.log('[agent] Claude OAuth provider added (priority: high)')
-      }
-    }
+    // Build providers list: Anthropic API key (highest priority), then Gemini
+    const providers = await resolveProviders()
 
     // ── Streaming path ──
     if (wantStream) {
@@ -162,7 +147,6 @@ export async function POST(request: Request) {
         },
       })
 
-      if (responseTokens) setClaudeRefreshedCookies(streamResponse, responseTokens)
       return streamResponse
     }
 
@@ -193,12 +177,10 @@ export async function POST(request: Request) {
 
     if (!result) {
       console.log('[agent] all providers failed')
-      const exhaustedResponse = NextResponse.json(
+      return NextResponse.json(
         { reply: 'Something went wrong, try again shortly.', responseMessages: [], pendingActions: [] },
         { status: 503 },
       )
-      if (responseTokens) setClaudeRefreshedCookies(exhaustedResponse, responseTokens)
-      return exhaustedResponse
     }
 
     const pendingActions = extractPendingActions(result.steps)
@@ -214,16 +196,14 @@ export async function POST(request: Request) {
       provider: chosenLabel,
     })
 
-    const nonStreamResponse = NextResponse.json({
+    return NextResponse.json({
       reply: result.text,
       responseMessages: result.response.messages,
       pendingActions,
     })
-    if (responseTokens) setClaudeRefreshedCookies(nonStreamResponse, responseTokens)
-    return nonStreamResponse
   } catch (error) {
     console.error('agent:error', error)
-    const errorResponse = NextResponse.json(
+    return NextResponse.json(
       {
         reply: 'Something went wrong, try again.',
         responseMessages: [],
@@ -231,7 +211,5 @@ export async function POST(request: Request) {
       },
       { status: 200 },
     )
-    if (responseTokens) setClaudeRefreshedCookies(errorResponse, responseTokens)
-    return errorResponse
   }
 }

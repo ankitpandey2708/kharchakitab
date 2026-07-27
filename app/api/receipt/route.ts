@@ -4,8 +4,8 @@ import type { CurrencyCode } from "@/src/utils/money";
 import { formatDateYMD } from "@/src/utils/dates";
 import { getPostHogClient } from "@/src/lib/posthog-server";
 import { ExpenseSchema } from "@/src/utils/schemas";
-import { CLAUDE_OAUTH_MODEL, CLAUDE_FETCH_HEADERS, buildClaudePrompt } from "@/src/lib/claude/oauth";
-import { getFreshClaudeToken, setClaudeRefreshedCookies } from "@/src/lib/claude/client";
+import { CLAUDE_OAUTH_MODEL, CLAUDE_FETCH_HEADERS } from "@/src/lib/claude/oauth";
+import { getAnthropicApiKey, getGeminiApiKey } from "@/src/lib/keys";
 import { geminiEndpoint, cleanGeminiOutput } from "@/src/lib/providers/gemini";
 
 export const runtime = "nodejs";
@@ -19,7 +19,7 @@ async function callClaudeVision(
   prompt: string,
   base64: string,
   mimeType: string,
-  token: string,
+  apiKey: string,
 ): Promise<AIResult> {
   const model = CLAUDE_OAUTH_MODEL;
   const t0 = Date.now();
@@ -29,13 +29,13 @@ async function callClaudeVision(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
+        "x-api-key": apiKey,
         ...CLAUDE_FETCH_HEADERS,
       },
       body: JSON.stringify({
         model,
         max_tokens: 1024,
-        system: buildClaudePrompt(prompt),
+        system: prompt,
         messages: [
           {
             role: "user",
@@ -66,11 +66,11 @@ async function callClaudeVision(
   }
 }
 
-async function callGemini(prompt: string, base64: string, mimeType: string, model: string): Promise<AIResult> {
-  const apiKey = process.env.GEMINI_API_KEY;
+async function callGemini(prompt: string, base64: string, mimeType: string, model: string, apiKeyOverride?: string): Promise<AIResult> {
+  const apiKey = apiKeyOverride || process.env.GEMINI_API_KEY;
   if (!apiKey) return { error: "Gemini API key not configured." };
   const isGemma = model.includes("gemma");
-  const endpoint = geminiEndpoint(model);
+  const endpoint = geminiEndpoint(model, apiKey);
   console.log(`[AI] gemini: sending request (model=${model}, imageBytes=${Math.round(base64.length * 0.75)})`);
   const t0 = Date.now();
   try {
@@ -137,15 +137,16 @@ export async function POST(request: NextRequest) {
   const reqStart = Date.now();
   console.log(`[AI] receipt: image=${mimeType} size=${buffer.byteLength}B `);
 
+  // ── Resolve API keys ──
+  const anthropicApiKey = await getAnthropicApiKey();
+  const geminiApiKey = await getGeminiApiKey();
+
   let result: AIResult = { error: "No models configured." };
   let provider = "unknown";
-  let responseTokens: { accessToken: string; refreshToken: string; expiresIn: number } | null = null;
 
-  // ── Claude OAuth first (user's own subscription, highest priority) ──
-  const { token: claudeToken, refreshedTokens } = await getFreshClaudeToken();
-  if (claudeToken) {
-    responseTokens = refreshedTokens ?? null;
-    result = await callClaudeVision(prompt, base64, mimeType, claudeToken);
+  // ── Anthropic API key first (user-provided or env, highest priority) ──
+  if (anthropicApiKey) {
+    result = await callClaudeVision(prompt, base64, mimeType, anthropicApiKey);
     if (!("error" in result)) {
       provider = "claude";
       console.log(`[AI] claude: vision success total=${Date.now() - reqStart}ms`);
@@ -157,7 +158,7 @@ export async function POST(request: NextRequest) {
     for (const model of GEMINI_MODELS) {
       const label = model.split("/").pop()!;
       const t = Date.now();
-      result = await callGemini(prompt, base64, mimeType, model);
+      result = await callGemini(prompt, base64, mimeType, model, geminiApiKey || undefined);
       console.log(`[AI] ${label}: total call duration=${Date.now() - t}ms`);
       if (!("error" in result)) { provider = label; break; }
       console.log(`[AI] ${label} failed → next — ${result.error}`);
@@ -172,9 +173,7 @@ export async function POST(request: NextRequest) {
         properties: { provider, error: result.error, image_size_bytes: buffer.byteLength },
       });
     }
-    const failRes = NextResponse.json({ error: result.error }, { status: 502 });
-    if (responseTokens) setClaudeRefreshedCookies(failRes, responseTokens);
-    return failRes;
+    return NextResponse.json({ error: result.error }, { status: 502 });
   }
 
   if (posthog) {
@@ -209,7 +208,5 @@ export async function POST(request: NextRequest) {
   }
 
   console.log(`[AI] receipt_parsed: provider=${provider} total_request=${Date.now() - reqStart}ms`);
-  const okRes = NextResponse.json({ data: validation.data });
-  if (responseTokens) setClaudeRefreshedCookies(okRes, responseTokens);
-  return okRes;
+  return NextResponse.json({ data: validation.data });
 }

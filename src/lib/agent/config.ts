@@ -1,7 +1,9 @@
+import { createAnthropic } from '@ai-sdk/anthropic'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import type { LanguageModel } from 'ai'
-import { CLAUDE_OAUTH_MODEL, buildClaudePrompt } from '@/src/lib/claude/oauth'
-import { createClaudeClient } from '@/src/lib/claude/client'
+import { CLAUDE_OAUTH_MODEL } from '@/src/lib/claude/oauth'
+import { COOKIE_ANTHROPIC_API_KEY, COOKIE_GEMINI_API_KEY } from '@/src/lib/keys'
+import { cookies } from 'next/headers'
 
 interface AgentProvider {
   key: string
@@ -26,31 +28,25 @@ Rules:
 - After calling log_swiggy_order, tell the user to confirm using the button below — NEVER say the expense has been logged yet.`
 
 /**
- * Required prefix for the system prompt when using Claude via OAuth.
- * The API validates that the prompt starts with this exact string.
+ * Build the system prompt. With API keys, no special prefix is needed.
  */
-/**
- * Build the system prompt appropriate for the given provider.
- * Claude OAuth requires the prompt to start with a specific prefix.
- */
-export function buildSystemPrompt(providerKey: string): string {
-  if (providerKey === 'claude-oauth') {
-    return buildClaudePrompt(SYSTEM_PROMPT)
-  }
+export function buildSystemPrompt(_providerKey: string): string {
+  void _providerKey;
   return SYSTEM_PROMPT
 }
 
 /**
- * Create a Claude provider using the user's OAuth access token.
- * The token is sent as Authorization: Bearer, and the required
- * anthropic-beta headers are added automatically.
+ * Create a Claude provider using the user's API key.
+ * The key is sent as x-api-key header automatically by @ai-sdk/anthropic.
  */
-export function createClaudeProvider(token: string): AgentProvider | null {
+function createClaudeProvider(apiKey: string): AgentProvider | null {
   try {
-    const anthropic = createClaudeClient(token)
+    const anthropic = createAnthropic({
+      apiKey,
+    })
     const modelId = CLAUDE_OAUTH_MODEL
     return {
-      key: 'claude-oauth',
+      key: 'anthropic',
       label: `claude/${modelId}`,
       model: anthropic(modelId) as unknown as LanguageModel,
     }
@@ -67,19 +63,47 @@ export function resolveModelId(): string {
   return first.replace(/^models\//, '')
 }
 
-export function getGoogleProvider() {
-  return createGoogleGenerativeAI({ apiKey: process.env.GEMINI_API_KEY })
+export function getGoogleProvider(apiKey?: string) {
+  return createGoogleGenerativeAI({ apiKey: apiKey || process.env.GEMINI_API_KEY })
 }
 
-export function resolveProviders(): AgentProvider[] {
+/**
+ * Resolve available providers using user-provided keys (from cookies)
+ * or fall back to server-side env vars.
+ */
+export async function resolveProviders(): Promise<AgentProvider[]> {
   const providers: AgentProvider[] = []
+  const cookieStore = await cookies()
 
-  // Gemini models as fallback
-  const google = getGoogleProvider()
-  const geminiModels = (process.env.GEMINI_MODEL || '').split(',').map(s => s.trim()).filter(Boolean)
-  for (const m of geminiModels) {
-    const modelId = m.replace(/^models\//, '')
-    providers.push({ key: `gemini:${modelId}`, label: modelId, model: google(modelId) as LanguageModel })
+  // User's Anthropic API key (from cookie) — highest priority
+  const anthropicApiKey = cookieStore.get(COOKIE_ANTHROPIC_API_KEY)?.value
+  if (anthropicApiKey) {
+    const claudeProvider = createClaudeProvider(anthropicApiKey)
+    if (claudeProvider) {
+      providers.push(claudeProvider)
+      console.log('[config] Anthropic API key provider added (priority: high)')
+    }
+  } else if (process.env.ANTHROPIC_API_KEY) {
+    const claudeProvider = createClaudeProvider(process.env.ANTHROPIC_API_KEY)
+    if (claudeProvider) {
+      providers.push(claudeProvider)
+      console.log('[config] Anthropic API key provider added (from env)')
+    }
+  }
+
+  // Gemini models as fallback — check cookie first, then env
+  const geminiApiKey = cookieStore.get(COOKIE_GEMINI_API_KEY)?.value || process.env.GEMINI_API_KEY
+  if (geminiApiKey) {
+    const google = getGoogleProvider(geminiApiKey)
+    const geminiModels = (process.env.GEMINI_MODEL || '').split(',').map(s => s.trim()).filter(Boolean)
+    for (const m of geminiModels) {
+      const modelId = m.replace(/^models\//, '')
+      providers.push({
+        key: `gemini:${modelId}`,
+        label: modelId,
+        model: google(modelId) as LanguageModel,
+      })
+    }
   }
 
   return providers

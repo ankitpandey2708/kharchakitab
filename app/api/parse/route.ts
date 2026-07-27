@@ -5,8 +5,9 @@ import { formatDateYMD } from "@/src/utils/dates";
 import { ExpenseArraySchema } from "@/src/utils/schemas";
 import type { CurrencyCode } from "@/src/utils/money";
 import { generateText } from "ai";
-import { CLAUDE_OAUTH_MODEL, buildClaudePrompt } from "@/src/lib/claude/oauth";
-import { getFreshClaudeToken, setClaudeRefreshedCookies, createClaudeClient } from "@/src/lib/claude/client";
+import { CLAUDE_OAUTH_MODEL } from "@/src/lib/claude/oauth";
+import { createClaudeClient } from "@/src/lib/claude/client";
+import { getAnthropicApiKey, getGeminiApiKey } from "@/src/lib/keys";
 import { geminiEndpoint, cleanGeminiOutput } from "@/src/lib/providers/gemini";
 
 type TierOutcome = "success" | "timeout" | "rate_limit" | "schema_fail" | "transport_error" | "truncation" | "cancelled";
@@ -80,13 +81,14 @@ async function callGemini(
   temperature: number,
   requestType: string,
   cancelSignal?: AbortSignal,
+  apiKeyOverride?: string,
 ): Promise<TierResult> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = apiKeyOverride || process.env.GEMINI_API_KEY;
   if (!apiKey) return { outcome: "transport_error", latency_ms: 0, error: "Gemini API key not configured." };
 
   const isGemma = model.includes("gemma");
   const isExpense = requestType === "expense";
-  const endpoint = geminiEndpoint(model);
+  const endpoint = geminiEndpoint(model, apiKey);
 
   const timeoutCtrl = new AbortController();
   const timer = setTimeout(() => timeoutCtrl.abort(), GEMINI_TIMEOUT_MS);
@@ -170,7 +172,7 @@ async function callGemini(
 
 async function callClaude(
   text: string,
-  token: string,
+  apiKey: string,
   temperature: number,
   cancelSignal?: AbortSignal,
 ): Promise<TierResult> {
@@ -180,10 +182,10 @@ async function callClaude(
   const signal = mergeSignals(timeoutCtrl.signal, cancelSignal);
 
   try {
-    const anthropic = createClaudeClient(token);
+    const anthropic = createClaudeClient(apiKey);
     const result = await generateText({
       model: anthropic(CLAUDE_OAUTH_MODEL) as unknown as Parameters<typeof generateText>[0]['model'],
-      prompt: buildClaudePrompt(text),
+      prompt: text,
       temperature,
       maxOutputTokens: 1024,
       abortSignal: signal,
@@ -283,19 +285,19 @@ export async function POST(request: NextRequest) {
   const telemetry: Record<string, unknown> = { input_length: text.length };
   let finalParsed: unknown = null;
   let provider = "unknown";
-  // Track refreshed Claude tokens for the response
-  let responseTokens: { accessToken: string; refreshToken: string; expiresIn: number } | null = null;
+
+  // ── Resolve API keys ──
+  const anthropicApiKey = await getAnthropicApiKey();
+  const geminiApiKey = await getGeminiApiKey();
 
   const [model1, model2] = GEMINI_MODELS;
   let tierN = 0;
   const nextTier = () => `tier${++tierN}`;
 
-  // ── Claude OAuth first (user's own subscription, highest priority) ──
-  const { token: claudeToken, refreshedTokens } = await getFreshClaudeToken();
-  if (claudeToken) {
-    responseTokens = refreshedTokens ?? null;
+  // ── Anthropic API key first (user-provided or env, highest priority) ──
+  if (anthropicApiKey) {
     const win = accept(
-      await callClaude(basePrompt, claudeToken, temperature),
+      await callClaude(basePrompt, anthropicApiKey, temperature),
       requestType, nextTier(), "claude", telemetry,
     );
     if (win) { finalParsed = win.parsed; provider = win.provider; }
@@ -305,7 +307,7 @@ export async function POST(request: NextRequest) {
   if (finalParsed === null) {
     for (const m of ([model1, model2].filter(Boolean)) as string[]) {
       const win = accept(
-        await callGemini(geminiPrompt(basePrompt, m), m, temperature, requestType),
+        await callGemini(geminiPrompt(basePrompt, m), m, temperature, requestType, undefined, geminiApiKey || undefined),
         requestType, nextTier(), modelLabel(m), telemetry,
       );
       if (win) { finalParsed = win.parsed; provider = win.provider; break; }
@@ -317,16 +319,12 @@ export async function POST(request: NextRequest) {
   if (finalParsed === null) {
     const event = requestType === "mann-ki-baat" ? "mann_ki_baat_generate_failed" : "expense_parse_failed";
     posthog?.capture({ distinctId, event, properties: { ...telemetry, provider, total_ms } });
-    const errRes = NextResponse.json({ error: "All AI providers failed." }, { status: 502 });
-    if (responseTokens) setClaudeRefreshedCookies(errRes, responseTokens);
-    return errRes;
+    return NextResponse.json({ error: "All AI providers failed." }, { status: 502 });
   }
 
   const event = requestType === "mann-ki-baat" ? "mann_ki_baat_generated" : "expense_parsed";
   console.log(`[AI] ${event}: provider=${provider} total=${total_ms}ms`);
   posthog?.capture({ distinctId, event, properties: { ...telemetry, provider, total_ms } });
 
-  const okRes = NextResponse.json({ data: finalParsed });
-  if (responseTokens) setClaudeRefreshedCookies(okRes, responseTokens);
-  return okRes;
+  return NextResponse.json({ data: finalParsed });
 }

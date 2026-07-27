@@ -7,7 +7,7 @@ import {
   ChevronRight,
   Coffee,
   Coins,
-  ExternalLink,
+
   Pencil,
   Share2,
   Smartphone,
@@ -330,208 +330,285 @@ const ClaudeLogo = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const ClaudeConnectRow = React.memo(() => {
-  const [isLinked, setIsLinked] = useState(() =>
-    typeof window !== "undefined" ? localStorage.getItem("claude_linked") === "true" : false
-  );
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [showDialog, setShowDialog] = useState(false);
-  const [authCode, setAuthCode] = useState("");
+/** Gemini logo SVG */
+const GeminiLogo = ({ className }: { className?: string }) => (
+  <svg
+    role="img"
+    viewBox="0 0 24 24"
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+    fill="#1A73E8"
+  >
+    <title>Gemini</title>
+    <path d="M12 24A14.304 14.304 0 000 12 14.304 14.304 0 0012 0a14.304 14.304 0 0012 12 14.304 14.304 0 00-12 12z" />
+  </svg>
+);
+
+/**
+ * API Key input row — shared between Anthropic and Gemini.
+ */
+const ApiKeyRow = React.memo<{
+  provider: "anthropic" | "gemini";
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+  initialConfigured: boolean;
+  initialSource: string;
+}>(({ provider, label, description, icon, initialConfigured, initialSource }) => {
+  const [isConfigured, setIsConfigured] = useState(initialConfigured);
+  const [source, setSource] = useState(initialSource);
+  const [showInput, setShowInput] = useState(false);
+  const [keyValue, setKeyValue] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [accountEmail, setAccountEmail] = useState<string | null>(null);
-  const popupRef = useRef<Window | null>(null);
-  const codeInputRef = useRef<HTMLInputElement>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleOpenAuth = useCallback(async () => {
-    setError(null);
+  // Focus input when dialog opens
+  useEffect(() => {
+    if (showInput) setTimeout(() => inputRef.current?.focus(), 100);
+  }, [showInput]);
+
+  // Refresh config status
+  const refreshStatus = useCallback(async () => {
     try {
-      const res = await fetch("/api/claude/authorize");
-      if (!res.ok) throw new Error("Failed to start authorization");
-      const { authUrl } = (await res.json()) as { authUrl: string };
-
-      const popup = window.open(authUrl, "claude_auth", "width=640,height=700,left=200,top=100");
-      if (!popup) {
-        setError("Popup blocked. Allow popups for this site, or open the link manually.");
-        return;
+      const res = await fetch("/api/keys");
+      if (!res.ok) return;
+      const data = (await res.json()) as { keys: Array<{ provider: string; configured: boolean; source: string }> };
+      const found = data.keys.find((k) => k.provider === provider);
+      if (found) {
+        setIsConfigured(found.configured);
+        setSource(found.source);
       }
-      popupRef.current = popup;
+    } catch { void 0; }
+  }, [provider]);
 
-      // Poll for popup close — if closed manually without completing, just wait
-      const pollClosed = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(pollClosed);
-          popupRef.current = null;
-          // Focus the code input so user can paste
-          setTimeout(() => codeInputRef.current?.focus(), 100);
-        }
-      }, 500);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Connection failed");
-    }
-  }, []);
-
-  const handleConnect = useCallback(async () => {
-    const trimmed = authCode.trim();
+  const handleSave = useCallback(async () => {
+    const trimmed = keyValue.trim();
     if (!trimmed) {
-      setError("Please paste the authorization code.");
+      setError("Please enter an API key.");
       return;
     }
-    setIsConnecting(true);
+    setIsSaving(true);
     setError(null);
     try {
-      const res = await fetch("/api/claude/callback", {
+      const res = await fetch("/api/keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: trimmed }),
+        body: JSON.stringify({ provider, key: trimmed }),
       });
-      const data = (await res.json()) as { ok?: boolean; error?: string; email?: string };
+      const data = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !data.ok) {
-        throw new Error(data.error ?? "Failed to connect");
+        throw new Error(data.error ?? "Failed to save key");
       }
-      localStorage.setItem("claude_linked", "true");
-      setAccountEmail(data.email ?? null);
-      setIsLinked(true);
-      setShowDialog(false);
-      setAuthCode("");
+      setIsConfigured(true);
+      setSource("cookie");
+      setShowInput(false);
+      setKeyValue("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Connection failed");
+      setError(err instanceof Error ? err.message : "Failed to save key");
     } finally {
-      setIsConnecting(false);
+      setIsSaving(false);
     }
-  }, [authCode]);
+  }, [keyValue, provider]);
 
-  const handleDisconnect = useCallback(async () => {
-    await fetch("/api/claude/disconnect", { method: "POST" });
-    localStorage.removeItem("claude_linked");
-    setIsLinked(false);
-    setAccountEmail(null);
-    setAuthCode("");
-    setShowDialog(false);
+  const handleRemove = useCallback(async () => {
+    try {
+      await fetch("/api/keys", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider }),
+      });
+      setIsConfigured(false);
+      setSource("none");
+      setShowInput(false);
+      setKeyValue("");
+      void refreshStatus();
+    } catch { void 0; }
+  }, [provider, refreshStatus]);
+
+  const descText = isConfigured
+    ? source === "env"
+      ? `Server key active — enter yours to override`
+      : `API key saved`
+    : description;
+
+  return (
+    <div className="space-y-1.5">
+      <SettingRow
+        icon={icon}
+        label={label}
+        description={descText}
+      >
+        {isConfigured && source === "env" ? (
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1 text-xs text-[var(--kk-ash)]">
+              <Check className="h-3 w-3 text-[var(--kk-sage)]" />
+              Server
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowInput(true)}
+              className="rounded-full bg-[var(--kk-paper)] px-3 py-1 text-xs font-semibold text-[var(--kk-ink)] hover:bg-[var(--kk-smoke)] transition-colors"
+            >
+              Override
+            </button>
+          </div>
+        ) : isConfigured ? (
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1 text-xs text-[var(--kk-sage)]">
+              <Check className="h-3 w-3" />
+              Saved
+            </span>
+            <button
+              type="button"
+              onClick={() => void handleRemove()}
+              className="text-xs text-[var(--kk-ash)] hover:text-[var(--kk-ink)] transition-colors"
+            >
+              Remove
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowInput(true)}
+            className="rounded-full bg-[var(--kk-paper)] px-4 py-1.5 text-xs font-semibold text-[var(--kk-ink)] hover:bg-[var(--kk-smoke)] transition-colors"
+          >
+            Add Key
+          </button>
+        )}
+      </SettingRow>
+
+      {/* Key Input Dialog */}
+      {showInput && (
+        <div className="rounded-xl bg-white border border-[var(--kk-smoke)] p-4 shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-[var(--kk-ink)]">
+              Enter {label} API Key
+            </span>
+            <button
+              type="button"
+              onClick={() => { setShowInput(false); setError(null); setKeyValue(""); }}
+              className="flex h-6 w-6 items-center justify-center rounded-full text-[var(--kk-ash)] hover:bg-[var(--kk-smoke)] transition-colors"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <p className="text-xs text-[var(--kk-ash)] leading-relaxed">
+            {provider === "anthropic"
+              ? `Paste your Anthropic API key from the Claude Console. It starts with "sk-ant-".`
+              : `Paste your Google AI Studio API key. It starts with "AIza".`}
+          </p>
+          <div className="space-y-2">
+            <input
+              ref={inputRef}
+              type="password"
+              value={keyValue}
+              onChange={(e) => setKeyValue(e.target.value)}
+              placeholder={`sk-ant-... or AIza...`}
+              className="w-full rounded-lg border border-[var(--kk-smoke)] bg-white px-3 py-2 text-sm font-mono text-[var(--kk-ink)] placeholder:text-[var(--kk-ash)]/50 focus:outline-none focus:border-[var(--kk-sage)]"
+              autoComplete="off"
+              onKeyDown={(e) => { if (e.key === "Enter") void handleSave(); }}
+            />
+          </div>
+          {error && (
+            <p className="text-xs text-[var(--kk-danger)]">{error}</p>
+          )}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => void handleSave()}
+              disabled={isSaving || !keyValue.trim()}
+              className="flex-1 rounded-lg bg-[var(--kk-ink)] py-2 text-xs font-semibold text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {isSaving ? "Saving…" : "Save Key"}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowInput(false); setError(null); setKeyValue(""); }}
+              className="rounded-lg border border-[var(--kk-smoke)] bg-white px-4 py-2 text-xs font-semibold text-[var(--kk-ash)] hover:bg-[var(--kk-paper)] transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+ApiKeyRow.displayName = "ApiKeyRow";
+
+/** Fetches initial API key config status on mount */
+const useApiKeyStatus = () => {
+  const [status, setStatus] = useState<{
+    anthropic: { configured: boolean; source: string };
+    gemini: { configured: boolean; source: string };
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch("/api/keys");
+        if (!res.ok) { setLoading(false); return; }
+        const data = (await res.json()) as { keys: Array<{ provider: string; configured: boolean; source: string }> };
+        const anthropic = data.keys.find((k) => k.provider === "anthropic") ?? { configured: false, source: "none" };
+        const gemini = data.keys.find((k) => k.provider === "gemini") ?? { configured: false, source: "none" };
+        setStatus({
+          anthropic: { configured: anthropic.configured, source: anthropic.source },
+          gemini: { configured: gemini.configured, source: gemini.source },
+        });
+      } catch { void 0; } finally {
+        setLoading(false);
+      }
+    };
+    void fetchStatus();
   }, []);
 
-  if (isLinked) {
+  return { status, loading };
+};
+
+/** Section that renders Anthropic + Gemini API key rows */
+const ApiKeysSection = React.memo(() => {
+  const { status, loading } = useApiKeyStatus();
+
+  if (loading) {
     return (
-      <SettingRow
-        icon={<ClaudeLogo className="h-4 w-4" />}
-        label="Claude"
-        description={accountEmail ? `Connected as ${accountEmail}` : "Connected — powers AI responses"}
-      >
-        <button
-          type="button"
-          onClick={() => void handleDisconnect()}
-          className="text-xs text-[var(--kk-ash)] hover:text-[var(--kk-ink)] transition-colors"
+      <div className="space-y-2">
+        <SettingRow
+          icon={<div className="h-4 w-4 rounded-full bg-[var(--kk-smoke)] animate-pulse" />}
+          label="..."
+          description="Loading..."
         >
-          Disconnect
-        </button>
-      </SettingRow>
+          <div className="h-6 w-16 rounded-full bg-[var(--kk-smoke)] animate-pulse" />
+        </SettingRow>
+      </div>
     );
   }
 
   return (
-    <>
-      <ActionRow
+    <div className="space-y-2">
+      <ApiKeyRow
+        provider="anthropic"
+        label="Claude (Anthropic)"
+        description="Enter your Anthropic API key for AI responses"
         icon={<ClaudeLogo className="h-4 w-4" />}
-        label="Claude"
-        description="Sign in with Claude — use your Claude subscription for AI responses"
-        onClick={() => setShowDialog(true)}
-        trailing={<ChevronRight className="h-4 w-4 text-[var(--kk-ash)]" />}
+        initialConfigured={status?.anthropic.configured ?? false}
+        initialSource={status?.anthropic.source ?? "none"}
       />
-
-      {/* Connect Dialog */}
-      {showDialog && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4"
-          onClick={() => { if (!isConnecting) setShowDialog(false); }}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl border border-[var(--kk-smoke)]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#f5f0eb]">
-                  <ClaudeLogo className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-[var(--kk-ink)]">Connect Claude</h3>
-                  <p className="text-xs text-[var(--kk-ash)]">Sign in with your Claude account</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => { setShowDialog(false); setError(null); }}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--kk-ash)] hover:bg-[var(--kk-smoke)] transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              {/* Step 1: Open auth page */}
-              <div className="rounded-xl bg-[var(--kk-paper)] border border-[var(--kk-smoke)] p-4">
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--kk-ember)] text-white text-xs font-bold">1</span>
-                  <span className="text-sm font-semibold text-[var(--kk-ink)]">Authorize with Claude</span>
-                </div>
-                <p className="text-xs text-[var(--kk-ash)] mb-3 ml-9">
-                  A new window will open. Sign in to your Claude account and approve the permissions.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleOpenAuth}
-                  className="ml-9 inline-flex items-center gap-2 rounded-full bg-[#D97757] px-4 py-2 text-sm font-semibold text-white hover:bg-[#c0684a] transition-colors"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  Open Authorization Page
-                </button>
-              </div>
-
-              {/* Step 2: Paste code */}
-              <div className="rounded-xl bg-[var(--kk-paper)] border border-[var(--kk-smoke)] p-4">
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--kk-ember)] text-white text-xs font-bold">2</span>
-                  <span className="text-sm font-semibold text-[var(--kk-ink)]">Paste the code</span>
-                </div>
-                <p className="text-xs text-[var(--kk-ash)] mb-3 ml-9">
-                  After authorizing, you&apos;ll see a code on the page. Copy it and paste it below.
-                </p>
-                <input
-                  ref={codeInputRef}
-                  type="text"
-                  value={authCode}
-                  onChange={(e) => setAuthCode(e.target.value)}
-                  placeholder="Paste authorization code here…"
-                  className="ml-9 w-full rounded-lg border border-[var(--kk-smoke)] bg-white px-3 py-2 text-sm font-mono text-[var(--kk-ink)] placeholder:text-[var(--kk-ash)]/50 focus:outline-none focus:border-[var(--kk-sage)]"
-                  autoComplete="off"
-                  autoFocus
-                />
-              </div>
-
-              {error && (
-                <p className="text-xs text-[var(--kk-danger)] px-1">{error}</p>
-              )}
-
-              <button
-                type="button"
-                onClick={() => void handleConnect()}
-                disabled={isConnecting || !authCode.trim()}
-                className="w-full rounded-xl bg-[var(--kk-ink)] py-3 text-sm font-semibold text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {isConnecting ? "Connecting…" : "Connect Claude"}
-              </button>
-
-              <p className="text-xs text-[var(--kk-ash)] text-center leading-relaxed">
-                Your Claude access token is stored securely and used only for AI responses.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+      <ApiKeyRow
+        provider="gemini"
+        label="Google Gemini"
+        description="Enter your Gemini API key (fallback if no Claude key)"
+        icon={<GeminiLogo className="h-4 w-4" />}
+        initialConfigured={status?.gemini.configured ?? false}
+        initialSource={status?.gemini.source ?? "none"}
+      />
+    </div>
   );
 });
 
-ClaudeConnectRow.displayName = "ClaudeConnectRow";
+ApiKeysSection.displayName = "ApiKeysSection";
 
 interface ProfileViewProps {
   onOpenSync: () => void;
@@ -640,7 +717,7 @@ export const ProfileView = React.memo(({ onOpenSync, onOpenNotifications, onOpen
 
           <SectionHeader>Integrations</SectionHeader>
           <SwiggyConnectRow />
-          <ClaudeConnectRow />
+          <ApiKeysSection />
 
           <SectionDivider />
 
