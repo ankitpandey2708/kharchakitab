@@ -16,7 +16,7 @@ export interface SwiggyRawAddress {
   phoneNumber?: string;      // masked, e.g. "****8567"
 }
 
-export interface SwiggyRawReorderItem {
+interface SwiggyRawReorderItem {
   itemId?: string;
   name?: string;
   isVeg?: string;            // "1" | "0"
@@ -79,7 +79,7 @@ export type SwiggyOrderStatus =
   | "cancelled"
   | "unknown";
 
-export type SwiggyPaymentMethod = "upi" | "card" | "cash" | "wallet";
+type SwiggyPaymentMethod = "upi" | "card" | "cash" | "wallet";
 
 export interface SwiggyReorderItem {
   item_id: string;
