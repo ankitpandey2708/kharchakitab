@@ -2,7 +2,7 @@ import { zodSchema } from 'ai'
 import { z } from 'zod'
 import type { DataSnapshot } from './types'
 import type { Tool } from 'ai'
-import { fetchActiveOrders, fetchAddresses, fetchInstamartOrders, isMockMode } from '@/src/lib/swiggy/client'
+import { fetchActiveOrders, fetchAddresses, fetchFoodOrderDetails, fetchInstamartOrders, isMockMode } from '@/src/lib/swiggy/client'
 
 function monthKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
@@ -113,6 +113,17 @@ export function createAgentTools(snapshot: DataSnapshot, ctx: { swiggyToken?: st
       execute: async () =>
         withSwiggyAuth(async () => ({
           orders: await fetchInstamartOrders(ctx.swiggyToken ?? 'mock'),
+        })),
+    } satisfies Tool,
+
+    get_swiggy_food_order_details: {
+      description: 'Fetch full details for ONE food order, including payment info. get_swiggy_active_orders does NOT return payment_method — call this first when you need it to log an order. Do not call it for every order in a list.',
+      inputSchema: zodSchema(z.object({
+        order_id: z.string().describe('orderId from get_swiggy_active_orders.'),
+      })),
+      execute: async ({ order_id }: { order_id: string }) =>
+        withSwiggyAuth(async () => ({
+          details: await fetchFoodOrderDetails(ctx.swiggyToken ?? 'mock', order_id),
         })),
     } satisfies Tool,
 

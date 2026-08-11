@@ -95,6 +95,10 @@ export async function GET(request: NextRequest) {
     const tokenData = await tokenRes.json() as { access_token: string };
     const { access_token } = tokenData;
 
+    // The server advertises the refresh_token grant but the docs' example response
+    // omits it. Key names only — never the values.
+    console.log("swiggy token response keys:", Object.keys(tokenData));
+
     const res = new NextResponse(POPUP_HTML(origin), { headers: htmlHeaders });
     res.cookies.set("swiggy_access_token", access_token, {
       httpOnly: true,
