@@ -77,17 +77,52 @@ async function mcpCall<T>(
   }
   if (!res.ok) throw new Error(`Swiggy MCP error ${res.status}`);
 
-  const data = await res.json() as {
-    result?: { content?: { type: string; text: string }[] };
+  const body = await res.json() as {
+    result?: {
+      content?: { type: string; text?: string }[];
+      structuredContent?: unknown;
+      isError?: boolean;
+    };
+    error?: { message?: string };
   };
-  const text = data?.result?.content?.[0]?.text;
-  if (!text) throw new Error("Empty response from Swiggy");
 
-  const envelope = JSON.parse(text) as SwiggyEnvelope<T>;
-  if (envelope.success === false) {
-    throw new Error(envelope.error?.message ?? `Swiggy tool ${toolName} failed`);
+  if (body.error) throw new Error(body.error.message ?? `Swiggy tool ${toolName} failed`);
+
+  const result = body.result;
+  if (!result) throw new Error("Empty response from Swiggy");
+
+  // content[] is the human-readable summary ("Found 6 saved addresses...") —
+  // NOT JSON. The machine-readable payload comes back in structuredContent.
+  // Fall back to parsing content[] for tools that only return text.
+  const summary = result.content?.find((c) => typeof c.text === "string")?.text;
+
+  let payload: unknown = result.structuredContent;
+  if (payload === undefined) {
+    if (!summary) throw new Error("Empty response from Swiggy");
+    try {
+      payload = JSON.parse(summary);
+    } catch (e) {
+      throw new Error(
+        `Swiggy tool ${toolName} returned no structuredContent; text was: ${summary.slice(0, 200)}`,
+        { cause: e }
+      );
+    }
   }
-  return envelope.data;
+
+  if (result.isError) {
+    throw new Error(summary ?? `Swiggy tool ${toolName} failed`);
+  }
+
+  // structuredContent may be the { success, data } envelope or the payload itself.
+  if (payload && typeof payload === "object" && "success" in payload) {
+    const envelope = payload as SwiggyEnvelope<T>;
+    if (envelope.success === false) {
+      throw new Error(envelope.error?.message ?? `Swiggy tool ${toolName} failed`);
+    }
+    return envelope.data;
+  }
+
+  return payload as T;
 }
 
 // ── Public fetch functions ─────────────────────────────────────────────────
