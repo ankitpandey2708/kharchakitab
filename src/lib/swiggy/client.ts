@@ -110,10 +110,8 @@ const ORDER_STATUS: Record<string, SwiggyOrderStatus> = {
   canceled: "cancelled",
 };
 
-/** Prefers orderDeliveryStatus ("delivered") over orderStatus ("Delivered"). */
-function parseStatus(raw: SwiggyRawFoodOrder): SwiggyOrderStatus {
-  const source = raw.orderDeliveryStatus ?? raw.orderStatus ?? "";
-  const key = source.toLowerCase().trim().replace(/[\s-]+/g, "_");
+function normalizeStatus(value: string | undefined): SwiggyOrderStatus {
+  const key = (value ?? "").toLowerCase().trim().replace(/[\s-]+/g, "_");
   return ORDER_STATUS[key] ?? "unknown";
 }
 
@@ -160,23 +158,29 @@ function mapFoodOrder(raw: SwiggyRawFoodOrder): SwiggyActiveOrder {
     items_display: raw.orderedItems ?? "",
     total_amount: parseAmount(raw.orderTotal),
     placed_at: parsePlacedAt(raw.orderedTime),
-    status: parseStatus(raw),
+    // orderDeliveryStatus ("delivered") over orderStatus ("Delivered").
+    status: normalizeStatus(raw.orderDeliveryStatus ?? raw.orderStatus),
     is_active: raw.isActiveOrder === true,
     actions: mapActions(raw),
   };
 }
 
 function mapInstamartOrder(raw: SwiggyRawInstamartOrder): SwiggyInstamartOrder {
+  const items = (raw.items ?? [])
+    .map((i) => (i.quantity && i.quantity > 1 ? `${i.name} (${i.quantity})` : i.name))
+    .filter((s): s is string => Boolean(s));
+
   return {
     order_id: raw.orderId ?? "",
-    // Field unverified — get_orders returned no rows to inspect.
-    store_name: raw.storeName || raw.restaurantName || "Swiggy Instamart",
-    items_display: raw.orderedItems ?? "",
-    total_amount: parseAmount(raw.orderTotal),
-    placed_at: parsePlacedAt(raw.orderedTime),
-    status: parseStatus(raw),
-    is_active: raw.isActiveOrder === true,
-    actions: mapActions(raw),
+    store_name: raw.storeName || "Swiggy Instamart",
+    // Instamart returns a structured item list rather than Food's display string.
+    items_display: items.join(", "),
+    total_amount: raw.totalAmount ?? raw.billDetails?.grandTotal ?? 0,
+    // Already ISO 8601 with a zone — none of Food's guesswork needed.
+    placed_at: raw.createdAt ? Date.parse(raw.createdAt) || 0 : 0,
+    status: normalizeStatus(raw.status ?? raw.historyStatus),
+    is_active: raw.isActive === true,
+    payment_provider: raw.paymentMethod,
   };
 }
 
@@ -192,7 +196,10 @@ async function mcpCall<T>(
   token: string,
   mcpUrl: string,
   toolName: string,
-  args: Record<string, unknown> = {}
+  args: Record<string, unknown> = {},
+  // Some tools answer in prose only. Set for those, so the text is returned as
+  // { text } instead of throwing for not being JSON.
+  opts: { textOk?: boolean } = {}
 ): Promise<T | undefined> {
   const res = await fetch(mcpUrl, {
     method: "POST",
@@ -249,6 +256,7 @@ async function mcpCall<T>(
     try {
       payload = JSON.parse(summary);
     } catch (e) {
+      if (opts.textOk) return { text: summary } as T;
       throw new Error(
         `Swiggy tool ${toolName} returned no structuredContent; text was: ${summary.slice(0, 200)}`,
         { cause: e }
@@ -350,11 +358,11 @@ export async function fetchInstamartOrdersWithRaw(
 
 
 /**
- * get_food_orders carries no payment info — get_food_order_details does
- * ("items, variants, pricing breakdown, delivery address, payment info").
- * Its shape is unpublished and untested, so the payload is returned raw for the
- * agent to read rather than mapped against guessed field names. Called only when
- * logging a specific order, not per row of a list.
+ * get_food_orders carries no payment info; get_food_order_details does. It sends
+ * no structuredContent at all — only a prose block carrying the restaurant, a
+ * full "Placed: 2026-08-11 18:46:12" timestamp, per-item prices and totals — so
+ * the text is handed to the agent to read rather than parsed against a format
+ * Swiggy doesn't document. Called only when logging one order, not per list row.
  */
 export async function fetchFoodOrderDetails(
   token: string,
@@ -362,14 +370,15 @@ export async function fetchFoodOrderDetails(
 ): Promise<Record<string, unknown> | undefined> {
   if (isMockMode()) {
     await new Promise((r) => setTimeout(r, 400));
-    return { orderId, paymentMethod: "upi", mock: true };
+    return { text: `Order ${orderId} — mock` };
   }
 
   return mcpCall<Record<string, unknown>>(
     token,
     SWIGGY_MCP_FOOD_URL,
     "get_food_order_details",
-    { orderId }
+    { orderId },
+    { textOk: true }
   );
 }
 

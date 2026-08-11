@@ -54,9 +54,36 @@ export interface SwiggyRawFoodOrder {
   actions?: SwiggyRawOrderAction[];
 }
 
-// Unverified — get_orders returned { orders: [] } on the only live call.
-export interface SwiggyRawInstamartOrder extends SwiggyRawFoodOrder {
+// Instamart shares nothing with Food beyond `orderId` — different keys, and
+// better types: amounts are numbers and timestamps are ISO 8601 with a zone.
+export interface SwiggyRawInstamartOrder {
+  orderId?: string;
   storeName?: string;
+  status?: string;              // "DELIVERED" — upper case
+  historyStatus?: string;       // "DELIVERED"
+  currentStatus?: string;       // prose, e.g. "Order delivered on 6 Aug 2026, 09:51 PM by ..."
+  createdAt?: string;           // "2026-08-06T16:04:58.000Z" — real ISO 8601
+  updatedAt?: string;
+  estimatedDeliveryTime?: string; // "14 mins"
+  itemCount?: number;
+  totalAmount?: number;         // 331 — number, no currency symbol
+  paymentMethod?: string;       // "Juspay" — the PSP, not a payment method
+  paymentStatus?: string;       // "SUCCESS"
+  refundStatus?: string;        // "NO_REFUND"
+  orderType?: string;           // "DASH"
+  isActive?: boolean;           // note: not isActiveOrder, as Food uses
+  deliveryAddress?: {
+    id?: string;
+    addressLine?: string;
+    phoneNumber?: string;
+  };
+  items?: { name?: string; quantity?: number; itemId?: string }[];
+  billDetails?: {
+    itemTotal?: number;
+    deliveryFee?: number;
+    packagingFee?: number;
+    grandTotal?: number;
+  };
 }
 
 // ── Domain shapes ──────────────────────────────────────────────────────────
@@ -120,5 +147,8 @@ export interface SwiggyInstamartOrder {
   status: SwiggyOrderStatus;
   is_active: boolean;
   payment_method?: SwiggyPaymentMethod;
+  // Swiggy reports the payment processor ("Juspay"), not the instrument — it
+  // cannot be reduced to SwiggyPaymentMethod, so it is kept verbatim.
+  payment_provider?: string;
   actions?: SwiggyOrderAction[];
 }

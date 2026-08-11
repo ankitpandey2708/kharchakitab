@@ -24,8 +24,16 @@
 | `result.structuredContent` holds the payload **directly** — not wrapped in `{ success, data }` | live prod |
 | `result.content[0].text` is prose (`"Found 6 saved addresses..."`), never JSON | live prod |
 | `structuredContent` can be `{}` — `mcpCall` treats empty as absent and falls back to `content[]` | live prod |
+| Some tools send **no** `structuredContent` and answer in prose only. `mcpCall(..., { textOk: true })` returns `{ text }` for those instead of throwing | live prod |
 | Endpoints: `POST mcp.swiggy.com/food`, `POST mcp.swiggy.com/im` | Swiggy docs |
 | Failure envelope: `{ success: false, error: { message } }` | Swiggy docs |
+
+Per-tool response channel:
+
+| Tool | Channel |
+|---|---|
+| `get_addresses`, `get_food_orders`, Instamart `get_orders` | `structuredContent` |
+| `get_food_order_details` | prose only (`textOk`) |
 
 ### Tool arguments
 
@@ -45,8 +53,17 @@
 `orderStatus` (`"Delivered"`) / `orderDeliveryStatus` (`"delivered"`), `orderedItems`,
 `orderType`, `isActiveOrder`, `actions[]`. **No payment field.**
 
-**Instamart `get_orders`** — `orderId`, `storeName` confirmed. Keys for items, total, time and status
-differ from Food and are still unknown.
+**Instamart `get_orders`** — shares nothing with Food but `orderId`, and is better typed:
+`storeName`, `status` (`"DELIVERED"`, upper), `historyStatus`, `currentStatus` (prose),
+`createdAt` / `updatedAt` (**real ISO 8601 with zone**), `estimatedDeliveryTime`, `itemCount`,
+`totalAmount` (**number**, no symbol), `paymentMethod` (`"Juspay"` — the PSP, not an instrument),
+`paymentStatus`, `refundStatus`, `orderType` (`"DASH"`), `isActive` (**not** `isActiveOrder`),
+`deliveryAddress{id,addressLine,phoneNumber}`, `items[{name,quantity,itemId}]`,
+`billDetails{itemTotal,deliveryFee,packagingFee,grandTotal}`.
+
+**`get_food_order_details`** — no `structuredContent` at all; prose only. Carries restaurant,
+`Placed: 2026-08-11 18:46:12` (full timestamp, with year), per-item prices and totals.
+That timestamp independently confirms the IST reading of `orderedTime`.
 
 ### Mapping verified live
 
@@ -55,15 +72,18 @@ differ from Food and are still unknown.
 | `SwiggyAddress` | `label: "Office"`, `category: "Work"`, masked `phone` |
 | `SwiggyActiveOrder` | `total_amount: 368` (number), `status: "delivered"`, `restaurant_area` |
 | `actions[]` | `reorder_items` with `is_veg`, `quantity`, parsed `total`, `category` |
-| `placed_at` | parsed as IST via `GMT+0530`; TZ-independent |
+| `placed_at` (Food) | `orderedTime` parsed as IST via `GMT+0530`; TZ-independent |
+
+Instamart needs none of Food's coercion — `totalAmount` is already a number and
+`createdAt` a zoned ISO string, so `mapInstamartOrder` parses it directly.
 
 ---
 
 ## 2. Unverified — needs the next deploy
 
-- [ ] Instamart list keys for items / total / time / status — read `raw_sample` from the `get_swiggy_instamart_orders` tool output, then fix `mapInstamartOrder`
-- [ ] `get_food_order_details` returned `{}` in `structuredContent`. With the empty-object fallback deployed, check whether `content[]` carries the payload — the tool may not be live ("Coming soon" in its docs)
-- [ ] Where payment lives inside those details, if anywhere
+- [ ] `mapInstamartOrder` rewritten against the real shape — confirm items / total / time / status now populate
+- [ ] `get_food_order_details` now returns `{ text }` instead of throwing — read the full prose and check whether payment instrument appears in it
+- [ ] If it does, decide how to extract it; if not, `payment_method` is unobtainable for Food
 
 ---
 
@@ -73,7 +93,10 @@ differ from Food and are still unknown.
       only connect, so no callback log exists. Needs a fresh connect (phone + OTP), then
       `vercel logs kharchakitab.com | grep "swiggy token response keys"`
 - [ ] `SwiggyOrderStatus` values beyond `"delivered"` — unmatched values map to `"unknown"`
-- [ ] `SwiggyPaymentMethod` values — `"upi" | "card" | "cash" | "wallet"` still a guess
+- [ ] `SwiggyPaymentMethod` values — `"upi" | "card" | "cash" | "wallet"` still a guess.
+      Instamart reports only `paymentMethod: "Juspay"` (the PSP), kept verbatim in
+      `payment_provider`; the instrument is not exposed. Food may expose it in the
+      `get_food_order_details` prose — see section 2
 - [ ] `log_swiggy_order` confirmation card → IndexedDB write
 - [ ] 401 → tools return `swiggy_disconnected` and the agent tells the user to reconnect. Revoke server-side to test
 - [ ] Token expiry at 5 days → re-auth from Profile → Integrations
