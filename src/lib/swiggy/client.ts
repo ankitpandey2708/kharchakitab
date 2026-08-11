@@ -184,6 +184,41 @@ function mapInstamartOrder(raw: SwiggyRawInstamartOrder): SwiggyInstamartOrder {
   };
 }
 
+// ── Rate limit observability ───────────────────────────────────────────────
+
+// Quota is 70 req/min per user per server (30 for write tools). Warn while
+// there is still room to react rather than after the 429.
+const QUOTA_WARN_BELOW = 20;
+
+// One full dump per cold start pins down the header names — the docs only
+// promise the `X-RateLimit-*` prefix. After that, log only when quota runs low.
+let loggedRateLimitHeaderNames = false;
+
+function watchRateLimit(res: Response, toolName: string): void {
+  const headers: Record<string, string> = {};
+  res.headers.forEach((value, key) => {
+    if (key.toLowerCase().startsWith("x-ratelimit")) headers[key] = value;
+  });
+  if (Object.keys(headers).length === 0) return;
+
+  if (!loggedRateLimitHeaderNames) {
+    loggedRateLimitHeaderNames = true;
+    console.log("swiggy rate limit headers:", headers);
+  }
+
+  const remainingKey = Object.keys(headers).find((k) =>
+    k.toLowerCase().includes("remaining")
+  );
+  const remaining = remainingKey ? Number(headers[remainingKey]) : NaN;
+
+  if (Number.isFinite(remaining) && remaining < QUOTA_WARN_BELOW) {
+    console.warn(
+      `swiggy quota low: ${remaining} remaining after ${toolName}`,
+      headers
+    );
+  }
+}
+
 // ── MCP call helper ────────────────────────────────────────────────────────
 
 // Every tool returns { success, data, message } on success, { success, error } on
@@ -215,6 +250,9 @@ async function mcpCall<T>(
       params: { name: toolName, arguments: args },
     }),
   });
+
+  // Before the status checks — the headers are worth reading on 429 too.
+  watchRateLimit(res, toolName);
 
   // 401 = UNAUTHENTICATED / TOKEN_EXPIRED, 419 = SESSION_REVOKED
   if (res.status === 401 || res.status === 419) {

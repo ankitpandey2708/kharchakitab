@@ -116,7 +116,16 @@ Instamart needs none of Food's coercion — `totalAmount` is already a number an
       `initialize` handshake. Swiggy's guidance is one session per user reused across calls,
       and calls reinitializing per invocation "the most common cause of rate limit breaches
       in production". Serverless functions make a long-lived session awkward; unmeasured
-      whether each POST counts as an auth event. Watch for 429s.
+      whether each POST counts as an auth event.
+
+      **How to watch** — `watchRateLimit` in `client.ts` logs the full `X-RateLimit-*` set
+      once per cold start (to pin the header names, which the docs don't specify) and warns
+      when remaining quota drops below 20:
+      ```
+      vercel logs kharchakitab.com | grep -E "swiggy rate limit headers|swiggy quota low|rate limit reached"
+      ```
+      - [ ] Read the header names from the first dump, then narrow the parsing to them
+      - [ ] No hits after real traffic ⇒ per-POST auth events are not a problem in practice
 
 ---
 
