@@ -22,39 +22,6 @@ export const SERVICE_CATEGORY: Record<SwiggyService, CategoryKey> = {
   dineout: "Eating out",
 };
 
-// Opt-in only. Previously this keyed off a missing SWIGGY_CLIENT_ID, which no
-// longer exists (see getSwiggyClientId) — production would have served mock
-// data silently. Set SWIGGY_MOCK=1 to work offline against the fixtures below.
-export const isMockMode = () => process.env.SWIGGY_MOCK === "1";
-
-// ── Mock data ──────────────────────────────────────────────────────────────
-
-const MOCK_ADDRESSES: SwiggyAddress[] = [
-  { id: "addr_001", label: "Home", address: "Koramangala, Bengaluru" },
-];
-
-function getMockOrderStatus(pollingStartMs: number): SwiggyActiveOrder["status"] {
-  const elapsed = Date.now() - pollingStartMs;
-  if (elapsed < 5_000) return "preparing";
-  if (elapsed < 10_000) return "out_for_delivery";
-  return "delivered";
-}
-
-function getMockActiveOrders(pollingStartMs: number): SwiggyActiveOrder[] {
-  return [
-    {
-      order_id: `sw_mock_${pollingStartMs}`,
-      restaurant_name: "Domino's Pizza",
-      items_display: "Peppy Paneer (M), Garlic Bread",
-      total_amount: 349,
-      payment_method: "upi",
-      status: getMockOrderStatus(pollingStartMs),
-      placed_at: pollingStartMs,
-      is_active: true,
-    },
-  ];
-}
-
 // ── Wire → domain mapping ──────────────────────────────────────────────────
 
 /** "₹368" / "₹1,234.50" → 368 / 1234.5 */
@@ -332,11 +299,6 @@ async function mcpCall<T>(
 // ── Public fetch functions ─────────────────────────────────────────────────
 
 export async function fetchAddresses(token: string): Promise<SwiggyAddress[]> {
-  if (isMockMode()) {
-    await new Promise((r) => setTimeout(r, 600));
-    return MOCK_ADDRESSES;
-  }
-
   const data = await mcpCall<{ addresses?: SwiggyRawAddress[] }>(
     token,
     SWIGGY_MCP_FOOD_URL,
@@ -347,14 +309,8 @@ export async function fetchAddresses(token: string): Promise<SwiggyAddress[]> {
 
 export async function fetchActiveOrders(
   token: string,
-  addressId: string,
-  pollingStartMs: number
+  addressId: string
 ): Promise<SwiggyActiveOrder[]> {
-  if (isMockMode()) {
-    await new Promise((r) => setTimeout(r, 500));
-    return getMockActiveOrders(pollingStartMs);
-  }
-
   // activeOnly: false returns full order history, not just in-progress orders —
   // deliberate, since expenses are logged from past orders too.
   const data = await mcpCall<{ orders?: SwiggyRawFoodOrder[] }>(
@@ -366,27 +322,9 @@ export async function fetchActiveOrders(
   return (data?.orders ?? []).map(mapFoodOrder);
 }
 
-const MOCK_INSTAMART_ORDERS: SwiggyInstamartOrder[] = [
-  {
-    order_id: "im_mock_001",
-    store_name: "Swiggy Instamart",
-    items_display: "Amul Milk 1L, Bread, Eggs (6pc)",
-    total_amount: 187,
-    payment_method: "upi",
-    status: "delivered",
-    placed_at: Date.now() - 2 * 60 * 60 * 1000,
-    is_active: false,
-  },
-];
-
 export async function fetchInstamartOrders(
   token: string
 ): Promise<SwiggyInstamartOrder[]> {
-  if (isMockMode()) {
-    await new Promise((r) => setTimeout(r, 500));
-    return MOCK_INSTAMART_ORDERS;
-  }
-
   // orderType is documented only as `e.g. "DASH", "INSTAMART"`, neither defined.
   // Live: "INSTAMART" returns zero rows, "DASH" returns the orders — so DASH it is.
   const data = await mcpCall<{ orders?: SwiggyRawInstamartOrder[] }>(
@@ -428,11 +366,6 @@ export async function fetchFoodOrderDetails(
   token: string,
   orderId: string
 ): Promise<{ text?: string; payment_method?: SwiggyPaymentMethod } | undefined> {
-  if (isMockMode()) {
-    await new Promise((r) => setTimeout(r, 400));
-    return { text: `Order ${orderId} — mock\nPayment: UPI`, payment_method: "upi" };
-  }
-
   const result = await mcpCall<{ text?: string }>(
     token,
     SWIGGY_MCP_FOOD_URL,

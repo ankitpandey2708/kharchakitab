@@ -17,7 +17,7 @@
 | DCR → authorize → consent → token → cookie | live |
 | `swiggy_access_token` cookie is `httpOnly` | live |
 | `/api/swiggy/status` clears stale `swiggy_linked` + `swiggy_address_id` on mount | live |
-| Mock active only when `SWIGGY_MOCK=1`; unset in dev and prod | `client.ts` → `isMockMode` |
+| No mock path. `isMockMode`, fixtures and the `?mock=true` callback branch are removed; dev and prod both hit live Swiggy | `client.ts` |
 
 ### Transport
 
@@ -55,8 +55,11 @@
 | Instamart `get_orders` | `orderId`, `storeName`, `status` (`"DELIVERED"`), `historyStatus`, `currentStatus`, `createdAt`/`updatedAt` (ISO 8601, zoned), `estimatedDeliveryTime`, `itemCount`, `totalAmount` (number), `paymentMethod` (`"Juspay"` — PSP, not instrument), `paymentStatus`, `refundStatus`, `orderType`, `isActive`, `deliveryAddress{id,addressLine,phoneNumber}`, `items[{name,quantity,itemId}]`, `billDetails{itemTotal,deliveryFee,packagingFee,grandTotal}` |
 | `get_food_order_details` | prose: restaurant, `Placed: 2026-08-11 18:46:12`, per-item prices + image URLs, delivery address, `Total paid: ₹368`, `Payment: Credit/Debit card`, `Reorderable: yes` |
 
-Payment instrument sources: Food ⇒ `get_food_order_details` `Payment:` line only.
-Instamart ⇒ none. `get_payment_options` returns checkout options, not past-order instruments.
+| Payment instrument | Source |
+|---|---|
+| Food | `get_food_order_details` `Payment:` line — only source |
+| Instamart | none; `paymentMethod` is the PSP |
+| `get_payment_options` | checkout options, not past-order instruments |
 
 ### Mapping
 
@@ -67,36 +70,25 @@ Instamart ⇒ none. `get_payment_options` returns checkout options, not past-ord
 | `placed_at` (Food) | `orderedTime` parsed as IST via `GMT+0530`; TZ-independent |
 | `actions[]` | `reorder_items` with `is_veg`, `quantity`, `total`, `category` |
 | `SwiggyInstamartOrder` | `total_amount: 331`/`2253`, `placed_at` = `createdAt`, `status: "delivered"`, `payment_provider: "Juspay"`, `items_display` from `items[]` |
+| `extractPaymentMethod` | `Payment: Credit/Debit card` → `"card"` |
+| `log_swiggy_order` | carries `placed_at`; `AgentChat` dates the expense to the order, falling back to now only when absent or `0` |
 
 ---
 
-## 2. Verify on next deploy
-
-- [ ] `extractPaymentMethod`: `Payment: Credit/Debit card` → `"card"`
-
----
-
-## 3. Verify — separate action each
+## 2. Verify — separate action each
 
 - [ ] `Payment:` labels for UPI / Cash / wallet — unmatched labels return `undefined`
 - [ ] `SwiggyOrderStatus` values beyond `"delivered"` — unmatched map to `"unknown"`
-- [ ] `log_swiggy_order` card → IndexedDB write
+- [ ] `log_swiggy_order` card → IndexedDB write, and that the model actually passes `placed_at`
 - [ ] 401 → `swiggy_disconnected` + reconnect prompt. Revoke server-side to test
 - [ ] Token expiry at 5 days → re-auth from Profile → Integrations
 - [ ] `POST /auth/logout` revokes server-side
 
 ---
 
-## 4. Open defects
+## 3. Open defects
 
-- [ ] `AgentChat.tsx:342` — `timestamp: Date.now()` files historical orders under today. `log_swiggy_order` has no field for `placed_at`. Needs schema field + wiring
 - [ ] `mcpCall` opens a fresh POST per tool call, no `initialize`, no session reuse. Docs call per-invocation reinit the top cause of production rate-limit breaches. Unmeasured whether each POST is an auth event
 - [ ] No quota early warning. `watchRateLimit` is in place but never fires — no `X-RateLimit-*` headers arrive. Detection is after-the-fact:
       `vercel logs kharchakitab.com | grep -E "rate limit reached|swiggy quota low|swiggy rate limit headers"`
 
----
-
-## 5. Cleanup
-
-- [ ] Delete `MOCK_ADDRESSES`, `MOCK_INSTAMART_ORDERS`, `getMockActiveOrders`, `getMockOrderStatus`, `isMockMode` from `client.ts`
-- [ ] Delete `isMockMode` branches in `authorize/route.ts`, `callback/route.ts`, `disconnect/route.ts`, `tools.ts`

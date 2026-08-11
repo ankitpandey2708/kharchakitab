@@ -332,14 +332,16 @@ export function AgentChat({ open, onClose, onRefreshTransactions }: AgentChatPro
         onRefreshTransactions?.()
         await sendSilent("User confirmed. Budget has been updated to ₹" + action.params.monthly_limit_inr + ".")
       } else if (action.tool === 'log_swiggy_order') {
-        const { order_id, restaurant_name, amount, payment_method, items_display, service } = action.params
+        const { order_id, restaurant_name, amount, payment_method, items_display, service, placed_at } = action.params
         await addTransaction({
           id: "",
           amount,
           item: `Swiggy: ${restaurant_name}`,
           category: SERVICE_CATEGORY[service ?? "food"],
           paymentMethod: payment_method === "card" ? "card" : payment_method === "cash" ? "cash" : "upi",
-          timestamp: Date.now(),
+          // Date the expense to the order, not to when it was logged. parsePlacedAt
+          // yields 0 on an unparseable time, so guard against that too.
+          timestamp: placed_at && placed_at > 0 ? placed_at : Date.now(),
         })
         const logged = new Set<string>(JSON.parse(localStorage.getItem("swiggy_logged_orders") ?? "[]"))
         logged.add(order_id)

@@ -1,16 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generatePKCE, SWIGGY_AUTH_URL, getAppOrigin, getSwiggyClientId, getSwiggyRedirectUri } from "@/src/lib/swiggy/oauth";
-import { isMockMode } from "@/src/lib/swiggy/client";
 import crypto from "node:crypto";
 
 export async function GET(request: NextRequest) {
   const origin = getAppOrigin(request);
-
-  if (isMockMode()) {
-    const res = NextResponse.redirect(`${origin}/api/swiggy/callback?mock=true`);
-    return res;
-  }
-
   const redirectUri = getSwiggyRedirectUri(request);
 
   let clientId: string;

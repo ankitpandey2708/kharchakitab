@@ -46,18 +46,6 @@ export async function GET(request: NextRequest) {
   const origin = getAppOrigin(request);
   const htmlHeaders = { "Content-Type": "text/html" };
 
-  // Mock mode — skip real OAuth
-  if (searchParams.get("mock") === "true") {
-    const res = new NextResponse(POPUP_HTML(origin), { headers: htmlHeaders });
-    res.cookies.set("swiggy_access_token", "mock_token", {
-      httpOnly: true,
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 5, // 5 days
-      path: "/",
-    });
-    return res;
-  }
-
   const code = searchParams.get("code");
   const returnedState = searchParams.get("state");
 

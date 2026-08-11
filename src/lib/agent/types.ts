@@ -42,5 +42,7 @@ export type PendingWriteAction =
         payment_method: string
         items_display: string
         service?: 'food' | 'instamart'
+        // Epoch ms the order was placed. Absent ⇒ the expense falls back to now.
+        placed_at?: number
       }
     }

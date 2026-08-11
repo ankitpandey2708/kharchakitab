@@ -2,7 +2,7 @@ import { zodSchema } from 'ai'
 import { z } from 'zod'
 import type { DataSnapshot } from './types'
 import type { Tool } from 'ai'
-import { fetchActiveOrders, fetchAddresses, fetchFoodOrderDetails, fetchInstamartOrders, isMockMode } from '@/src/lib/swiggy/client'
+import { fetchActiveOrders, fetchAddresses, fetchFoodOrderDetails, fetchInstamartOrders } from '@/src/lib/swiggy/client'
 
 function monthKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
@@ -83,28 +83,27 @@ async function withSwiggyAuth<T>(fn: () => Promise<T>): Promise<T | typeof SWIGG
 export function createAgentTools(snapshot: DataSnapshot, ctx: { swiggyToken?: string } = {}) {
   let budgetRequested = false
 
-  const swiggyTools: Record<string, Tool> = (ctx.swiggyToken || isMockMode()) ? {
+  const swiggyToken = ctx.swiggyToken
+
+  const swiggyTools: Record<string, Tool> = swiggyToken ? {
     get_swiggy_addresses: {
       description: 'Fetch the user\'s saved Swiggy delivery addresses. Call this first before get_swiggy_active_orders to obtain a valid address_id.',
       inputSchema: zodSchema(z.object({})),
       execute: async () =>
         withSwiggyAuth(async () => ({
-          addresses: await fetchAddresses(ctx.swiggyToken ?? 'mock'),
+          addresses: await fetchAddresses(swiggyToken),
         })),
     } satisfies Tool,
 
     get_swiggy_active_orders: {
-      description: 'Fetch the user\'s active Swiggy food orders. Call get_swiggy_addresses first to get a valid address_id, then pass it here.',
+      description: 'Fetch the user\'s Swiggy food orders — full history, most recent first. Call get_swiggy_addresses first to get a valid address_id, then pass it here.',
       inputSchema: zodSchema(z.object({
         address_id: z.string().describe('Delivery address ID from get_swiggy_addresses.'),
       })),
       execute: async ({ address_id }: { address_id: string }) =>
-        withSwiggyAuth(async () => {
-          const pollingStart = isMockMode() ? Date.now() - 15_000 : Date.now()
-          return {
-            orders: await fetchActiveOrders(ctx.swiggyToken ?? 'mock', address_id, pollingStart),
-          }
-        }),
+        withSwiggyAuth(async () => ({
+          orders: await fetchActiveOrders(swiggyToken, address_id),
+        })),
     } satisfies Tool,
 
     get_swiggy_instamart_orders: {
@@ -112,7 +111,7 @@ export function createAgentTools(snapshot: DataSnapshot, ctx: { swiggyToken?: st
       inputSchema: zodSchema(z.object({})),
       execute: async () =>
         withSwiggyAuth(async () => ({
-          orders: await fetchInstamartOrders(ctx.swiggyToken ?? 'mock'),
+          orders: await fetchInstamartOrders(swiggyToken),
         })),
     } satisfies Tool,
 
@@ -123,7 +122,7 @@ export function createAgentTools(snapshot: DataSnapshot, ctx: { swiggyToken?: st
       })),
       execute: async ({ order_id }: { order_id: string }) =>
         withSwiggyAuth(async () => ({
-          details: await fetchFoodOrderDetails(ctx.swiggyToken ?? 'mock', order_id),
+          details: await fetchFoodOrderDetails(swiggyToken, order_id),
         })),
     } satisfies Tool,
 
@@ -136,8 +135,9 @@ export function createAgentTools(snapshot: DataSnapshot, ctx: { swiggyToken?: st
         payment_method: z.string().describe('upi, card, cash, or wallet'),
         items_display: z.string().describe('Short description of items ordered'),
         service: z.enum(['food', 'instamart']).optional().describe('Source service — food (default) or instamart.'),
+        placed_at: z.number().optional().describe('The placed_at value (epoch ms) from the order. Always pass it so the expense is dated to the order, not to today.'),
       })),
-      execute: async (input: { order_id: string; restaurant_name: string; amount: number; payment_method: string; items_display: string; service?: 'food' | 'instamart' }) => {
+      execute: async (input: { order_id: string; restaurant_name: string; amount: number; payment_method: string; items_display: string; service?: 'food' | 'instamart'; placed_at?: number }) => {
         return {
           status: 'pending_swiggy_log' as const,
           order: input,
