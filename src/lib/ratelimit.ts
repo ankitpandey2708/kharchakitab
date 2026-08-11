@@ -28,10 +28,23 @@ const redis =
 const limiterCache = new Map<string, Ratelimit>();
 
 /**
- * No usable limiter — either unconfigured or Redis is down. Deployed, that means
- * refusing the request: the routes behind this call a paid API, so failing open
- * would leave spend uncapped. Locally it lets traffic through so dev doesn't
- * need a Redis.
+ * No Redis configured — the operator has opted out of rate limiting, so let the
+ * request through rather than blocking the route entirely.
+ */
+const unlimited = (): RateLimitResult => ({
+  allowed: true,
+  limit: 0,
+  remaining: 0,
+  reset: 0,
+  retryAfter: null,
+  skipped: true,
+});
+
+/**
+ * Configured but unreachable. Deployed, refuse: limits were explicitly asked
+ * for, and failing open for the duration of an outage leaves spend on the paid
+ * APIs behind this uncapped. Locally, fall through so a down Redis doesn't
+ * block dev.
  */
 const unavailable = (reason: string): RateLimitResult =>
   process.env.VERCEL
@@ -44,14 +57,7 @@ const unavailable = (reason: string): RateLimitResult =>
         skipped: true,
         reason,
       }
-    : {
-        allowed: true,
-        limit: 0,
-        remaining: 0,
-        reset: 0,
-        retryAfter: null,
-        skipped: true,
-      };
+    : unlimited();
 
 const getLimiter = ({ prefix, max, window }: RateLimitOptions): Ratelimit => {
   const key = `${prefix}:${max}:${window}`;
@@ -82,7 +88,7 @@ export const rateLimitByIp = async (
   request: NextRequest,
   options: RateLimitOptions
 ): Promise<RateLimitResult> => {
-  if (!redis) return unavailable("Rate limiting is not configured.");
+  if (!redis) return unlimited();
 
   const limiter = getLimiter(options);
   const identifier = `${options.prefix}:${getClientIp(request)}`;
