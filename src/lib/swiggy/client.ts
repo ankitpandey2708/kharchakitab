@@ -4,6 +4,7 @@ import type {
   SwiggyInstamartOrder,
   SwiggyOrderAction,
   SwiggyOrderStatus,
+  SwiggyPaymentMethod,
   SwiggyRawAddress,
   SwiggyRawFoodOrder,
   SwiggyRawInstamartOrder,
@@ -378,17 +379,12 @@ const MOCK_INSTAMART_ORDERS: SwiggyInstamartOrder[] = [
   },
 ];
 
-/**
- * Returns mapped orders alongside the raw rows. Instamart's list shape is still
- * unverified — `storeName` maps, but items/total/time/status come back empty, so
- * its keys differ from Food's. The raw rows let a caller inspect them.
- */
-export async function fetchInstamartOrdersWithRaw(
+export async function fetchInstamartOrders(
   token: string
-): Promise<{ orders: SwiggyInstamartOrder[]; raw: SwiggyRawInstamartOrder[] }> {
+): Promise<SwiggyInstamartOrder[]> {
   if (isMockMode()) {
     await new Promise((r) => setTimeout(r, 500));
-    return { orders: MOCK_INSTAMART_ORDERS, raw: [] };
+    return MOCK_INSTAMART_ORDERS;
   }
 
   // orderType is documented only as `e.g. "DASH", "INSTAMART"`, neither defined.
@@ -400,33 +396,52 @@ export async function fetchInstamartOrdersWithRaw(
     { orderType: "DASH", count: 10 }
   );
 
-  const raw = data?.orders ?? [];
-  return { orders: raw.map(mapInstamartOrder), raw };
+  return (data?.orders ?? []).map(mapInstamartOrder);
 }
 
 
 /**
+ * Reads the `Payment: Credit/Debit card` line out of the details prose. The
+ * model would otherwise pass that label straight through to log_swiggy_order,
+ * where AgentChat only matches "card"/"cash" and silently defaults to UPI.
+ */
+function extractPaymentMethod(text: string): SwiggyPaymentMethod | undefined {
+  const line = text.match(/^\s*Payment:\s*(.+)$/im)?.[1]?.toLowerCase();
+  if (!line) return undefined;
+
+  if (line.includes("card")) return "card";
+  if (line.includes("wallet")) return "wallet";
+  if (line.includes("upi")) return "upi";
+  if (line.includes("cash") || line.includes("cod")) return "cash";
+  return undefined;
+}
+
+/**
  * get_food_orders carries no payment info; get_food_order_details does. It sends
- * no structuredContent at all — only a prose block carrying the restaurant, a
- * full "Placed: 2026-08-11 18:46:12" timestamp, per-item prices and totals — so
- * the text is handed to the agent to read rather than parsed against a format
- * Swiggy doesn't document. Called only when logging one order, not per list row.
+ * no structuredContent at all — only a prose block with the restaurant, a full
+ * "Placed: 2026-08-11 18:46:12" timestamp, per-item prices, the total and the
+ * payment instrument. The text goes to the agent verbatim, with the one field
+ * that must be exact parsed out alongside it. Called when logging a single
+ * order, never per list row.
  */
 export async function fetchFoodOrderDetails(
   token: string,
   orderId: string
-): Promise<Record<string, unknown> | undefined> {
+): Promise<{ text?: string; payment_method?: SwiggyPaymentMethod } | undefined> {
   if (isMockMode()) {
     await new Promise((r) => setTimeout(r, 400));
-    return { text: `Order ${orderId} — mock` };
+    return { text: `Order ${orderId} — mock\nPayment: UPI`, payment_method: "upi" };
   }
 
-  return mcpCall<Record<string, unknown>>(
+  const result = await mcpCall<{ text?: string }>(
     token,
     SWIGGY_MCP_FOOD_URL,
     "get_food_order_details",
     { orderId },
     { textOk: true }
   );
+
+  const text = typeof result?.text === "string" ? result.text : undefined;
+  return { text, payment_method: text ? extractPaymentMethod(text) : undefined };
 }
 

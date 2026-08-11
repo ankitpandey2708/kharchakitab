@@ -106,7 +106,7 @@ export type SwiggyOrderStatus =
   | "cancelled"
   | "unknown";
 
-type SwiggyPaymentMethod = "upi" | "card" | "cash" | "wallet";
+export type SwiggyPaymentMethod = "upi" | "card" | "cash" | "wallet";
 
 export interface SwiggyReorderItem {
   item_id: string;
