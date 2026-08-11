@@ -27,6 +27,32 @@ const redis =
 
 const limiterCache = new Map<string, Ratelimit>();
 
+/**
+ * No usable limiter — either unconfigured or Redis is down. Deployed, that means
+ * refusing the request: the routes behind this call a paid API, so failing open
+ * would leave spend uncapped. Locally it lets traffic through so dev doesn't
+ * need a Redis.
+ */
+const unavailable = (reason: string): RateLimitResult =>
+  process.env.VERCEL
+    ? {
+        allowed: false,
+        limit: 0,
+        remaining: 0,
+        reset: Date.now() + 60_000,
+        retryAfter: 60,
+        skipped: true,
+        reason,
+      }
+    : {
+        allowed: true,
+        limit: 0,
+        remaining: 0,
+        reset: 0,
+        retryAfter: null,
+        skipped: true,
+      };
+
 const getLimiter = ({ prefix, max, window }: RateLimitOptions): Ratelimit => {
   const key = `${prefix}:${max}:${window}`;
   const cached = limiterCache.get(key);
@@ -56,35 +82,25 @@ export const rateLimitByIp = async (
   request: NextRequest,
   options: RateLimitOptions
 ): Promise<RateLimitResult> => {
-  if (!redis) {
-    if (process.env.VERCEL) {
-      return {
-        allowed: false,
-        limit: 0,
-        remaining: 0,
-        reset: Date.now() + 60_000,
-        retryAfter: 60,
-        skipped: true,
-        reason: "Rate limiting is not configured.",
-      };
-    }
-
-    return {
-      allowed: true,
-      limit: 0,
-      remaining: 0,
-      reset: 0,
-      retryAfter: null,
-      skipped: true,
-    };
-  }
+  if (!redis) return unavailable("Rate limiting is not configured.");
 
   const limiter = getLimiter(options);
   const identifier = `${options.prefix}:${getClientIp(request)}`;
-  const result = await limiter.limit(
-    identifier,
-    options.rate ? { rate: options.rate } : undefined
-  );
+
+  // Redis.fromEnv() only checks that the vars exist — an unreachable or deleted
+  // database fails here, at call time. Unwrapped this throws past the route and
+  // surfaces as an opaque 500.
+  let result: Awaited<ReturnType<Ratelimit["limit"]>>;
+  try {
+    result = await limiter.limit(
+      identifier,
+      options.rate ? { rate: options.rate } : undefined
+    );
+  } catch (e) {
+    console.error("ratelimit: Redis unreachable", e);
+    return unavailable("Rate limiting is temporarily unavailable.");
+  }
+
   const retryAfter = result.success
     ? null
     : Math.max(0, Math.ceil((result.reset - Date.now()) / 1000));
