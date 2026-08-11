@@ -11,7 +11,9 @@
 | `token_endpoint_auth_methods_supported` includes `"none"` — public client, no secret | `/.well-known/oauth-authorization-server` |
 | Token exchange body is JSON: `grant_type`, `code`, `code_verifier`, `redirect_uri`. No `client_id` | live prod |
 | `http://localhost` allowed as redirect URI; HTTPS otherwise; exact-match, no wildcards | Swiggy docs |
-| Access token 5 days (`expires_in: 432000`). Auth code 120s single-use. Session 30d idle | Swiggy docs |
+| Access token 5 days (`expires_in: 432000`). Auth code 120s single-use. Session 30d idle sliding | Swiggy docs |
+| **No refresh token.** Metadata advertises the `refresh_token` grant but issuance is not wired in v1.0 — `/auth/token` handles `authorization_code` only. Expiry or revocation means re-running authorization. Rolling refresh is a v1.1 roadmap item | Swiggy docs |
+| Response schema is additive under SemVer: adding a field is non-breaking, **changing a field's type or removing one requires a major bump + 6-month deprecation**. Optional-field mapping is therefore safe | Swiggy docs |
 | Full chain works: DCR → authorize → consent → token → cookie | live prod |
 | `swiggy_access_token` cookie is `httpOnly` | live prod |
 | `/api/swiggy/status` clears stale `swiggy_linked` + `swiggy_address_id` on mount | live prod |
@@ -25,8 +27,9 @@
 | `result.content[0].text` is prose (`"Found 6 saved addresses..."`), never JSON | live prod |
 | `structuredContent` can be `{}` — `mcpCall` treats empty as absent and falls back to `content[]` | live prod |
 | Some tools send **no** `structuredContent` and answer in prose only. `mcpCall(..., { textOk: true })` returns `{ text }` for those instead of throwing | live prod |
-| Endpoints: `POST mcp.swiggy.com/food`, `POST mcp.swiggy.com/im` | Swiggy docs |
+| Endpoints: `POST mcp.swiggy.com/food`, `POST mcp.swiggy.com/im`, `POST mcp.swiggy.com/dineout` (unused) | Swiggy docs |
 | Failure envelope: `{ success: false, error: { message } }` | Swiggy docs |
+| Quotas: **70 req/min** per user per server, **30/min** for write tools, burst 2× over 10s. 429 → `RATE_LIMITED`: stop, back off, never retry. `X-RateLimit-*` on every success | Swiggy docs |
 
 Per-tool response channel:
 
@@ -83,15 +86,15 @@ Instamart needs none of Food's coercion — `totalAmount` is already a number an
 
 - [ ] `mapInstamartOrder` rewritten against the real shape — confirm items / total / time / status now populate
 - [ ] `get_food_order_details` now returns `{ text }` instead of throwing — read the full prose and check whether payment instrument appears in it
-- [ ] If it does, decide how to extract it; if not, `payment_method` is unobtainable for Food
+- [ ] If it does, decide how to extract it; if not, `payment_method` is unobtainable for Food.
+      `get_payment_options` does **not** help — it lists instruments available for a cart at
+      checkout (`data.platforms.mobile.methods[]`, `data.platforms.desktop.methods[]`,
+      `data.cod`), not what a past order was paid with
 
 ---
 
 ## 3. Unverified — separate action each
 
-- [ ] Does `/auth/token` return `refresh_token`? The `console.log` was deployed **after** the
-      only connect, so no callback log exists. Needs a fresh connect (phone + OTP), then
-      `vercel logs kharchakitab.com | grep "swiggy token response keys"`
 - [ ] `SwiggyOrderStatus` values beyond `"delivered"` — unmatched values map to `"unknown"`
 - [ ] `SwiggyPaymentMethod` values — `"upi" | "card" | "cash" | "wallet"` still a guess.
       Instamart reports only `paymentMethod: "Juspay"` (the PSP), kept verbatim in
@@ -104,11 +107,16 @@ Instamart needs none of Food's coercion — `totalAmount` is already a number an
 
 ---
 
-## 4. Known gap — not fixed
+## 4. Known gaps — not fixed
 
 - [ ] `AgentChat.tsx:342` writes `timestamp: Date.now()` when logging an order, filing a
       historical order under today. `placed_at` is parsed correctly but `log_swiggy_order`
       has no field to carry it. Needs a schema field + wiring.
+- [ ] **No persistent MCP session.** `mcpCall` opens a fresh `POST` per tool call with no
+      `initialize` handshake. Swiggy's guidance is one session per user reused across calls,
+      and calls reinitializing per invocation "the most common cause of rate limit breaches
+      in production". Serverless functions make a long-lived session awkward; unmeasured
+      whether each POST counts as an auth event. Watch for 429s.
 
 ---
 
@@ -116,6 +124,5 @@ Instamart needs none of Food's coercion — `totalAmount` is already a number an
 
 - [ ] **Remove `raw_sample`** from `get_swiggy_instamart_orders` in `tools.ts` once section 2 is closed
 - [ ] Rename `fetchInstamartOrdersWithRaw` → `fetchInstamartOrders` and drop the `raw` return at the same time
-- [ ] Remove `console.log("swiggy token response keys:")` from `callback/route.ts` once answered
 - [ ] Delete `MOCK_ADDRESSES`, `MOCK_INSTAMART_ORDERS`, `getMockActiveOrders`, `getMockOrderStatus`, `isMockMode` from `client.ts`
 - [ ] Delete the `isMockMode` branches in `authorize/route.ts`, `callback/route.ts`, `disconnect/route.ts`, `tools.ts`

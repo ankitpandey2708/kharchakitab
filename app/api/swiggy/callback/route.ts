@@ -92,12 +92,12 @@ export async function GET(request: NextRequest) {
       return new NextResponse(ERROR_HTML(origin, `Token exchange failed: ${tokenRes.status}`), { headers: htmlHeaders });
     }
 
+    // No refresh token to keep: the metadata advertises the refresh_token grant,
+    // but issuance is not wired in v1.0 — /auth/token only handles
+    // authorization_code. The 5-day access token is the whole session; expiry or
+    // revocation means re-running authorization. Rolling refresh is a v1.1 item.
     const tokenData = await tokenRes.json() as { access_token: string };
     const { access_token } = tokenData;
-
-    // The server advertises the refresh_token grant but the docs' example response
-    // omits it. Key names only — never the values.
-    console.log("swiggy token response keys:", Object.keys(tokenData));
 
     const res = new NextResponse(POPUP_HTML(origin), { headers: htmlHeaders });
     res.cookies.set("swiggy_access_token", access_token, {

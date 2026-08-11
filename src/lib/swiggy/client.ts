@@ -220,6 +220,16 @@ async function mcpCall<T>(
   if (res.status === 401 || res.status === 419) {
     throw Object.assign(new Error("Swiggy token revoked"), { status: 401 });
   }
+
+  // Quotas are 70 req/min per user per server (30 for write tools). Swiggy's
+  // guidance on RATE_LIMITED is to stop immediately and back off, never retry.
+  if (res.status === 429) {
+    throw Object.assign(
+      new Error("Swiggy rate limit reached — back off, do not retry"),
+      { status: 429 }
+    );
+  }
+
   if (!res.ok) throw new Error(`Swiggy MCP error ${res.status}`);
 
   const body = await res.json() as {
