@@ -187,33 +187,23 @@ function watchRateLimit(res: Response, toolName: string): void {
   }
 }
 
-// ── MCP session ────────────────────────────────────────────────────────────
-
-const MCP_PROTOCOL_VERSION = "2025-06-18";
-const SESSION_HEADER = "mcp-session-id";
+// ── MCP call helper ────────────────────────────────────────────────────────
 
 /**
- * Swiggy counts each `initialize` as an auth event and names "reconnecting on
- * every tool call" the top cause of production rate-limit breaches. So the
- * handshake runs once per token+server and the session id rides on subsequent
- * calls.
+ * One authenticated POST per tool call, no `initialize` handshake.
  *
- * Cached per instance: a cold start re-handshakes, warm invocations reuse. The
- * promise is cached rather than the value so concurrent calls share one
- * handshake; failures are evicted so the next call retries.
- *
- * `undefined` is a valid cached result — it means the server issued no session
- * id, in which case calls proceed exactly as they did before.
+ * Swiggy's rate-limit docs warn against re-handshaking per call and prescribe
+ * reusing one session — but a live `initialize` against `/food` returned no
+ * `Mcp-Session-Id`, so the server issues no session to carry. Handshaking would
+ * add an auth event per cold start and buy nothing.
  */
-const sessionCache = new Map<string, Promise<string | undefined>>();
-
-let loggedSessionSupport = false;
-
-async function initializeSession(
+function callTool(
   token: string,
-  mcpUrl: string
-): Promise<string | undefined> {
-  const res = await fetch(mcpUrl, {
+  mcpUrl: string,
+  toolName: string,
+  args: Record<string, unknown>
+): Promise<Response> {
+  return fetch(mcpUrl, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -222,107 +212,12 @@ async function initializeSession(
     },
     body: JSON.stringify({
       jsonrpc: "2.0",
-      id: "init",
-      method: "initialize",
-      params: {
-        protocolVersion: MCP_PROTOCOL_VERSION,
-        capabilities: {},
-        clientInfo: { name: "KharchaKitab", version: "1.0.0" },
-      },
+      id: "1",
+      method: "tools/call",
+      params: { name: toolName, arguments: args },
     }),
   });
-
-  if (!res.ok) throw new Error(`Swiggy initialize failed: ${res.status}`);
-
-  const sessionId = res.headers.get(SESSION_HEADER) ?? undefined;
-
-  if (!loggedSessionSupport) {
-    loggedSessionSupport = true;
-    console.log(
-      `swiggy session: ${sessionId ? "issued" : "no " + SESSION_HEADER + " header — stateless"}`
-    );
-  }
-
-  // The spec requires this before any other request on the session.
-  if (sessionId) {
-    await fetch(mcpUrl, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-        Accept: "application/json, text/event-stream",
-        "Mcp-Session-Id": sessionId,
-      },
-      body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
-    });
-  }
-
-  return sessionId;
 }
-
-function getSession(token: string, mcpUrl: string): Promise<string | undefined> {
-  const key = `${mcpUrl} ${token}`;
-  const cached = sessionCache.get(key);
-  if (cached) return cached;
-
-  const pending = initializeSession(token, mcpUrl).catch((e: unknown) => {
-    sessionCache.delete(key);
-    throw e;
-  });
-  sessionCache.set(key, pending);
-  return pending;
-}
-
-function dropSession(token: string, mcpUrl: string): void {
-  sessionCache.delete(`${mcpUrl} ${token}`);
-}
-
-async function callTool(
-  token: string,
-  mcpUrl: string,
-  toolName: string,
-  args: Record<string, unknown>
-): Promise<Response> {
-  const send = (sessionId: string | undefined) =>
-    fetch(mcpUrl, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-        Accept: "application/json, text/event-stream",
-        ...(sessionId ? { "Mcp-Session-Id": sessionId } : {}),
-      },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: "1",
-        method: "tools/call",
-        params: { name: toolName, arguments: args },
-      }),
-    });
-
-  let sessionId: string | undefined;
-  try {
-    sessionId = await getSession(token, mcpUrl);
-  } catch (e) {
-    // A failed handshake must not take the tool call down with it — fall back
-    // to the stateless call that worked before sessions existed here.
-    console.warn("swiggy initialize failed, calling without a session", e);
-    return send(undefined);
-  }
-
-  const res = await send(sessionId);
-
-  // 404 is how streamable HTTP reports an expired or unknown session. Re-handshake
-  // once; a second failure is a real error and propagates.
-  if (sessionId && res.status === 404) {
-    dropSession(token, mcpUrl);
-    return send(await getSession(token, mcpUrl));
-  }
-
-  return res;
-}
-
-// ── MCP call helper ────────────────────────────────────────────────────────
 
 // Every tool returns { success, data, message } on success, { success, error } on
 // failure — https://mcp.swiggy.com/builders/docs/reference/errors/
@@ -459,7 +354,6 @@ export async function fetchInstamartOrders(
   return (data?.orders ?? []).map(mapInstamartOrder);
 }
 
-
 /**
  * Reads the `Payment: Credit/Debit card` line out of the details prose. The
  * model would otherwise pass that label straight through to log_swiggy_order,
@@ -499,4 +393,3 @@ export async function fetchFoodOrderDetails(
   const text = typeof result?.text === "string" ? result.text : undefined;
   return { text, payment_method: text ? extractPaymentMethod(text) : undefined };
 }
-

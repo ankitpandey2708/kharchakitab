@@ -31,6 +31,7 @@
 | Failure envelope: `{ success: false, error: { message } }` | docs |
 | Quotas: 70 req/min per user per server; 30/min write tools; burst 2× over 10s. 429 ⇒ stop, back off, never retry | docs |
 | No `X-RateLimit-*` headers sent, contrary to docs | live |
+| `initialize` succeeds but returns no `Mcp-Session-Id` — server is stateless, no session to reuse | live |
 
 | Tool | Response channel |
 |---|---|
@@ -88,7 +89,7 @@
 
 ## 3. Open defects
 
-- [ ] `mcpCall` opens a fresh POST per tool call, no `initialize`, no session reuse. Docs call per-invocation reinit the top cause of production rate-limit breaches. Unmeasured whether each POST is an auth event
+- [ ] `mcpCall` opens a fresh POST per tool call. Docs call per-invocation reinit the top cause of production rate-limit breaches, but a live `initialize` returned no `Mcp-Session-Id` — no session exists to reuse, so stateless is the only option. Unmeasured whether each POST is an auth event
 - [ ] No quota early warning. `watchRateLimit` is in place but never fires — no `X-RateLimit-*` headers arrive. Detection is after-the-fact:
       `vercel logs kharchakitab.com | grep -E "rate limit reached|swiggy quota low|swiggy rate limit headers"`
 
