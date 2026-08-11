@@ -9,9 +9,6 @@ export function generatePKCE() {
   return { codeVerifier, codeChallenge };
 }
 
-// Internal — consumers go through getSwiggyClientId(), which falls back to DCR.
-const SWIGGY_CLIENT_ID = process.env.SWIGGY_CLIENT_ID ?? "";
-
 /**
  * Public origin this request came in on. NEXT_PUBLIC_APP_URL wins when set;
  * otherwise derive from the proxy headers so prod (kharchakitab.com), preview
@@ -48,9 +45,6 @@ export function getSwiggyRedirectUri(request: Request): string {
 const clientIdCache = new Map<string, Promise<string>>();
 
 export function getSwiggyClientId(redirectUri: string): Promise<string> {
-  // Escape hatch: a manually registered client_id wins if one is configured.
-  if (SWIGGY_CLIENT_ID) return Promise.resolve(SWIGGY_CLIENT_ID);
-
   const cached = clientIdCache.get(redirectUri);
   if (cached) return cached;
 
