@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SWIGGY_CLIENT_ID, SWIGGY_REDIRECT_URI, SWIGGY_TOKEN_URL } from "@/src/lib/swiggy/oauth";
+import { SWIGGY_TOKEN_URL, getAppOrigin, getSwiggyRedirectUri } from "@/src/lib/swiggy/oauth";
 
 const POPUP_HTML = (origin: string) => `<!DOCTYPE html>
 <html>
@@ -43,7 +43,7 @@ const ERROR_HTML = (origin: string, msg: string) => `<!DOCTYPE html>
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const origin = new URL(request.url).origin;
+  const origin = getAppOrigin(request);
   const htmlHeaders = { "Content-Type": "text/html" };
 
   // Mock mode — skip real OAuth
@@ -78,13 +78,13 @@ export async function GET(request: NextRequest) {
   try {
     const tokenRes = await fetch(SWIGGY_TOKEN_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
+      headers: { "Content-Type": "application/json" },
+      // Documented body — no client_id at the token step.
+      body: JSON.stringify({
         grant_type: "authorization_code",
         code,
-        redirect_uri: SWIGGY_REDIRECT_URI,
         code_verifier: codeVerifier,
-        client_id: SWIGGY_CLIENT_ID,
+        redirect_uri: getSwiggyRedirectUri(request),
       }),
     });
 

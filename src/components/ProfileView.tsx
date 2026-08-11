@@ -236,6 +236,41 @@ const SwiggyConnectRow = React.memo(() => {
     popupRef.current = null;
   }, []);
 
+  // localStorage only seeds the first paint — the httpOnly cookie is the real
+  // source of truth. Tokens last 5 days and can be revoked earlier, so the flag
+  // goes stale silently. Reconcile on mount and whenever the tab regains focus.
+  useEffect(() => {
+    let cancelled = false;
+
+    const reconcile = async () => {
+      try {
+        const res = await fetch("/api/swiggy/status", { cache: "no-store" });
+        if (!res.ok || cancelled) return;
+        const { connected } = (await res.json()) as { connected: boolean };
+        if (cancelled) return;
+
+        setIsLinked(connected);
+        if (connected) {
+          localStorage.setItem("swiggy_linked", "true");
+        } else {
+          localStorage.removeItem("swiggy_linked");
+          localStorage.removeItem("swiggy_address_id");
+        }
+      } catch (e) {
+        // Offline or transient — keep the cached flag rather than flashing a
+        // disconnect the user hasn't actually experienced.
+        console.debug("swiggy status check failed", e);
+      }
+    };
+
+    reconcile();
+    window.addEventListener("focus", reconcile);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", reconcile);
+    };
+  }, []);
+
   const handleConnect = useCallback(() => {
     setError(null);
     setIsConnecting(true);

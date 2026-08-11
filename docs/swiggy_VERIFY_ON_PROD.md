@@ -1,6 +1,11 @@
 # Swiggy MCP — Verify on Production
 
-Once you have a real `SWIGGY_CLIENT_ID`, run through each item below and fix any mismatches.
+Run through each item below on the first authenticated call and fix any mismatches.
+
+There is no `SWIGGY_CLIENT_ID` to obtain — Swiggy issues no static client identity.
+`getSwiggyClientId` self-registers via Dynamic Client Registration (RFC 7591) at
+`POST /auth/register` and caches the returned `client_id` per redirect URI.
+`http://localhost` is an allowed redirect URI, so this checklist can be run locally.
 
 ---
 
@@ -20,6 +25,15 @@ File: `client.ts` → `fetchActiveOrders`
 - [ ] Field names: `order_id`, `restaurant_name`, `items_display`, `total_amount`, `payment_method`, `status`, `placed_at` — all correct?
 - [ ] Is `placed_at` unix ms or seconds or ISO string?
 
+### Instamart `get_orders`
+File: `client.ts` → `fetchInstamartOrders`
+- [ ] Is the array at `data.orders`?
+- [ ] Field names: `order_id`, `store_name`, `items_display`, `total_amount`, `payment_method`, `status`, `placed_at` — all correct?
+- [ ] Does `orderType: "INSTAMART"` return the expected orders (vs the `"DASH"` default)?
+
+The `{ success, data, message }` envelope itself is documented and confirmed —
+only the contents of `data` are unverified.
+
 ---
 
 ## 2. Status strings (assumed)
@@ -38,14 +52,14 @@ Current assumption:
 
 ## 3. Arguments
 
-### `get_addresses`
-File: `client.ts` → `fetchAddresses`
-- [ ] Confirm no required arguments (currently called with no args)
+Resolved from the published tool reference — no verification needed:
 
-### `get_food_orders`
-File: `client.ts` → `fetchActiveOrders`
-- [ ] Confirm argument name is `addressId` (not `address_id` or `deliveryAddressId`)
-- [ ] Confirm argument name is `orderCount` (not `limit` or `count`)
+- `get_addresses` takes **no arguments**.
+- `get_food_orders` takes `addressId` (required) and `activeOnly` (optional boolean).
+  We pass `activeOnly: false` on purpose — full order history, since expenses are
+  logged from past orders. There is no `orderCount` parameter.
+- Instamart `get_orders` takes `count`, `orderType` and `activeOnly`.
+  `orderType` defaults to `"DASH"` server-side, so `"INSTAMART"` must be passed explicitly.
 
 ---
 
@@ -79,14 +93,21 @@ The agent (Gemini via Vercel AI SDK) calls Swiggy MCP through three tools in `sr
 
 File: `client.ts` → `isMockMode`
 
-Mock is active when `NODE_ENV === "development"` OR `SWIGGY_CLIENT_ID` is unset.
-- [ ] After setting `SWIGGY_CLIENT_ID` in prod, confirm mock never activates
-- [ ] Remove `MOCK_ADDRESSES`, `getMockActiveOrders`, `getMockOrderStatus` once real data is verified
+Mock is active **only** when `SWIGGY_MOCK=1`. It is unset everywhere, so dev and
+prod both run the real flow.
+
+- [ ] Remove `MOCK_ADDRESSES`, `MOCK_INSTAMART_ORDERS`, `getMockActiveOrders`,
+      `getMockOrderStatus` and `isMockMode` once real data is verified
 
 ---
 
 ## 7. Token lifecycle edge cases
 
-- [ ] Test 401 handling: revoke token manually from Swiggy side, confirm AgentChat surfaces an error and the Profile page shows disconnected state
+- [ ] Test 401 handling: revoke the token from Swiggy's side, then confirm the agent
+      returns `swiggy_disconnected` and tells the user to reconnect (rather than
+      emitting a raw error string)
+- [ ] Confirm `GET /api/swiggy/status` drives the Profile row: delete the
+      `swiggy_access_token` cookie in devtools, refocus the tab, and the row should
+      flip to disconnected even though `swiggy_linked` is still in localStorage
 - [ ] Test token expiry after 5 days — full re-auth flow from Profile → Integrations → Connect Swiggy works?
 - [ ] Confirm `POST /auth/logout` actually revokes the token server-side

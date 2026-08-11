@@ -1,6 +1,6 @@
 import type { SwiggyAddress, SwiggyActiveOrder, SwiggyInstamartOrder } from "./types";
 import type { CategoryKey } from "@/src/config/categories";
-import { SWIGGY_CLIENT_ID, SWIGGY_MCP_FOOD_URL, SWIGGY_MCP_INSTAMART_URL } from "./oauth";
+import { SWIGGY_MCP_FOOD_URL, SWIGGY_MCP_INSTAMART_URL } from "./oauth";
 
 type SwiggyService = "food" | "instamart" | "dineout";
 
@@ -10,8 +10,10 @@ export const SERVICE_CATEGORY: Record<SwiggyService, CategoryKey> = {
   dineout: "Eating out",
 };
 
-export const isMockMode = () =>
-  !SWIGGY_CLIENT_ID || process.env.NODE_ENV === "development";
+// Opt-in only. Previously this keyed off a missing SWIGGY_CLIENT_ID, which no
+// longer exists (see getSwiggyClientId) — production would have served mock
+// data silently. Set SWIGGY_MOCK=1 to work offline against the fixtures below.
+export const isMockMode = () => process.env.SWIGGY_MOCK === "1";
 
 // ── Mock data ──────────────────────────────────────────────────────────────
 
@@ -42,12 +44,18 @@ function getMockActiveOrders(pollingStartMs: number): SwiggyActiveOrder[] {
 
 // ── MCP call helper ────────────────────────────────────────────────────────
 
+// Every tool returns { success, data, message } on success, { success, error } on
+// failure — https://mcp.swiggy.com/builders/docs/reference/errors/
+type SwiggyEnvelope<T> =
+  | { success: true; data?: T; message?: string }
+  | { success: false; error?: { message?: string } };
+
 async function mcpCall<T>(
   token: string,
   mcpUrl: string,
   toolName: string,
   args: Record<string, unknown> = {}
-): Promise<T> {
+): Promise<T | undefined> {
   const res = await fetch(mcpUrl, {
     method: "POST",
     headers: {
@@ -63,7 +71,10 @@ async function mcpCall<T>(
     }),
   });
 
-  if (res.status === 401) throw Object.assign(new Error("Swiggy token revoked"), { status: 401 });
+  // 401 = UNAUTHENTICATED / TOKEN_EXPIRED, 419 = SESSION_REVOKED
+  if (res.status === 401 || res.status === 419) {
+    throw Object.assign(new Error("Swiggy token revoked"), { status: 401 });
+  }
   if (!res.ok) throw new Error(`Swiggy MCP error ${res.status}`);
 
   const data = await res.json() as {
@@ -71,7 +82,12 @@ async function mcpCall<T>(
   };
   const text = data?.result?.content?.[0]?.text;
   if (!text) throw new Error("Empty response from Swiggy");
-  return JSON.parse(text) as T;
+
+  const envelope = JSON.parse(text) as SwiggyEnvelope<T>;
+  if (envelope.success === false) {
+    throw new Error(envelope.error?.message ?? `Swiggy tool ${toolName} failed`);
+  }
+  return envelope.data;
 }
 
 // ── Public fetch functions ─────────────────────────────────────────────────
@@ -82,13 +98,13 @@ export async function fetchAddresses(token: string): Promise<SwiggyAddress[]> {
     return MOCK_ADDRESSES;
   }
 
-  // TODO: verify response shape — assuming { data: { addresses: SwiggyAddress[] } }
-  const res = await mcpCall<{ data?: { addresses?: SwiggyAddress[] } }>(
+  // Envelope is documented; the `addresses` key inside `data` is not — verify live.
+  const data = await mcpCall<{ addresses?: SwiggyAddress[] }>(
     token,
     SWIGGY_MCP_FOOD_URL,
-    "get_addresses"
+    "get_addresses" // takes no arguments
   );
-  return res.data?.addresses ?? [];
+  return data?.addresses ?? [];
 }
 
 export async function fetchActiveOrders(
@@ -101,15 +117,16 @@ export async function fetchActiveOrders(
     return getMockActiveOrders(pollingStartMs);
   }
 
-  // TODO: verify response shape — assuming { data: { orders: SwiggyActiveOrder[] } }
-  // TODO: verify argument name — using "addressId" and "orderCount" per docs
-  const res = await mcpCall<{ data?: { orders?: SwiggyActiveOrder[] } }>(
+  // activeOnly: false returns full order history, not just in-progress orders —
+  // deliberate, since expenses are logged from past orders too.
+  // The `orders` key inside `data` is undocumented — verify live.
+  const data = await mcpCall<{ orders?: SwiggyActiveOrder[] }>(
     token,
     SWIGGY_MCP_FOOD_URL,
     "get_food_orders",
-    { addressId }
+    { addressId, activeOnly: false }
   );
-  return res.data?.orders ?? [];
+  return data?.orders ?? [];
 }
 
 const MOCK_INSTAMART_ORDERS: SwiggyInstamartOrder[] = [
@@ -132,12 +149,14 @@ export async function fetchInstamartOrders(
     return MOCK_INSTAMART_ORDERS;
   }
 
-  // TODO: verify response shape — assuming { data: { orders: SwiggyInstamartOrder[] } }
-  const res = await mcpCall<{ data?: { orders?: SwiggyInstamartOrder[] } }>(
+  // orderType defaults to "DASH" server-side, so Instamart orders must be
+  // requested explicitly. The `orders` key inside `data` is undocumented.
+  const data = await mcpCall<{ orders?: SwiggyInstamartOrder[] }>(
     token,
     SWIGGY_MCP_INSTAMART_URL,
-    "get_orders"
+    "get_orders",
+    { orderType: "INSTAMART", count: 10 }
   );
-  return res.data?.orders ?? [];
+  return data?.orders ?? [];
 }
 

@@ -56,6 +56,30 @@ function filterByPeriod(expenses: DataSnapshot['expenses'], period: string) {
   return expenses.filter(e => e.timestamp >= startMs && e.timestamp <= endMs)
 }
 
+/**
+ * Swiggy tokens are revocable server-side and the docs are explicit that a 401
+ * means "re-run authorization". Thrown, it reaches the user as a raw stream
+ * error; returned, the model can tell them what to actually do about it.
+ */
+const SWIGGY_DISCONNECTED = {
+  error: 'swiggy_disconnected',
+  message:
+    'The Swiggy connection has expired or been revoked. Tell the user to reconnect Swiggy from Profile → Integrations. Do not retry this tool.',
+} as const
+
+function isSwiggyAuthError(e: unknown): boolean {
+  return typeof e === 'object' && e !== null && (e as { status?: number }).status === 401
+}
+
+async function withSwiggyAuth<T>(fn: () => Promise<T>): Promise<T | typeof SWIGGY_DISCONNECTED> {
+  try {
+    return await fn()
+  } catch (e) {
+    if (isSwiggyAuthError(e)) return SWIGGY_DISCONNECTED
+    throw e
+  }
+}
+
 export function createAgentTools(snapshot: DataSnapshot, ctx: { swiggyToken?: string } = {}) {
   let budgetRequested = false
 
@@ -63,10 +87,10 @@ export function createAgentTools(snapshot: DataSnapshot, ctx: { swiggyToken?: st
     get_swiggy_addresses: {
       description: 'Fetch the user\'s saved Swiggy delivery addresses. Call this first before get_swiggy_active_orders to obtain a valid address_id.',
       inputSchema: zodSchema(z.object({})),
-      execute: async () => {
-        const addresses = await fetchAddresses(ctx.swiggyToken ?? 'mock')
-        return { addresses }
-      },
+      execute: async () =>
+        withSwiggyAuth(async () => ({
+          addresses: await fetchAddresses(ctx.swiggyToken ?? 'mock'),
+        })),
     } satisfies Tool,
 
     get_swiggy_active_orders: {
@@ -74,20 +98,22 @@ export function createAgentTools(snapshot: DataSnapshot, ctx: { swiggyToken?: st
       inputSchema: zodSchema(z.object({
         address_id: z.string().describe('Delivery address ID from get_swiggy_addresses.'),
       })),
-      execute: async ({ address_id }: { address_id: string }) => {
-        const pollingStart = isMockMode() ? Date.now() - 15_000 : Date.now()
-        const orders = await fetchActiveOrders(ctx.swiggyToken ?? 'mock', address_id, pollingStart)
-        return { orders }
-      },
+      execute: async ({ address_id }: { address_id: string }) =>
+        withSwiggyAuth(async () => {
+          const pollingStart = isMockMode() ? Date.now() - 15_000 : Date.now()
+          return {
+            orders: await fetchActiveOrders(ctx.swiggyToken ?? 'mock', address_id, pollingStart),
+          }
+        }),
     } satisfies Tool,
 
     get_swiggy_instamart_orders: {
       description: 'Fetch the user\'s Swiggy Instamart grocery orders (past 15 days).',
       inputSchema: zodSchema(z.object({})),
-      execute: async () => {
-        const orders = await fetchInstamartOrders(ctx.swiggyToken ?? 'mock')
-        return { orders }
-      },
+      execute: async () =>
+        withSwiggyAuth(async () => ({
+          orders: await fetchInstamartOrders(ctx.swiggyToken ?? 'mock'),
+        })),
     } satisfies Tool,
 
     log_swiggy_order: {
