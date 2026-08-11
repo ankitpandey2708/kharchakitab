@@ -1,4 +1,3 @@
-import reactCompiler from "eslint-plugin-react-compiler";
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
@@ -69,7 +68,7 @@ const eslintConfig = defineConfig([
     "worker/.wrangler/**",
   ]),
   {
-    plugins: { catchPlugin, 'react-compiler': reactCompiler },
+    plugins: { catchPlugin },
     settings: {
       react: { version: "detect" },
     },
@@ -83,7 +82,9 @@ const eslintConfig = defineConfig([
         "error",
         { caughtErrors: "all", caughtErrorsIgnorePattern: "^_" },
       ],
-      "react-compiler/react-compiler": "error",
+      // React Compiler diagnostics come from eslint-plugin-react-hooks v7
+      // (purity, immutability, preserve-manual-memoization, et al.), which
+      // eslint-config-next already enables — no separate plugin needed.
     },
   },
 ]);
