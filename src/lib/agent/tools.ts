@@ -2,7 +2,7 @@ import { zodSchema } from 'ai'
 import { z } from 'zod'
 import type { DataSnapshot } from './types'
 import type { Tool } from 'ai'
-import { fetchActiveOrders, fetchAddresses, fetchFoodOrderDetails, fetchInstamartOrders, isMockMode } from '@/src/lib/swiggy/client'
+import { fetchActiveOrders, fetchAddresses, fetchFoodOrderDetails, fetchInstamartOrdersWithRaw, isMockMode } from '@/src/lib/swiggy/client'
 
 function monthKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
@@ -111,9 +111,12 @@ export function createAgentTools(snapshot: DataSnapshot, ctx: { swiggyToken?: st
       description: 'Fetch the user\'s Swiggy Instamart grocery orders (past 15 days).',
       inputSchema: zodSchema(z.object({})),
       execute: async () =>
-        withSwiggyAuth(async () => ({
-          orders: await fetchInstamartOrders(ctx.swiggyToken ?? 'mock'),
-        })),
+        withSwiggyAuth(async () => {
+          const { orders, raw } = await fetchInstamartOrdersWithRaw(ctx.swiggyToken ?? 'mock')
+          // TEMPORARY: Instamart's list keys are unverified, so ship one raw row
+          // for shape discovery. Remove once mapInstamartOrder is confirmed.
+          return { orders, raw_sample: raw[0] }
+        }),
     } satisfies Tool,
 
     get_swiggy_food_order_details: {

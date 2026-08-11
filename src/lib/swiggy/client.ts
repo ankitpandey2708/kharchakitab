@@ -64,10 +64,17 @@ function parseAmount(raw: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+// Swiggy is India-only and sends wall-clock IST with no zone marker. Stating the
+// offset keeps the result independent of the server's zone — Date.parse would
+// otherwise read it as local time, which is UTC on Vercel, shifting every order
+// forward by 5h30m.
+const IST = "GMT+0530";
+
 /**
- * "August 11, 6:46 PM" → epoch ms. Swiggy omits the year, so assume the current
- * one and step back if that lands in the future — otherwise every December order
- * read in January is dated eleven months ahead.
+ * "August 11, 6:46 PM" → epoch ms. Splits off the day so the year can be
+ * injected, then lets Date.parse handle the month name. Swiggy omits the year,
+ * so assume the current one and step back if that lands in the future —
+ * otherwise a December order read in January is dated eleven months ahead.
  */
 function parsePlacedAt(raw: unknown, now: number = Date.now()): number {
   if (typeof raw === "number") return raw;
@@ -76,16 +83,16 @@ function parsePlacedAt(raw: unknown, now: number = Date.now()): number {
   const m = raw.match(/^\s*([A-Za-z]+\s+\d{1,2})\s*,\s*(.+?)\s*$/);
   if (!m) return 0;
 
-  const [, dayPart, timePart] = m;
-  const at = (year: number) => Date.parse(`${dayPart}, ${year} ${timePart}`);
+  const [, day, time] = m;
+  const at = (year: number) => Date.parse(`${day}, ${year} ${time} ${IST}`);
 
-  const thisYear = at(new Date(now).getFullYear());
+  const thisYear = at(new Date(now).getUTCFullYear());
   if (!Number.isFinite(thisYear)) return 0;
 
   // One day of slack absorbs clock skew between us and Swiggy.
   if (thisYear <= now + 86_400_000) return thisYear;
 
-  const lastYear = at(new Date(now).getFullYear() - 1);
+  const lastYear = at(new Date(now).getUTCFullYear() - 1);
   return Number.isFinite(lastYear) ? lastYear : thisYear;
 }
 
@@ -227,7 +234,16 @@ async function mcpCall<T>(
   // Fall back to parsing content[] for tools that only return text.
   const summary = result.content?.find((c) => typeof c.text === "string")?.text;
 
-  let payload: unknown = result.structuredContent;
+  // An empty structuredContent is treated as absent — some tools return `{}`
+  // there and put the real payload in content[], and silently returning `{}`
+  // would look like a successful empty result.
+  const isEmptyObject =
+    result.structuredContent !== null &&
+    typeof result.structuredContent === "object" &&
+    !Array.isArray(result.structuredContent) &&
+    Object.keys(result.structuredContent as object).length === 0;
+
+  let payload: unknown = isEmptyObject ? undefined : result.structuredContent;
   if (payload === undefined) {
     if (!summary) throw new Error("Empty response from Swiggy");
     try {
@@ -306,32 +322,32 @@ const MOCK_INSTAMART_ORDERS: SwiggyInstamartOrder[] = [
   },
 ];
 
-export async function fetchInstamartOrders(
+/**
+ * Returns mapped orders alongside the raw rows. Instamart's list shape is still
+ * unverified — `storeName` maps, but items/total/time/status come back empty, so
+ * its keys differ from Food's. The raw rows let a caller inspect them.
+ */
+export async function fetchInstamartOrdersWithRaw(
   token: string
-): Promise<SwiggyInstamartOrder[]> {
+): Promise<{ orders: SwiggyInstamartOrder[]; raw: SwiggyRawInstamartOrder[] }> {
   if (isMockMode()) {
     await new Promise((r) => setTimeout(r, 500));
-    return MOCK_INSTAMART_ORDERS;
+    return { orders: MOCK_INSTAMART_ORDERS, raw: [] };
   }
 
-  // orderType is documented only as `e.g. "DASH", "INSTAMART"` with "DASH" as the
-  // server default, and neither term is defined. INSTAMART returned zero rows on
-  // the one live call, so try it first and fall back to the default rather than
-  // reporting "no orders" off an unverified filter.
-  for (const orderType of ["INSTAMART", "DASH"] as const) {
-    const data = await mcpCall<{ orders?: SwiggyRawInstamartOrder[] }>(
-      token,
-      SWIGGY_MCP_INSTAMART_URL,
-      "get_orders",
-      { orderType, count: 10 }
-    );
+  // orderType is documented only as `e.g. "DASH", "INSTAMART"`, neither defined.
+  // Live: "INSTAMART" returns zero rows, "DASH" returns the orders — so DASH it is.
+  const data = await mcpCall<{ orders?: SwiggyRawInstamartOrder[] }>(
+    token,
+    SWIGGY_MCP_INSTAMART_URL,
+    "get_orders",
+    { orderType: "DASH", count: 10 }
+  );
 
-    const raw = data?.orders ?? [];
-    if (raw.length > 0) return raw.map(mapInstamartOrder);
-  }
-
-  return [];
+  const raw = data?.orders ?? [];
+  return { orders: raw.map(mapInstamartOrder), raw };
 }
+
 
 /**
  * get_food_orders carries no payment info — get_food_order_details does
