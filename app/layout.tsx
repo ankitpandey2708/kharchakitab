@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Playfair_Display, DM_Sans, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import {
   SITE_DESCRIPTION,
@@ -8,22 +8,29 @@ import {
   SITE_URL,
 } from "@/src/config/site";
 
-const bodyFont = DM_Sans({
+// Self-hosted (latin-subset variable woff2, committed under app/fonts) rather
+// than next/font/google: Turbopack fetches Google Fonts at build time, and that
+// fetch fails intermittently on CI, taking the whole build with it.
+// See vercel/next.js#78472 and discussions #61886 / #81721.
+const bodyFont = localFont({
+  src: "./fonts/DMSans-Variable.woff2",
   variable: "--font-body",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: "400 700",
+  display: "swap",
 });
 
-const displayFont = Playfair_Display({
+const displayFont = localFont({
+  src: "./fonts/PlayfairDisplay-Variable.woff2",
   variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["600", "700"],
+  weight: "600 700",
+  display: "swap",
 });
 
-const monoFont = JetBrains_Mono({
+const monoFont = localFont({
+  src: "./fonts/JetBrainsMono-Variable.woff2",
   variable: "--font-mono",
-  subsets: ["latin"],
-  weight: ["500", "600"],
+  weight: "500 600",
+  display: "swap",
   preload: false,
 });
 
