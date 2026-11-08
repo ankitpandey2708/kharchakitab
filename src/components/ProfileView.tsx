@@ -218,16 +218,36 @@ const DeviceNameRow = React.memo(() => {
 
 DeviceNameRow.displayName = "DeviceNameRow";
 
+/**
+ * Swiggy link lifecycle:
+ *
+ *   unlinked ─connect─▶ connecting ─SWIGGY_CONNECTED─▶ linked ─disconnect─▶ unlinked
+ *      ▲                    │ SWIGGY_ERROR / popup blocked → unlinked{error}
+ *      └────────────────────┘ popup closed by user        → unlinked
+ *
+ * Server reconcile (mount + focus) may flip linked ⇄ unlinked, but never
+ * interrupts an in-flight `connecting`.
+ */
+type SwiggyLink =
+  | { kind: "unlinked"; error?: string }
+  | { kind: "connecting" }
+  | { kind: "linked" };
+
 const SwiggyConnectRow = React.memo(() => {
-  const [isLinked, setIsLinked] = useState(() =>
-    typeof window !== "undefined" ? localStorage.getItem("swiggy_linked") === "true" : false
+  const [link, setLink] = useState<SwiggyLink>(() =>
+    typeof window !== "undefined" && localStorage.getItem("swiggy_linked") === "true"
+      ? { kind: "linked" }
+      : { kind: "unlinked" }
   );
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const popupRef = useRef<Window | null>(null);
   const messageHandlerRef = useRef<((e: MessageEvent) => void) | null>(null);
+  const pollClosedRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const cleanupPopup = useCallback(() => {
+    if (pollClosedRef.current) {
+      clearInterval(pollClosedRef.current);
+      pollClosedRef.current = null;
+    }
     if (messageHandlerRef.current) {
       window.removeEventListener("message", messageHandlerRef.current);
       messageHandlerRef.current = null;
@@ -235,6 +255,9 @@ const SwiggyConnectRow = React.memo(() => {
     if (popupRef.current && !popupRef.current.closed) popupRef.current.close();
     popupRef.current = null;
   }, []);
+
+  // Don't leak the listener/poller if the row unmounts mid-login.
+  useEffect(() => cleanupPopup, [cleanupPopup]);
 
   // localStorage only seeds the first paint — the httpOnly cookie is the real
   // source of truth. Tokens last 5 days and can be revoked earlier, so the flag
@@ -249,7 +272,10 @@ const SwiggyConnectRow = React.memo(() => {
         const { connected } = (await res.json()) as { connected: boolean };
         if (cancelled) return;
 
-        setIsLinked(connected);
+        // A login popup in flight owns the state; its own result will land.
+        setLink((prev) =>
+          prev.kind === "connecting" ? prev : connected ? { kind: "linked" } : prev.kind === "linked" ? { kind: "unlinked" } : prev
+        );
         if (connected) {
           localStorage.setItem("swiggy_linked", "true");
         } else {
@@ -272,34 +298,32 @@ const SwiggyConnectRow = React.memo(() => {
   }, []);
 
   const handleConnect = useCallback(() => {
-    setError(null);
-    setIsConnecting(true);
+    cleanupPopup(); // at most one login attempt at a time
     const popup = window.open("/api/swiggy/authorize", "swiggy_auth", "width=480,height=640,left=200,top=100");
     if (!popup) {
-      setError("Popup blocked. Allow popups for this site.");
-      setIsConnecting(false);
+      setLink({ kind: "unlinked", error: "Popup blocked. Allow popups for this site." });
       return;
     }
+    setLink({ kind: "connecting" });
     popupRef.current = popup;
     const handler = (e: MessageEvent) => {
       if (e.origin !== window.location.origin) return;
       if (e.data?.type === "SWIGGY_CONNECTED") {
         cleanupPopup();
         localStorage.setItem("swiggy_linked", "true");
-        setIsLinked(true);
-        setIsConnecting(false);
+        setLink({ kind: "linked" });
       } else if (e.data?.type === "SWIGGY_ERROR") {
         cleanupPopup();
-        setError(e.data.error ?? "Authentication failed");
-        setIsConnecting(false);
+        setLink({ kind: "unlinked", error: e.data.error ?? "Authentication failed" });
       }
     };
     messageHandlerRef.current = handler;
     window.addEventListener("message", handler);
-    const pollClosed = setInterval(() => {
+    pollClosedRef.current = setInterval(() => {
       if (popup.closed) {
-        clearInterval(pollClosed);
-        if (messageHandlerRef.current) { cleanupPopup(); setIsConnecting(false); }
+        // Closed without a result message → user abandoned the login.
+        cleanupPopup();
+        setLink((prev) => (prev.kind === "connecting" ? { kind: "unlinked" } : prev));
       }
     }, 500);
   }, [cleanupPopup]);
@@ -308,12 +332,15 @@ const SwiggyConnectRow = React.memo(() => {
     await fetch("/api/swiggy/disconnect", { method: "POST" });
     localStorage.removeItem("swiggy_linked");
     localStorage.removeItem("swiggy_address_id");
-    setIsLinked(false);
+    setLink({ kind: "unlinked" });
   }, []);
+
+  const isConnecting = link.kind === "connecting";
+  const error = link.kind === "unlinked" ? link.error : undefined;
 
   return (
     <div className="space-y-1.5">
-      {isLinked ? (
+      {link.kind === "linked" ? (
         <SettingRow
           icon={<SwiggyLogo className="h-4 w-4" />}
           label="Swiggy"

@@ -6,12 +6,27 @@ import { SIGNALING_URL } from "@/src/config/sync"
 const CHUNK_INTERVAL_MS = 250 // Send audio every 250ms
 const SAMPLE_RATE = 16000
 
+/**
+ * Lifecycle of one voice session. Exactly one is live at a time.
+ *
+ *   idle ──start()──▶ connecting ──stt:ready──▶ listening ──stop()──▶ stopping
+ *    ▲                    │                        │                     │
+ *    └──── stop() / error / socket close ──────────┴──── stt:closed / 3s ┘
+ *
+ * - `start()` is a no-op unless `idle` (no double mic/socket on double-tap).
+ * - `stop()` while `connecting` cancels the session: a mic grant or socket
+ *   open that lands afterwards is discarded instead of starting a ghost stream.
+ */
+type VoiceStatus = "idle" | "connecting" | "listening" | "stopping"
+
 interface StreamingSTTResult {
   /** Latest transcript from Sarvam */
   transcript: string
   /** Detected language code (BCP-47) */
   languageCode: string | null
-  /** True while mic is active and streaming */
+  /** Where the session is in its lifecycle — see {@link VoiceStatus} */
+  status: VoiceStatus
+  /** True while the mic is capturing (`listening` or `stopping`) */
   isStreaming: boolean
   /** True when user is actively speaking (via VAD) */
   isUserSpeaking: boolean
@@ -44,9 +59,19 @@ export function useStreamingSTT({
 } = {}): StreamingSTTResult {
   const [transcript, setTranscript] = useState("")
   const [languageCode, setLanguageCode] = useState<string | null>(null)
-  const [isStreaming, setIsStreaming] = useState(false)
+  const [status, setStatusState] = useState<VoiceStatus>("idle")
   const [isUserSpeaking, setIsUserSpeaking] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Ref mirror so start/stop can guard synchronously (state lags a render).
+  const statusRef = useRef<VoiceStatus>("idle")
+  const setStatus = useCallback((next: VoiceStatus) => {
+    statusRef.current = next
+    setStatusState(next)
+  }, [])
+  // Bumped on every start and every teardown. Async continuations and socket
+  // handlers capture the value they were born with and bail if it moved on.
+  const sessionRef = useRef(0)
 
   const wsRef = useRef<WebSocket | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -68,6 +93,7 @@ export function useStreamingSTT({
   useEffect(() => { onStartOfSpeechRef.current = onStartOfSpeech }, [onStartOfSpeech])
 
   const cleanup = useCallback(() => {
+    sessionRef.current += 1
     if (intervalRef.current) {
       clearInterval(intervalRef.current)
       intervalRef.current = null
@@ -95,9 +121,14 @@ export function useStreamingSTT({
       stopTimeoutRef.current = null
     }
     chunkBufferRef.current = []
-    setIsStreaming(false)
+    // Never leave a stop() caller hanging (e.g. unmount mid-drain).
+    if (stopResolveRef.current) {
+      stopResolveRef.current(transcriptRef.current)
+      stopResolveRef.current = null
+    }
+    setStatus("idle")
     setIsUserSpeaking(false)
-  }, [])
+  }, [setStatus])
 
   /** Convert Float32 samples to 16-bit PCM and then to base64 */
   const encodeChunk = useCallback((samples: Float32Array): string => {
@@ -172,11 +203,19 @@ export function useStreamingSTT({
 
   const stop = useCallback(async (): Promise<string> => {
     return new Promise<string>((resolve) => {
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      if (statusRef.current === "stopping" && stopResolveRef.current) {
+        // Already draining — share the in-flight result instead of orphaning it.
+        const prev = stopResolveRef.current
+        stopResolveRef.current = (t) => { prev(t); resolve(t) }
+        return
+      }
+      if (statusRef.current !== "listening" || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        // idle or connecting: nothing captured yet, so cancel outright.
         cleanup()
         resolve(transcriptRef.current)
         return
       }
+      setStatus("stopping")
       // Send remaining audio + flush, then wait for final transcript
       sendChunks()
       wsRef.current.send(JSON.stringify({ type: "flush" }))
@@ -202,15 +241,16 @@ export function useStreamingSTT({
         wsRef.current.send(JSON.stringify({ type: "stt:stop" }))
       }
     })
-  }, [cleanup, sendChunks])
+  }, [cleanup, sendChunks, setStatus])
 
-  const startAudioCapture = useCallback(async (stream: MediaStream) => {
+  const startAudioCapture = useCallback(async (stream: MediaStream, session: number) => {
     const audioCtx = new AudioContext()
     audioCtxRef.current = audioCtx
 
     try {
       // Load the modern AudioWorklet module
       await audioCtx.audioWorklet.addModule('/worklets/stt-processor.js')
+      if (session !== sessionRef.current) return // torn down while loading
       const source = audioCtx.createMediaStreamSource(stream)
       
       const processor = new AudioWorkletNode(audioCtx, 'stt-processor')
@@ -225,8 +265,9 @@ export function useStreamingSTT({
       // AudioWorkletNode stays active as long as it's connected to the graph
       processor.connect(audioCtx.destination)
     } catch (err) {
+      if (session !== sessionRef.current) return
       console.warn("[StreamingSTT] Failed to load AudioWorklet, falling back to ScriptProcessorNode:", err)
-      
+
       const source = audioCtx.createMediaStreamSource(stream)
       // Fallback for older browsers or if module loading fails
       const processor = audioCtx.createScriptProcessor(4096, 1, 1)
@@ -249,6 +290,7 @@ export function useStreamingSTT({
   }, [sendChunks])
 
   const start = useCallback(async () => {
+    if (statusRef.current !== "idle") return
     setError(null)
     setTranscript("")
     setLanguageCode(null)
@@ -262,8 +304,17 @@ export function useStreamingSTT({
       return
     }
 
+    const session = ++sessionRef.current
+    const isCurrent = () => session === sessionRef.current
+    setStatus("connecting")
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      if (!isCurrent()) {
+        // Cancelled (stop/unmount) while the permission prompt was up.
+        stream.getTracks().forEach(t => t.stop())
+        return
+      }
       streamRef.current = stream
 
       // Connect to signaling server — it proxies to Sarvam with auth headers
@@ -272,6 +323,7 @@ export function useStreamingSTT({
       wsRef.current = ws
 
       ws.onopen = () => {
+        if (!isCurrent()) return
         console.log("[StreamingSTT] Connected, requesting STT proxy")
         ws.send(JSON.stringify({
           type: "stt:start",
@@ -280,6 +332,7 @@ export function useStreamingSTT({
       }
 
       ws.onmessage = (event) => {
+        if (!isCurrent()) return
         try {
           const msg = JSON.parse(event.data)
           console.log("[StreamingSTT] Received message from server:", msg.type, msg)
@@ -287,8 +340,8 @@ export function useStreamingSTT({
           // Server confirms Sarvam connected — start audio capture
           if (msg.type === "stt:ready") {
             console.log("[StreamingSTT] Sarvam proxy ready, starting audio capture")
-            setIsStreaming(true)
-            void startAudioCapture(stream)
+            setStatus("listening")
+            void startAudioCapture(stream, session)
             return
           }
 
@@ -362,6 +415,7 @@ export function useStreamingSTT({
       }
 
       ws.onclose = (e) => {
+        if (!isCurrent()) return // our own teardown, not a failure
         if (!e.wasClean && !serverClosedRef.current) {
           setError(`Speech service connection failed (code: ${e.code})`)
         }
@@ -372,11 +426,12 @@ export function useStreamingSTT({
         cleanup()
       }
     } catch (err) {
+      if (!isCurrent()) return
       console.error("[StreamingSTT] Start failed:", err)
       setError(err instanceof Error ? err.message : "Failed to start streaming STT")
       cleanup()
     }
-  }, [mode, cleanup, startAudioCapture])
+  }, [mode, cleanup, startAudioCapture, setStatus])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -386,7 +441,8 @@ export function useStreamingSTT({
   return {
     transcript,
     languageCode,
-    isStreaming,
+    status,
+    isStreaming: status === "listening" || status === "stopping",
     isUserSpeaking,
     error,
     start,

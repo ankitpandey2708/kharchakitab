@@ -20,6 +20,8 @@ export interface TranscriptFeedback {
 interface UnifiedInputPillProps {
   activeTab: AppTab;
   isRecording: boolean;
+  /** Mic/socket are opening but not capturing yet */
+  isConnecting?: boolean;
   isSpeaking?: boolean;
   isProcessing?: boolean;
   isEmpty?: boolean;
@@ -34,6 +36,7 @@ interface UnifiedInputPillProps {
 export const UnifiedInputPill = React.memo(({
   activeTab,
   isRecording,
+  isConnecting,
   isSpeaking,
   isProcessing,
   isEmpty,
@@ -90,13 +93,13 @@ export const UnifiedInputPill = React.memo(({
 
   // Collapse typing when recording/processing starts or feedback appears
   useEffect(() => {
-    if (isRecording || isProcessing || transcriptFeedback) {
+    if (isConnecting || isRecording || isProcessing || transcriptFeedback) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsExpanded(false);
       setDisplayValue("");
       setTextValue("");
     }
-  }, [isRecording, isProcessing, transcriptFeedback]);
+  }, [isConnecting, isRecording, isProcessing, transcriptFeedback]);
 
   const handleMicToggle = (event?: React.SyntheticEvent) => {
     event?.preventDefault();
@@ -147,13 +150,14 @@ export const UnifiedInputPill = React.memo(({
 
   const hint = EXAMPLES[hintIndex];
 
-  // Pill state machine — now 4 states
-  const pillState: "recording" | "processing" | "feedback" | "typing" | "idle" =
+  // Pill state — derived, first match wins (processing outranks a live mic).
+  const pillState: "processing" | "connecting" | "recording" | "feedback" | "typing" | "idle" =
     isProcessing ? "processing" :
       isRecording ? "recording" :
-        transcriptFeedback ? "feedback" :
-          isExpanded ? "typing" :
-            "idle";
+        isConnecting ? "connecting" :
+          transcriptFeedback ? "feedback" :
+            isExpanded ? "typing" :
+              "idle";
 
   // Hidden on non-entry tabs
   if (activeTab === "analytics" || activeTab === "profile") {
@@ -163,8 +167,9 @@ export const UnifiedInputPill = React.memo(({
   return (
     <div className="kk-text-bar" aria-live="polite" aria-atomic="true">
       <AnimatePresence mode="wait" initial={false}>
-        {(pillState === "recording" || pillState === "processing") && (
+        {(pillState === "connecting" || pillState === "recording" || pillState === "processing") && (
           <RecordingPill
+            isConnecting={pillState === "connecting"}
             isRecording={pillState === "recording"}
             isSpeaking={pillState === "recording" && isSpeaking}
             isProcessing={pillState === "processing"}

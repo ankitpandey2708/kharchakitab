@@ -6,6 +6,8 @@ import { Square, Loader2 } from "lucide-react";
 
 interface RecordingPillProps {
     isRecording: boolean;
+    /** Mic is opening — same shell as recording (no re-animate on hand-off), stop = cancel */
+    isConnecting?: boolean;
     isSpeaking?: boolean;
     isProcessing?: boolean;
     holdMode?: boolean;
@@ -14,12 +16,16 @@ interface RecordingPillProps {
 
 export const RecordingPill = React.memo(({
     isRecording,
+    isConnecting,
     isSpeaking,
     isProcessing,
     holdMode,
     onStopRecording,
 }: RecordingPillProps) => {
-    if (isRecording) {
+    if (isRecording || isConnecting) {
+        const label = isConnecting
+            ? "starting mic…"
+            : holdMode ? "release to send" : isSpeaking ? "speaking…" : "listening…";
         return (
             <motion.div
                 key="recording"
@@ -32,7 +38,7 @@ export const RecordingPill = React.memo(({
                 <button
                     type="button"
                     onClick={onStopRecording}
-                    aria-label="Stop recording"
+                    aria-label={isConnecting ? "Cancel recording" : "Stop recording"}
                     className="flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-full bg-[var(--kk-ember)] text-white animate-ember-pulse"
                 >
                     <Square className="h-3 w-3 fill-current" strokeWidth={0} />
@@ -42,13 +48,13 @@ export const RecordingPill = React.memo(({
                     {[0, 1, 2, 3, 4].map((i) => (
                         <span
                             key={i}
-                            className={isSpeaking ? "kk-wave-bar kk-wave-bar--active" : "kk-wave-bar kk-wave-bar--idle"}
+                            className={isSpeaking && !isConnecting ? "kk-wave-bar kk-wave-bar--active" : "kk-wave-bar kk-wave-bar--idle"}
                             style={{ animationDelay: `${i * 0.1}s` }}
                         />
                     ))}
                 </div>
                 <span className="text-xs font-medium text-[var(--kk-ember)] flex-shrink-0">
-                    {holdMode ? "release to send" : isSpeaking ? "speaking…" : "listening…"}
+                    {label}
                 </span>
             </motion.div>
         );

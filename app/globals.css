@@ -2591,6 +2591,14 @@ div.kk-driver-theme .driver-popover-arrow {
   background: var(--kk-cream);
 }
 
+/* Inert while the assistant is busy or a confirm is being applied */
+.kk-chat-confirm-yes:disabled,
+.kk-chat-confirm-no:disabled {
+  opacity: 0.55;
+  cursor: default;
+  pointer-events: none;
+}
+
 /* Reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
   .kk-chat-confirm,

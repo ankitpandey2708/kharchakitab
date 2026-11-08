@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { buildSnapshot } from '@/src/lib/agent/snapshot';
 import { deleteTransaction } from '@/src/db/db';
 import { createAgentTools } from '@/src/lib/agent/tools';
+import type { ExpenseInputOutcome } from '@/src/types';
 
 /**
  * Hook to implement WebMCP API support.
@@ -11,7 +12,7 @@ import { createAgentTools } from '@/src/lib/agent/tools';
  * See: https://webmachinelearning.github.io/webmcp/
  */
 export function useWebMCP(
-  processTextInput: (text: string) => Promise<void>,
+  processTextInput: (text: string) => Promise<ExpenseInputOutcome>,
   refreshTransactions: () => void
 ) {
   useEffect(() => {
@@ -76,7 +77,7 @@ export function useWebMCP(
           },
           {
             name: "add_expense",
-            description: "Add a new expense using natural language (e.g. 'chai for 20 rupees' or '150 for lunch').",
+            description: "Add a new expense using natural language (e.g. 'chai for 20 rupees' or '150 for lunch'). Returns `status`: \"saved\" (with transaction_id), \"needs_review\" (multiple expenses or a recurring one — a sheet is open for the user to confirm; do not retry), \"busy\" (another input is still processing — retry shortly), \"ignored\" (no expense found), or \"error\" (with message).",
             inputSchema: {
               type: "object",
               properties: {
@@ -85,8 +86,7 @@ export function useWebMCP(
               required: ["text"]
             },
             execute: async ({ text }: { text: string }) => {
-              await processTextInput(text);
-              return { status: "success", message: `Initiated processing for: "${text}"` };
+              return await processTextInput(text);
             }
           },
           {

@@ -94,6 +94,22 @@ export interface PairingRecord {
   trust_level?: "paired";
 }
 
+/**
+ * Terminal state of one natural-language expense input (typed, spoken, or via
+ * the WebMCP `add_expense` tool). Every path through the pipeline ends in
+ * exactly one of these, so callers — UI or agent — can tell "saved" from
+ * "dropped because busy" from "waiting on the user".
+ */
+export type ExpenseInputOutcome =
+  | { status: "saved"; transaction_id: string; item: string; amount: number; category: string }
+  /** Parsed fine, but a sheet/modal is now open for the user to review. */
+  | { status: "needs_review"; reason: "multiple_expenses" | "recurring"; count: number }
+  /** Another text/voice input is still being parsed; this one was not processed. */
+  | { status: "busy" }
+  /** Nothing to process (blank input or no expense found). */
+  | { status: "ignored" }
+  | { status: "error"; message: string };
+
 export interface SyncState {
   partner_device_id: string;
   last_sync_at: number | null;

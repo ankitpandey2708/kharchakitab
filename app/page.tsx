@@ -46,7 +46,7 @@ import {
 } from "@/src/db/db";
 import { RECURRING_TEMPLATES, type Frequency, type RecurringTemplate } from "@/src/config/recurring";
 import type { Expense } from "@/src/utils/schemas";
-import type { Transaction, Recurring_template } from "@/src/types";
+import type { Transaction, Recurring_template, ExpenseInputOutcome } from "@/src/types";
 import { AlertCircle, X, Download, Sparkles } from "lucide-react";
 import { prepareReceiptImage } from "@/src/utils/imageProcessing";
 
@@ -66,6 +66,16 @@ import { usePendingTransactions } from "@/src/hooks/usePendingTransactions";
 import { useWebMCP } from "@/src/hooks/useWebMCP";
 
 type TransactionInput = Omit<Transaction, "id">;
+
+/** Which text/voice parse is in flight (receipts run on their own lane). */
+type ParseJob = "text" | "voice" | null;
+
+/**
+ * Full-screen settings panel opened from Profile — or auto-opened ("sync")
+ * when a pairing request arrives. One at a time, so an incoming pair can never
+ * open underneath another panel.
+ */
+type SettingsPanel = "sync" | "notifications" | "aiProviders" | "tags" | null;
 
 const buildTransaction = (
   data: TransactionInput,
@@ -150,19 +160,19 @@ const AppShell = () => {
     tags?: string[];
   } | null>(null);
   const isEditing = editState !== null;
-  const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
   const [tagsVersion, setTagsVersion] = useState(0);
   const [lastError, setLastError] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
+  // Text/voice parse lane — at most one in flight; the ref guards synchronously
+  // against a double submit landing before the state update renders.
+  const [parseJob, setParseJob] = useState<ParseJob>(null);
+  const parseJobRef = useRef<ParseJob>(null);
+  const isProcessing = parseJob !== null;
   const { pendingTransactions, addPending: addPendingTransaction, removePending: removePendingTransaction } = usePendingTransactions();
-const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [isSyncOpen, setIsSyncOpen] = useState(false);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [isAiProvidersOpen, setIsAiProvidersOpen] = useState(false);
+  const [settingsPanel, setSettingsPanel] = useState<SettingsPanel>(null);
   const [isTxnSheetOpen, setIsTxnSheetOpen] = useState(false);
   const [isReceiptProcessing, setIsReceiptProcessing] = useState(false);
-  const [isTextProcessing, setIsTextProcessing] = useState(false);
   const [isListEmpty, setIsListEmpty] = useState(false);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [recurringModalState, setRecurringModalState] = useState<{
@@ -239,7 +249,6 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const recurringQueueRef = useRef<Expense[]>([]);
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const processingRef = useRef(false);
   const receiptProcessingRef = useRef(false);
   const receiptInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -263,10 +272,13 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   useEffect(() => {
     setIsRecording(streamingSTT.isStreaming);
-    if (streamingSTT.isStreaming) {
+  }, [streamingSTT.isStreaming, setIsRecording]);
+
+  useEffect(() => {
+    if (streamingSTT.status !== "idle") {
       setLastError(null);
     }
-  }, [streamingSTT.isStreaming, setIsRecording]);
+  }, [streamingSTT.status]);
 
   useEffect(() => {
     if (streamingSTT.error) {
@@ -393,16 +405,16 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     refreshTransactions();
   }, [refreshTransactions]);
 
-  const startProcessing = useCallback(() => {
-    if (processingRef.current) return false;
-    processingRef.current = true;
-    setIsProcessing(true);
+  const startProcessing = useCallback((job: Exclude<ParseJob, null>) => {
+    if (parseJobRef.current) return false;
+    parseJobRef.current = job;
+    setParseJob(job);
     return true;
   }, []);
 
   const stopProcessing = useCallback(() => {
-    setIsProcessing(false);
-    processingRef.current = false;
+    parseJobRef.current = null;
+    setParseJob(null);
   }, []);
 
   const startReceiptProcessing = useCallback(() => {
@@ -428,11 +440,11 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     return (data.data ?? []) as Expense[];
   }, [currency]);
 
-  const saveSingleExpense = useCallback(async (expense: Expense, inputMethod: string) => {
+  const saveSingleExpense = useCallback(async (expense: Expense, inputMethod: string): Promise<ExpenseInputOutcome> => {
     const now = Date.now();
     if (expense.amount <= 0) {
       setLastError(ERROR_MESSAGES.amountGreaterThanZero);
-      return;
+      return { status: "error", message: ERROR_MESSAGES.amountGreaterThanZero };
     }
 
     // Recurring intent: open RecurringEditModal pre-filled
@@ -444,8 +456,9 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
       if (matchedTemplate) {
         const existing = await getRecurringTemplates();
         if (existing.some((t) => t.recurring_template_id === matchedTemplate.id)) {
-          setLastError(`"${expense.item}" is already set up as a recurring expense.`);
-          return;
+          const message = `"${expense.item}" is already set up as a recurring expense.`;
+          setLastError(message);
+          return { status: "error", message };
         }
       }
 
@@ -456,6 +469,7 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
         frequency: expense.frequency ?? "monthly",
         input_method: inputMethod,
       });
+      return { status: "needs_review", reason: "recurring", count: 1 };
     } else {
       const transaction: Transaction = {
         id: "",
@@ -479,6 +493,7 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
         payment_method: expense.paymentMethod ?? "cash",
         input_method: inputMethod,
       });
+      return { status: "saved", transaction_id: id, item: expense.item, amount: expense.amount, category: expense.category };
     }
   }, [addTransaction, currency, getRecurringTemplates, openRecurringFromExpense, refreshTransactions]);
 
@@ -518,11 +533,10 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     }
   }, [addTransaction, currency, openRecurringFromExpense, refreshTransactions]);
 
-  const processTextInput = useCallback(async (text: string) => {
+  const processTextInput = useCallback(async (text: string): Promise<ExpenseInputOutcome> => {
     const trimmed = text.trim();
-    if (!trimmed) return;
-    if (!startProcessing()) return;
-    setIsTextProcessing(true);
+    if (!trimmed) return { status: "ignored" };
+    if (!startProcessing("text")) return { status: "busy" };
     setLastError(null);
     const pendingId = addPendingTransaction(TRANSACTION_PENDING_LABEL);
     try {
@@ -531,21 +545,22 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
       if (expenses.length > 1) {
         // Multi-expense: show preview sheet
         setBulkExpenses(expenses);
-      } else {
-        // Single expense: existing auto-save flow
-        const expense = expenses[0];
-        if (expense) await saveSingleExpense(expense, "text");
+        return { status: "needs_review", reason: "multiple_expenses", count: expenses.length };
       }
+      // Single expense: existing auto-save flow
+      const expense = expenses[0];
+      return expense ? await saveSingleExpense(expense, "text") : { status: "ignored" };
     } catch (error) {
-      setLastError(toUserMessage(error, "unableToTranscribeAudio"));
+      const message = toUserMessage(error, "unableToTranscribeAudio");
+      setLastError(message);
       posthogCapture("error_occurred", {
         error_type: "text_parse_failed",
-        error_message: toUserMessage(error, "unableToTranscribeAudio"),
+        error_message: message,
       });
+      return { status: "error", message };
     } finally {
       removePendingTransaction(pendingId);
       stopProcessing();
-      setIsTextProcessing(false);
     }
   }, [addPendingTransaction, currency, parseTranscript, refreshTransactions, removePendingTransaction, saveSingleExpense, startProcessing, stopProcessing]);
 
@@ -572,7 +587,7 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     lastProcessedTranscriptRef.current = trimmed;
     const normalized = trimmed.toLowerCase();
     if (new Set(["no, i don't want it.", "okay.", "yes.", "okay, i will do it.", ""]).has(normalized)) return;
-    if (!startProcessing()) return;
+    if (!startProcessing("voice")) return;
     setLastError(null);
     const pendingId = addPendingTransaction(TRANSACTION_PENDING_LABEL);
     try {
@@ -713,13 +728,15 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   }, [streamingSTT, processStreamingTranscript]);
 
   const onMicPress = useCallback(() => {
-    if (streamingSTT.isStreaming) {
+    // Any live session (incl. still connecting) toggles off — a second tap
+    // while the mic is opening cancels instead of opening a second mic.
+    if (streamingSTT.status !== "idle") {
       void handleStopRecording();
     } else {
       window.scrollTo({ top: 0, behavior: "smooth" });
       void handleStartRecording();
     }
-  }, [streamingSTT.isStreaming, handleStopRecording, handleStartRecording]);
+  }, [streamingSTT.status, handleStopRecording, handleStartRecording]);
 
   const onReceiptUploadClick = useCallback(() => {
     receiptInputRef.current?.click();
@@ -746,38 +763,29 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     posthogCapture("history_viewed");
   }, []);
 
-  const handleOpenSync = useCallback(() => {
-    setIsSyncOpen(true);
+  // Closing only clears the panel it belongs to, so a stale close (e.g. a
+  // back-button handler racing a panel switch) can't dismiss its successor.
+  const closeSettingsPanel = useCallback((panel: Exclude<SettingsPanel, null>) => {
+    setSettingsPanel((current) => (current === panel ? null : current));
   }, []);
 
-  const handleOpenNotifications = useCallback(() => {
-    setIsNotificationsOpen(true);
-  }, []);
-
-  const handleCloseNotifications = useCallback(() => {
-    setIsNotificationsOpen(false);
-  }, []);
-
-  const handleOpenAiProviders = useCallback(() => {
-    setIsAiProvidersOpen(true);
-  }, []);
-
-  const handleCloseAiProviders = useCallback(() => {
-    setIsAiProvidersOpen(false);
-  }, []);
+  const handleOpenSync = useCallback(() => setSettingsPanel("sync"), []);
+  const handleCloseSync = useCallback(() => closeSettingsPanel("sync"), [closeSettingsPanel]);
+  const handleOpenNotifications = useCallback(() => setSettingsPanel("notifications"), []);
+  const handleCloseNotifications = useCallback(() => closeSettingsPanel("notifications"), [closeSettingsPanel]);
+  const handleOpenAiProviders = useCallback(() => setSettingsPanel("aiProviders"), []);
+  const handleCloseAiProviders = useCallback(() => closeSettingsPanel("aiProviders"), [closeSettingsPanel]);
+  const handleOpenTags = useCallback(() => setSettingsPanel("tags"), []);
+  const handleCloseTags = useCallback(() => closeSettingsPanel("tags"), [closeSettingsPanel]);
 
   // Auto-open sync overlay when an incoming pairing request arrives
   useEffect(() => {
     if (incomingPair) {
-      setIsSyncOpen(true);
+      setSettingsPanel("sync");
     }
   }, [incomingPair]);
 
-  const handleCloseSync = useCallback(() => {
-    setIsSyncOpen(false);
-  }, []);
-
-  useBackButton(isSyncOpen, handleCloseSync);
+  useBackButton(settingsPanel === "sync", handleCloseSync);
 
   const handleTransactionDeleted = useCallback(
     (tx: Transaction) => {
@@ -914,7 +922,7 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
             isRecording={false}
             isProcessing={false}
             isReceiptProcessing={isReceiptProcessing}
-            isTextProcessing={isTextProcessing}
+            isTextProcessing={parseJob === "text"}
           />
           <section>
             <HomeView
@@ -949,7 +957,7 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
             onOpenSync={handleOpenSync}
             onOpenNotifications={handleOpenNotifications}
             onOpenAiProviders={handleOpenAiProviders}
-            onOpenTags={() => setIsTagManagerOpen(true)}
+            onOpenTags={handleOpenTags}
           />
         </section>
 
@@ -967,6 +975,7 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
           <UnifiedInputPill
             activeTab={activeTab}
             isRecording={isRecording}
+            isConnecting={streamingSTT.status === "connecting"}
             isSpeaking={streamingSTT.isUserSpeaking}
             isProcessing={isProcessing}
             isEmpty={isListEmpty}
@@ -1011,8 +1020,8 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
       {/* Tag Manager */}
       <TagManager
-        isOpen={isTagManagerOpen}
-        onClose={() => setIsTagManagerOpen(false)}
+        isOpen={settingsPanel === "tags"}
+        onClose={handleCloseTags}
         onTagsChanged={() => setTagsVersion((v) => v + 1)}
       />
 
@@ -1054,19 +1063,19 @@ const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
       {/* Notifications Settings — full-screen overlay */}
       <NotificationsSettings
-        isOpen={isNotificationsOpen}
+        isOpen={settingsPanel === "notifications"}
         onClose={handleCloseNotifications}
       />
 
       {/* AI Providers Settings — full-screen overlay */}
       <AiProvidersSettings
-        isOpen={isAiProvidersOpen}
+        isOpen={settingsPanel === "aiProviders"}
         onClose={handleCloseAiProviders}
       />
 
       {/* Sync Manager — full-screen overlay */}
       <SyncOverlay
-        isOpen={isSyncOpen}
+        isOpen={settingsPanel === "sync"}
         onClose={handleCloseSync}
         onSyncComplete={refreshTransactions}
       />

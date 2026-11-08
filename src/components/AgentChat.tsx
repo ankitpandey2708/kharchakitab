@@ -35,8 +35,18 @@ interface AgentChatProps {
 export function AgentChat({ open, onClose, onRefreshTransactions }: AgentChatProps) {
   const [messages, setMessages] = useState<{ role: string; content: string }[]>([])
   const [displayMessages, setDisplayMessages] = useState<DisplayMessage[]>([])
+  /*
+   * Turn lifecycle (derived from the state below, not stored separately):
+   *   idle ─send─▶ thinking (loading, no streaming msg) ─1st token─▶ streaming
+   *        ─done─▶ idle, or awaiting-confirmation if pendingActions is non-empty
+   *   awaiting-confirmation ─Confirm/Decline─▶ confirming ─▶ thinking (silent follow-up)
+   * Confirm/Decline are inert while thinking/streaming/confirming, so one tap
+   * = one write (a double-tap used to log the same Swiggy order twice).
+   */
   const [pendingActions, setPendingActions] = useState<PendingWriteAction[]>([])
   const [loading, setLoading] = useState(false)
+  const [isConfirming, setIsConfirming] = useState(false)
+  const confirmingRef = useRef(false)
   const [input, setInput] = useState("")
 
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -306,8 +316,18 @@ export function AgentChat({ open, onClose, onRefreshTransactions }: AgentChatPro
 
   async function handleConfirm(accepted: boolean) {
     const action = pendingActions[0]
-    if (!action) return
+    if (!action || loading || confirmingRef.current) return
+    confirmingRef.current = true
+    setIsConfirming(true)
+    try {
+      await resolvePendingAction(action, accepted)
+    } finally {
+      confirmingRef.current = false
+      setIsConfirming(false)
+    }
+  }
 
+  async function resolvePendingAction(action: PendingWriteAction, accepted: boolean) {
     if (accepted) {
       if (action.tool === 'set_budget') {
         const snapshot = lastSnapshotRef.current
@@ -511,6 +531,7 @@ export function AgentChat({ open, onClose, onRefreshTransactions }: AgentChatPro
                     <div className="kk-chat-confirm-actions">
                       <button
                         onClick={() => handleConfirm(true)}
+                        disabled={loading || isConfirming}
                         className="kk-chat-confirm-yes"
                         aria-label="Confirm setting monthly budget"
                       >
@@ -521,6 +542,7 @@ export function AgentChat({ open, onClose, onRefreshTransactions }: AgentChatPro
                       </button>
                       <button
                         onClick={() => handleConfirm(false)}
+                        disabled={loading || isConfirming}
                         className="kk-chat-confirm-no"
                         aria-label="Decline budget change"
                       >

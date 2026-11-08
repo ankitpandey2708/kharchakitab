@@ -53,7 +53,15 @@ export const SyncManager = React.memo(({ onSyncComplete }: SyncManagerProps) => 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [connectionState, setConnectionState] = useState<RTCPeerConnectionState>("new");
-  const [isSyncing, setIsSyncing] = useState(false);
+  /**
+   * Single source of truth for a sync run, on both initiator and responder.
+   *
+   *   null ─start/offer─▶ connecting ─▶ sending ⇄ receiving ─▶ done ─(1.5s)─▶ null
+   *                           └──── error / timeout / cancel / lost ──────────▶ null
+   *
+   * `null` means idle; anything else means a run is live (there is no separate
+   * "isSyncing" flag to drift out of step with it).
+   */
   type SyncPhase =
     | { status: 'connecting' }
     | { status: 'sending'; chunk: number; totalChunks: number }
@@ -61,6 +69,7 @@ export const SyncManager = React.memo(({ onSyncComplete }: SyncManagerProps) => 
     | { status: 'done'; received: number }
     | null;
   const [syncPhase, setSyncPhase] = useState<SyncPhase>(null);
+  const isSyncing = syncPhase !== null;
   const [incomingCode, setIncomingCode] = useState("");
   const [outgoingPair, setOutgoingPair] = useState<
     | {
@@ -97,7 +106,7 @@ export const SyncManager = React.memo(({ onSyncComplete }: SyncManagerProps) => 
   const outgoingPairRef = useRef(outgoingPair);
   const incomingPairRef = useRef(incomingPair);
   const pairingsRef = useRef(pairings);
-  const isSyncingRef = useRef(isSyncing);
+  const isSyncingRef = useRef(isSyncing); // log-only mirror for async handlers
 
   useEffect(() => { identityRef.current = identity; }, [identity]);
   useEffect(() => { outgoingPairRef.current = outgoingPair; }, [outgoingPair]);
@@ -316,7 +325,11 @@ export const SyncManager = React.memo(({ onSyncComplete }: SyncManagerProps) => 
     posthog.capture("sync_initiated", { partner_device_id: partnerDeviceId });
     const ts = () => new Date().toISOString();
     console.log(`[${ts()}] [Sync] handleSyncWith STARTED for partner: ${partnerDeviceId}`);
-    setIsSyncing(true);
+    if (!client) {
+      // Previously returned after entering 'connecting' → spinner never ended.
+      setErrorMessage("Signaling not connected");
+      return;
+    }
     setSyncSummary("");
     setErrorMessage(null);
     setSyncPhase({ status: 'connecting' });
@@ -328,12 +341,12 @@ export const SyncManager = React.memo(({ onSyncComplete }: SyncManagerProps) => 
       dataChannelRef.current = null;
     }
 
-    if (!client) return;
     try {
       await client.ensureConnected();
       const pairing = pairings.find((p) => p.partner_device_id === partnerDeviceId);
       if (!pairing) {
         setErrorMessage("Please pair with this device first");
+        setSyncPhase(null);
         return;
       }
 
@@ -360,7 +373,6 @@ export const SyncManager = React.memo(({ onSyncComplete }: SyncManagerProps) => 
           if (state === 'failed' || state === 'disconnected') {
             setErrorMessage("Connection lost. Try again.");
             setSyncPhase(null);
-            setIsSyncing(false);
           }
         }
       );
@@ -424,7 +436,7 @@ export const SyncManager = React.memo(({ onSyncComplete }: SyncManagerProps) => 
           if (chunkInfo.current === chunkInfo.total) {
             await refreshSyncState();
             setSyncPhase({ status: 'done', received: summary.received });
-            setTimeout(() => { setSyncPhase(null); setIsSyncing(false); }, 1500);
+            setTimeout(() => setSyncPhase(null), 1500);
 
             // Send ack back to responder confirming we stored their data
             if (sharedKeyRef.current && channel.readyState === 'open') {
@@ -451,7 +463,6 @@ export const SyncManager = React.memo(({ onSyncComplete }: SyncManagerProps) => 
         console.error("[Sync] Initiator channel error:", rtcError?.errorDetail, rtcError?.message, "| PC state:", pc.connectionState, "| ICE state:", pc.iceConnectionState);
         setErrorMessage("Data channel error. Please retry.");
         setSyncPhase(null);
-        setIsSyncing(false);
       };
 
       channel.onclose = () => {
@@ -464,7 +475,7 @@ export const SyncManager = React.memo(({ onSyncComplete }: SyncManagerProps) => 
         if (!receiveDone || !ackReceived) {
           console.warn(`[${ts()}] [Sync] Initiator: channel closed early (receiveDone=${receiveDone}, ackReceived=${ackReceived})`);
           setSyncPhase((prev) => prev?.status === 'done' ? prev : { status: 'done', received: 0 });
-          setTimeout(() => { setSyncPhase(null); setIsSyncing(false); }, 1500);
+          setTimeout(() => setSyncPhase(null), 1500);
           pc.close();
         }
       };
@@ -526,7 +537,6 @@ export const SyncManager = React.memo(({ onSyncComplete }: SyncManagerProps) => 
         if (peerConnectionRef.current === timeoutPc && timeoutPc.connectionState !== 'connected') {
           setErrorMessage("Connection timed out. Partner may be offline.");
           setSyncPhase(null);
-          setIsSyncing(false);
         }
       }, 15000);
     } catch (error) {
@@ -534,7 +544,6 @@ export const SyncManager = React.memo(({ onSyncComplete }: SyncManagerProps) => 
       console.error(`[${ts()}] [Sync] Initiator: handleSyncWith CATCH error:`, errorMsg, error);
       setErrorMessage(errorMsg);
       setSyncPhase(null);
-      setIsSyncing(false);
       await recordSyncError(partnerDeviceId, errorMsg);
       setConnectionState("failed");
     } finally {
@@ -546,7 +555,6 @@ export const SyncManager = React.memo(({ onSyncComplete }: SyncManagerProps) => 
 
   const cancelSync = useCallback(() => {
     posthog.capture("sync_cancelled");
-    setIsSyncing(false);
     setSyncPhase(null);
     setSyncSummary("Sync cancelled");
     peerConnectionRef.current?.close();
@@ -865,7 +873,7 @@ export const SyncManager = React.memo(({ onSyncComplete }: SyncManagerProps) => 
           peerConnectionRef.current.close();
           peerConnectionRef.current = null;
           dataChannelRef.current = null;
-          // Don't setIsSyncing(false) here — we're about to take over as responder below
+          // Don't clear syncPhase here — we're about to take over as responder below
         }
       }
       if (payload.session_nonce) {
@@ -945,14 +953,13 @@ export const SyncManager = React.memo(({ onSyncComplete }: SyncManagerProps) => 
 
               if (chunkInfo.current === chunkInfo.total) {
                 setSyncPhase({ status: 'done', received: summary.received });
-                setTimeout(() => { setSyncPhase(null); setIsSyncing(false); }, 1500);
+                setTimeout(() => setSyncPhase(null), 1500);
                 receiveDone = true;
                 maybeClose();
               }
             } catch (err) {
               console.error(`[${ts()}] [Sync] Responder: error processing incoming chunk:`, err);
               setSyncPhase(null);
-              setIsSyncing(false);
             }
           };
           channel.onerror = (event) => {
@@ -961,7 +968,6 @@ export const SyncManager = React.memo(({ onSyncComplete }: SyncManagerProps) => 
             if (rtcError?.message?.includes("Close called")) return;
             console.error("[Sync] Responder channel error:", rtcError?.errorDetail, rtcError?.message, "| PC state:", pc.connectionState, "| ICE state:", pc.iceConnectionState);
             setSyncPhase(null);
-            setIsSyncing(false);
           };
           channel.onclose = () => {
             if (!receiveDone || !ackReceived) {
@@ -1009,12 +1015,14 @@ export const SyncManager = React.memo(({ onSyncComplete }: SyncManagerProps) => 
         (state) => {
           setConnectionState(state);
           if (state === 'failed' || state === 'disconnected') {
-            setIsSyncing(false);
+            // Keep a just-finished "done" beat; otherwise the run is over.
+            setSyncPhase((prev) => (prev?.status === 'done' ? prev : null));
           }
         }
       );
       peerConnectionRef.current = pc;
-      setIsSyncing(true);
+      // Responder now shows the same progress card as the initiator.
+      setSyncPhase({ status: 'connecting' });
       try {
         await pc.setRemoteDescription(payload.sdp);
         const answer = await pc.createAnswer();
@@ -1023,7 +1031,7 @@ export const SyncManager = React.memo(({ onSyncComplete }: SyncManagerProps) => 
         client.send("webrtc:answer", { to_device_id: payload.from_device_id, from_device_id: identityRef.current?.device_id, sdp: pc.localDescription });
       } catch (err) {
         console.error(`[${ts()}] [Sync] Responder: error during WebRTC negotiation:`, err);
-        setIsSyncing(false);
+        setSyncPhase(null);
         peerConnectionRef.current?.close();
         peerConnectionRef.current = null;
       }
@@ -1294,11 +1302,10 @@ export const SyncManager = React.memo(({ onSyncComplete }: SyncManagerProps) => 
                     console.log(`[${new Date().toISOString()}] [UI] 🔘 SYNC NOW BUTTON CLICKED! partner=${pairings[0].partner_device_id}, isSyncing=${isSyncing}, syncPhase=${syncPhase ? JSON.stringify(syncPhase) : 'null'}, isPartnerOnline=${isPartnerOnline}`);
                     handleSyncWith(pairings[0].partner_device_id);
                   }}
-                  disabled={isSyncing}
                   className={`kk-btn-primary w-full justify-center gap-2 ${!isPartnerOnline ? 'opacity-60' : ''}`}
                 >
-                  <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
-                  {isSyncing ? 'Connecting…' : isPartnerOnline ? 'Sync now' : 'Try syncing'}
+                  <RefreshCw className="h-4 w-4" />
+                  {isPartnerOnline ? 'Sync now' : 'Try syncing'}
                 </button>
               )}
             </div>
